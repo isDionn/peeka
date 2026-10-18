@@ -2,7 +2,7 @@
 //! "Kilitle" (`lock_now`), a plugin's `lock.signal`. Windows unlock lifts only its own reason; the other two need the
 //! owner's click in Notch (`lock_release`). A plugin can never unlock. While locked: no password rows, no reveal,
 //! no copy-back of a password, no new password item written, and nothing of the owner's goes out to a plugin
-//! (Ctrl+Space, Ctrl+K "Asistana sor", shelf, pano share, scan, paperclip, share sheet, mirror; `cmd::unlocked`).
+//! (Ctrl+Space, Ctrl+K "Ask assistant", shelf, clipboard share, scan, paperclip, share sheet, mirror; `cmd::unlocked`).
 
 use serde::Serialize;
 

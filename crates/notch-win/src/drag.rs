@@ -1,4 +1,4 @@
-//! Drag out of the pano: Windows's own drag-and-drop with the shell's data object for the
+//! Drag out of the clipboard: Windows's own drag-and-drop with the shell's data object for the
 //! files (an image item drags its PNG), so Explorer and chat apps take it as a file drop. `SHDoDragDrop` supplies
 //! the drag image itself for a shell data object (no custom bitmap). It runs on the calling thread, which must be
 //! the UI thread that got the mouse press (the sync `clip_drag` command runs there); the call returns when the drop

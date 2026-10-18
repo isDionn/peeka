@@ -1,4 +1,4 @@
-// Maskot davranışları: sahte zamanlayıcıyla süre ve değer denetimi (rAF ve performance da sahte, 16 ms adım).
+// Mascot behaviors: duration and value checks with fake timers (rAF and performance are fake too, 16 ms steps).
 import { act, createRef } from "react";
 import { fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -19,8 +19,8 @@ const mount = (size: number, mood: Mood = "idle", extra: Record<string, unknown>
 const scale = (el: HTMLElement) => (/scale\(([-\d.e]+), ([-\d.e]+)\)/.exec(el.style.transform) ?? []).slice(1).map(Number) as [number, number];
 const tx = (el: HTMLElement) => Number(/translate\(([-\d.e]+)px/.exec(el.style.transform)?.[1]);
 
-describe("boşta döngü durur", () => {
-  it("hareket yoksa rAF çağrılmaz; hop döngüyü uyandırır, bitince tekrar durur", async () => {
+describe("the idle loop stops", () => {
+  it("rAF isn't called without motion; a hop wakes the loop, and it stops again when done", async () => {
     const m = mount(56, "idle");
     adv(200);
     expect(m.ref.current!.running()).toBe(false);
@@ -30,58 +30,58 @@ describe("boşta döngü durur", () => {
     m.ref.current!.hop();
     await act(async () => { await vi.advanceTimersByTimeAsync(100); });
     expect(m.ref.current!.running()).toBe(true);
-    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });   // hop dizisi async (await wait), mikro görevler için async ilerlet
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });   // the hop sequence is async (await wait), so advance asynchronously for microtasks
     expect(m.ref.current!.running()).toBe(false);
   });
-  it("24 px şerit de durur; konuşan ağız (speaking) durmaz", () => {
+  it("the 24 px strip stops too; a talking mouth (speaking) doesn't", () => {
     const a = mount(24, "idle"); adv(300); expect(a.ref.current!.running()).toBe(false);
     const b = mount(56, "speaking"); adv(2000); expect(b.ref.current!.running()).toBe(true);
   });
-  it("bakış hedefe varınca durur", () => {
+  it("the gaze stops once it reaches the target", () => {
     const m = mount(56, "idle", { cursor: { x: 200, y: 0 } });
     adv(100); expect(m.ref.current!.running()).toBe(true);
     adv(3000); expect(m.ref.current!.running()).toBe(false);
   });
 });
 
-describe("izin rozeti", () => {
-  it("56 px: eski rozet silinir, 100 ms sonra gelir; hal bitince silinir", () => {
+describe("permission badge", () => {
+  it("56 px: the old badge is removed, comes back after 100 ms; removed when the mood ends", () => {
     const m = mount(56, "idle");
-    expect(m.q(".g-rozet")!.dataset.s).toBe("out");
+    expect(m.q(".g-badge")!.dataset.s).toBe("out");
     m.set("approval");
-    adv(99); expect(m.q(".g-rozet")!.dataset.s).toBe("out");
-    adv(1); expect(m.q(".g-rozet")!.dataset.s).toBe("in");
-    expect(m.q(".g-isik")!.style.opacity).toBe("0.45");   // amber ışık güçlenir
-    m.set("idle"); expect(m.q(".g-rozet")!.dataset.s).toBe("out");
+    adv(99); expect(m.q(".g-badge")!.dataset.s).toBe("out");
+    adv(1); expect(m.q(".g-badge")!.dataset.s).toBe("in");
+    expect(m.q(".g-light")!.style.opacity).toBe("0.45");   // the amber light strengthens
+    m.set("idle"); expect(m.q(".g-badge")!.dataset.s).toBe("out");
   });
-  it("onayın '!' rozeti 56 altında görünmez (24, 28 rozet yok; 40'ta yalnız etiketli haller)", () => {
-    for (const s of [24, 28]) { const m = mount(s, "approval"); adv(300); expect(m.q(".g-rozet")).toBeNull(); m.unmount(); }
-    const m = mount(40, "approval"); adv(300); expect(m.q(".g-rozet")!.dataset.s).toBe("out"); m.unmount();
+  it("the approval '!' badge is hidden below 56 (no badge at 24, 28; at 40 only labeled moods)", () => {
+    for (const s of [24, 28]) { const m = mount(s, "approval"); adv(300); expect(m.q(".g-badge")).toBeNull(); m.unmount(); }
+    const m = mount(40, "approval"); adv(300); expect(m.q(".g-badge")!.dataset.s).toBe("out"); m.unmount();
   });
-  it("klavye ipucu yuvası yalnız ≥56 px ve izin halinde", () => {
-    const a = mount(56, "approval", { badgeHint: <kbd>Y</kbd> }); expect(a.q(".mascot-ipucu kbd")).toBeTruthy(); a.set("idle"); expect(a.q(".mascot-ipucu")).toBeNull(); a.unmount();
-    const b = mount(40, "approval", { badgeHint: <kbd>Y</kbd> }); expect(b.q(".mascot-ipucu")).toBeNull();
+  it("the keyboard hint slot only at ≥56 px and in the permission mood", () => {
+    const a = mount(56, "approval", { badgeHint: <kbd>Y</kbd> }); expect(a.q(".mascot-hint kbd")).toBeTruthy(); a.set("idle"); expect(a.q(".mascot-hint")).toBeNull(); a.unmount();
+    const b = mount(40, "approval", { badgeHint: <kbd>Y</kbd> }); expect(b.q(".mascot-hint")).toBeNull();
   });
 });
 
-describe("hata titremesi", () => {
-  it("56 px: +4, -4, +2,5, 0 px; 280 ms sonra sakin", () => {
+describe("error jitter", () => {
+  it("56 px: +4, -4, +2.5, 0 px; calm after 280 ms", () => {
     const m = mount(56, "idle"); adv(100);
     m.set("error");
-    const sal = m.q(".g-sal")!;
-    adv(48); expect(tx(sal)).toBeGreaterThan(3.3);
-    adv(80); expect(tx(sal)).toBeLessThan(-3.3);       // t=128
-    adv(64); expect(tx(sal)).toBeGreaterThan(1.8);     // t=192
-    adv(300); expect(tx(sal)).toBe(0);
+    const sway = m.q(".g-sway")!;
+    adv(48); expect(tx(sway)).toBeGreaterThan(3.3);
+    adv(80); expect(tx(sway)).toBeLessThan(-3.3);       // t=128
+    adv(64); expect(tx(sway)).toBeGreaterThan(1.8);     // t=192
+    adv(300); expect(tx(sway)).toBe(0);
   });
-  it("56 altında titreme yok", () => {
+  it("no jitter below 56", () => {
     const m = mount(40, "idle"); adv(100); m.set("error"); adv(48);
-    expect(tx(m.q(".g-sal")!)).toBe(0);
+    expect(tx(m.q(".g-sway")!)).toBe(0);
   });
 });
 
-describe("bitti pırıltısı", () => {
-  it("56 px: 500 ms'de başlar, 140 ms arayla 5 pırıltı; sonra hepsi kalkar", () => {
+describe("done sparkle", () => {
+  it("56 px: starts at 500 ms, 5 sparkles 140 ms apart; then all disappear", () => {
     const m = mount(56, "idle"); adv(100);
     m.set("done");
     const n = () => m.container.querySelectorAll(".g-spark").length;
@@ -93,56 +93,56 @@ describe("bitti pırıltısı", () => {
     adv(140); expect(n()).toBe(5);
     adv(2000); expect(n()).toBe(0);
   });
-  it("40 px: pırıltı yok", () => {
+  it("40 px: no sparkle", () => {
     const m = mount(40, "idle"); adv(100); m.set("done"); adv(1500);
     expect(m.container.querySelectorAll(".g-spark").length).toBe(0);
   });
 });
 
-describe("bakış", () => {
-  it("40 px: göz hedefi tanh ile, CouCou yumuşatmasıyla ilerler", () => {
+describe("gaze", () => {
+  it("40 px: the eye target moves with tanh and exponential smoothing", () => {
     const m = mount(40, "idle", { cursor: { x: 260, y: 200 } });
-    const track = m.q(".g-gozler-takip")!;
+    const track = m.q(".g-eyes-track")!;
     adv(16);
     const first = Number(/translate\(([-\d.e]+)%/.exec(track.style.transform)![1]);
-    expect(first).toBeGreaterThan(0.1); expect(first).toBeLessThan(0.6);   // 2,59 hedefin ~%9'u
+    expect(first).toBeGreaterThan(0.1); expect(first).toBeLessThan(0.6);   // 2.59 is ~9% of the target
     adv(1000);
     expect(track.style.transform).toBe(`translate(${Math.tanh(1) * 3.4}%, ${Math.tanh(1) * 2.6}%)`);
   });
-  it("24 px: göz takibi yok", () => {
+  it("24 px: no eye tracking", () => {
     const m = mount(24, "idle", { cursor: { x: 260, y: 0 } }); adv(500);
-    expect(m.q(".g-gozler-takip")).toBeNull();
+    expect(m.q(".g-eyes-track")).toBeNull();
   });
 });
 
-describe("dosya yutma", () => {
-  it("swallow: sy 0,78 -> 1,18 -> 1; ağız 460 ms açık", () => {
+describe("file swallow", () => {
+  it("swallow: sy 0.78 -> 1.18 -> 1; mouth open 460 ms", () => {
     const m = mount(56, "idle"); adv(100);
-    const sq = m.q(".g-ezil")!, mouth = m.q(".g-agiz")!;
+    const sq = m.q(".g-squash")!, mouth = m.q(".g-mouth")!;
     m.ref.current!.swallow();
-    adv(80); expect(scale(sq)[1]).toBeCloseTo(.78, 1); expect(mouth.dataset.d).toBe("agiz-acik");
+    adv(80); expect(scale(sq)[1]).toBeCloseTo(.78, 1); expect(mouth.dataset.d).toBe("mouth-open");
     adv(128); expect(scale(sq)[1]).toBeCloseTo(1.18, 1);
     adv(224); expect(scale(sq)[1]).toBeCloseTo(1, 1);
-    adv(120); expect(mouth.dataset.d).toBe("agiz-gulus");   // 552 > 460
+    adv(120); expect(mouth.dataset.d).toBe("mouth-smile");   // 552 > 460
   });
-  it("yutma: dosya simgesi çıkar ve ağza küçülüp kalkar; ağız kapanınca 3 çiğneme, sonra ağız normale döner", () => {
+  it("swallow: a file icon appears and shrinks into the mouth; when the mouth closes, 3 chews, then the mouth returns to normal", () => {
     const m = mount(56, "idle"); adv(100);
-    const mouth = m.q(".g-agiz")!;
+    const mouth = m.q(".g-mouth")!;
     m.ref.current!.swallow(); adv(50);
-    expect(m.container.querySelectorAll(".g-dosya").length).toBe(1);
-    adv(330); expect(m.container.querySelectorAll(".g-dosya").length).toBe(0); expect(mouth.dataset.d).toBe("agiz-acik");   // 380 ms: simge gitti, ağız hâlâ açık (460'ta çiğneme başlar)
+    expect(m.container.querySelectorAll(".g-file").length).toBe(1);
+    adv(330); expect(m.container.querySelectorAll(".g-file").length).toBe(0); expect(mouth.dataset.d).toBe("mouth-open");   // 380 ms: icon gone, mouth still open (chewing starts at 460)
     const seen = new Set<string>();
     for (let i = 0; i < 8; i++) { adv(60); seen.add(mouth.dataset.d!); }
-    expect(seen.has("agiz-o") && seen.has("agiz-gulus")).toBe(true);   // çiğneme: o <-> gülüş
-    adv(600); expect(mouth.dataset.d).toBe("agiz-gulus");
-    expect(m.q(".g-goz")!.dataset.d).toBe("goz-acik");
+    expect(seen.has("mouth-o") && seen.has("mouth-smile")).toBe(true);   // chewing: o <-> smile
+    adv(600); expect(mouth.dataset.d).toBe("mouth-smile");
+    expect(m.q(".g-eye")!.dataset.d).toBe("eye-open");
   });
-  it("24 px: yalnız ezilme, ağız yok", () => {
+  it("24 px: squash only, no mouth", () => {
     const m = mount(24, "idle"); adv(100);
     m.ref.current!.swallow(); adv(80);
-    expect(scale(m.q(".g-ezil")!)[1]).toBeCloseTo(.78, 1);
+    expect(scale(m.q(".g-squash")!)[1]).toBeCloseTo(.78, 1);
   });
-  it("onFileDrop: dosya bırakınca yutar ve çağrılır; dosya olmayan sürükleme yok sayılır", () => {
+  it("onFileDrop: swallows and is called when a file is dropped; a drag without files is ignored", () => {
     const onFileDrop = vi.fn();
     const m = mount(56, "idle", { onFileDrop }); adv(100);
     const f = new File(["x"], "a.txt");
@@ -150,126 +150,126 @@ describe("dosya yutma", () => {
     expect(onFileDrop).not.toHaveBeenCalled();
     fireEvent.drop(m.q(".mascot")!, { dataTransfer: { types: ["Files"], files: [f] } });
     expect(onFileDrop).toHaveBeenCalledWith([f]);
-    expect(m.q(".g-agiz")!.dataset.d).toBe("agiz-acik");
+    expect(m.q(".g-mouth")!.dataset.d).toBe("mouth-open");
   });
 });
 
-describe("tıklamada sersemleme (yalnız 96 px)", () => {
-  const eyes = (m: ReturnType<typeof mount>) => m.q(".g-goz")!.dataset.d;
-  it("1 tıklama 800 ms sersem", () => {
+describe("daze on click (96 px only)", () => {
+  const eyes = (m: ReturnType<typeof mount>) => m.q(".g-eye")!.dataset.d;
+  it("1 click: dizzy for 800 ms", () => {
     const m = mount(96, "sleeping"); adv(100);
     const base = eyes(m);
     fireEvent.pointerDown(m.q(".mascot")!);
-    adv(799); expect(eyes(m)).toBe("goz-sersem");
+    adv(799); expect(eyes(m)).toBe("eye-dizzy");
     adv(2); expect(eyes(m)).toBe(base);
   });
-  it("1,7 sn içinde 3 tıklama 3,3 sn", () => {
+  it("3 clicks within 1.7 s: 3.3 s", () => {
     const m = mount(96, "idle"); adv(100);
     const el = m.q(".mascot")!;
     fireEvent.pointerDown(el); adv(500); fireEvent.pointerDown(el); adv(500); fireEvent.pointerDown(el);
-    adv(3299); expect(eyes(m)).toBe("goz-sersem");
-    adv(2); expect(eyes(m)).toBe("goz-acik");
+    adv(3299); expect(eyes(m)).toBe("eye-dizzy");
+    adv(2); expect(eyes(m)).toBe("eye-open");
   });
-  it("3 tıklamalık uzun sersemlik, sonradan gelen 4. tıklamayla kısalmaz", () => {
+  it("the long daze from 3 clicks isn't shortened by a later 4th click", () => {
     const m = mount(96, "idle"); adv(100);
     const el = m.q(".mascot")!;
     for (let i = 0; i < 3; i++) { fireEvent.pointerDown(el); adv(200); }
-    fireEvent.pointerDown(el);                       // 4. tıklama: tek tıklama süresi (800) uzun olanı kısaltmaz
-    adv(2500); expect(eyes(m)).toBe("goz-sersem");   // 3. tıklamadan ~3,1 sn sonra hâlâ sersem
-    adv(800); expect(eyes(m)).toBe("goz-acik");
+    fireEvent.pointerDown(el);                       // 4th click: the single-click duration (800) doesn't shorten the longer one
+    adv(2500); expect(eyes(m)).toBe("eye-dizzy");   // still dizzy ~3.1 s after the 3rd click
+    adv(800); expect(eyes(m)).toBe("eye-open");
   });
-  it("56 ve 40 px: sersemleme yok", () => {
+  it("56 and 40 px: no daze", () => {
     for (const s of [56, 40]) {
       const m = mount(s, "idle"); adv(100);
       fireEvent.pointerDown(m.q(s === 40 ? ".mascot-hit" : ".mascot")!); adv(50);
-      expect(eyes(m)).toBe("goz-cizgi"); m.unmount();   // sersem değil: tokat (kısık gözler)
+      expect(eyes(m)).toBe("eye-line"); m.unmount();   // not dizzy: slap (squinting eyes)
     }
   });
 });
 
-describe("40 px asılı poz", () => {
-  it("kutu 40x30, hit kutusu gövdede; tıklama yalnız hit kutusundan", () => {
+describe("40 px hanging pose", () => {
+  it("box 40x30, hit box on the body; clicks only via the hit box", () => {
     const onPoke = vi.fn();
     const m = mount(40, "idle", { onPoke }); adv(100);
     const host = m.q(".mascot")!, hit = m.q(".mascot-hit")!;
     expect([host.style.width, host.style.height, host.dataset.hang]).toEqual(["40px", "30px", "1"]);
     expect([hit.style.left, hit.style.top, hit.style.width, hit.style.height]).toEqual(["5px", "5px", "30px", "37px"]);
-    expect(m.q(".g")!.classList.contains("asili")).toBe(true);
+    expect(m.q(".g")!.classList.contains("hung")).toBe(true);
     fireEvent.pointerDown(host); expect(onPoke).not.toHaveBeenCalled();
     fireEvent.pointerDown(hit); expect(onPoke).toHaveBeenCalledTimes(1);
-    expect(m.ref.current!.hitRect()).toEqual({ x: 0, y: 0, width: 0, height: 0 });   // jsdom'da yerleşim yok; gerçek değer tarayıcı karesinde ölçülür
+    expect(m.ref.current!.hitRect()).toEqual({ x: 0, y: 0, width: 0, height: 0 });   // jsdom has no layout; the real value is measured in a browser frame
   });
-  it("hal efektleri 40 px'te: izin = el sallama, hata = yıldız halkası, dinliyor = kulak dalgaları", () => {
-    const on = (m: ReturnType<typeof mount>, cls: string) => m.q(`.${cls}`)!.classList.contains("acik");
-    const m = mount(40, "approval"); expect(on(m, "fx-sallama")).toBe(true); expect(on(m, "fx-tabela")).toBe(false);
-    m.set("error"); expect(on(m, "fx-halka")).toBe(true);
-    m.set("listening"); expect(on(m, "fx-mintSol")).toBe(true);
-    m.set("thinking"); expect(on(m, "fx-nokta")).toBe(true);
-    m.set("done"); expect(on(m, "fx-pirilti")).toBe(true);
+  it("mood effects at 40 px: permission = hand wave, error = star ring, listening = ear waves", () => {
+    const on = (m: ReturnType<typeof mount>, cls: string) => m.q(`.${cls}`)!.classList.contains("shown");
+    const m = mount(40, "approval"); expect(on(m, "fx-wave")).toBe(true); expect(on(m, "fx-sign")).toBe(false);
+    m.set("error"); expect(on(m, "fx-ring")).toBe(true);
+    m.set("listening"); expect(on(m, "fx-mintLeft")).toBe(true);
+    m.set("thinking"); expect(on(m, "fx-dots")).toBe(true);
+    m.set("done"); expect(on(m, "fx-sparkle")).toBe(true);
   });
 });
 
-describe("dokunma tepkileri", () => {
+describe("touch reactions", () => {
   const hitOf = (m: ReturnType<typeof mount>) => m.q(".mascot-hit")!;
-  const eyes = (m: ReturnType<typeof mount>) => m.q(".g-goz")!.dataset.d;
-  it("tokat: gözler kısılır, ~600 ms sonra önceki hale döner; hal değişmez", () => {
+  const eyes = (m: ReturnType<typeof mount>) => m.q(".g-eye")!.dataset.d;
+  it("slap: eyes squint, return to the previous look after ~600 ms; the mood doesn't change", () => {
     const onPoke = vi.fn();
     const m = mount(40, "idle", { onPoke }); adv(100);
     fireEvent.pointerDown(hitOf(m)); adv(100);
-    expect(eyes(m)).toBe("goz-cizgi"); expect(m.q(".mascot")!.dataset.mood).toBe("idle");
-    adv(700); expect(eyes(m)).toBe("goz-acik");
+    expect(eyes(m)).toBe("eye-line"); expect(m.q(".mascot")!.dataset.mood).toBe("idle");
+    adv(700); expect(eyes(m)).toBe("eye-open");
     expect(onPoke).toHaveBeenCalledTimes(1);
   });
-  it("tıklama seli: asıl eylem (onPoke) her tıklamada çalışır; 5. tıklama sersem yapar, süre dolunca asıl hale döner, döngü yok", () => {
+  it("click flood: the real action (onPoke) runs on every click; the 5th click makes it dizzy, it returns to the real mood when the time is up, no loop", () => {
     const onPoke = vi.fn();
     const m = mount(40, "idle", { onPoke }); adv(100);
-    for (let i = 0; i < 8; i++) { fireEvent.pointerDown(hitOf(m)); adv(50); }   // 400 ms'de 8 tıklama
+    for (let i = 0; i < 8; i++) { fireEvent.pointerDown(hitOf(m)); adv(50); }   // 8 clicks in 400 ms
     expect(onPoke).toHaveBeenCalledTimes(8);
-    expect(m.q(".mascot")!.dataset.mood).toBe("dizzy"); expect(eyes(m)).toBe("goz-sersem");
-    adv(3000); expect(m.q(".mascot")!.dataset.mood).toBe("idle"); expect(eyes(m)).toBe("goz-acik");
-    fireEvent.pointerDown(hitOf(m)); adv(60); expect(eyes(m)).toBe("goz-cizgi");   // sersemden sonra tokat yine çalışır
+    expect(m.q(".mascot")!.dataset.mood).toBe("dizzy"); expect(eyes(m)).toBe("eye-dizzy");
+    adv(3000); expect(m.q(".mascot")!.dataset.mood).toBe("idle"); expect(eyes(m)).toBe("eye-open");
+    fireEvent.pointerDown(hitOf(m)); adv(60); expect(eyes(m)).toBe("eye-line");   // the slap works again after the daze
   });
-  it("sevgi: 1,9 sn üstünde kalınca kalpler çıkar, gözler yumuşar; erken ayrılırsa hiçbir şey", () => {
+  it("affection: hovering for over 1.9 s brings hearts and softens the eyes; nothing if left early", () => {
     const m = mount(40, "idle"); adv(100);
     fireEvent.pointerEnter(hitOf(m)); adv(1000); fireEvent.pointerLeave(hitOf(m)); adv(2000);
-    expect(m.container.querySelectorAll(".g-kalp").length).toBe(0);
+    expect(m.container.querySelectorAll(".g-heart").length).toBe(0);
     fireEvent.pointerEnter(hitOf(m)); adv(2000);
-    expect(eyes(m)).toBe("goz-huzurlu");
-    adv(600); expect(m.container.querySelectorAll(".g-kalp").length).toBeGreaterThan(0);
-    adv(3500); expect(m.container.querySelectorAll(".g-kalp").length).toBe(0); expect(eyes(m)).toBe("goz-acik");
+    expect(eyes(m)).toBe("eye-calm");
+    adv(600); expect(m.container.querySelectorAll(".g-heart").length).toBeGreaterThan(0);
+    adv(3500); expect(m.container.querySelectorAll(".g-heart").length).toBe(0); expect(eyes(m)).toBe("eye-open");
   });
-  it("sevgi: onay gibi hallerde yok; 8 sn içinde ikinci kez yok", () => {
+  it("affection: not in moods like approval; not a second time within 8 s", () => {
     const a = mount(40, "approval"); adv(100);
     fireEvent.pointerEnter(hitOf(a)); adv(2500);
-    expect(a.container.querySelectorAll(".g-kalp").length).toBe(0); a.unmount();
+    expect(a.container.querySelectorAll(".g-heart").length).toBe(0); a.unmount();
     const m = mount(40, "idle"); adv(100);
     fireEvent.pointerEnter(hitOf(m)); adv(2000); adv(4000); fireEvent.pointerLeave(hitOf(m));
     fireEvent.pointerEnter(hitOf(m)); adv(2500);
-    expect(eyes(m)).toBe("goz-acik");
+    expect(eyes(m)).toBe("eye-open");
   });
 });
 
-describe("yeni haller: arıyor, soru, kota, sersem", () => {
-  const tag = (m: ReturnType<typeof mount>) => m.q(".g-rozet");
-  it("arıyor: gözler tarar (tara işareti), açık gözler, mavi ışık", () => {
+describe("new moods: searching, question, quota, dizzy", () => {
+  const tag = (m: ReturnType<typeof mount>) => m.q(".g-badge");
+  it("searching: the eyes scan (scan mark), open eyes, blue light", () => {
     const m = mount(56, "searching"); adv(300);
-    expect(m.q(".g")!.dataset.tara).toBe("1"); expect(m.q(".g-goz")!.dataset.d).toBe("goz-acik");
-    m.set("idle"); expect(m.q(".g")!.dataset.tara).toBe("");
+    expect(m.q(".g")!.dataset.scan).toBe("1"); expect(m.q(".g-eye")!.dataset.d).toBe("eye-open");
+    m.set("idle"); expect(m.q(".g")!.dataset.scan).toBe("");
   });
-  it("soru: '?' rozeti 40 px ve üstünde, 24'te yok; baş yatar", () => {
-    for (const s of [40, 56]) { const m = mount(s, "question"); adv(300); expect(tag(m)!.textContent).toBe("?"); expect(tag(m)!.dataset.s).toBe("in"); expect(m.q(".g-goz")!.dataset.d).toBe("goz-yukari"); m.unmount(); }
+  it("question: '?' badge at 40 px and up, none at 24; the head tilts", () => {
+    for (const s of [40, 56]) { const m = mount(s, "question"); adv(300); expect(tag(m)!.textContent).toBe("?"); expect(tag(m)!.dataset.s).toBe("in"); expect(m.q(".g-eye")!.dataset.d).toBe("eye-up"); m.unmount(); }
     const a = mount(24, "question"); adv(300); expect(tag(a)).toBeNull();
   });
-  it("kota: turuncu nokta rozeti, yorgun gözler, ter damlaları açık; başka hale geçince kapanır", () => {
+  it("quota: orange dot badge, tired eyes, sweat drops on; they turn off on switching to another mood", () => {
     const m = mount(56, "ratelimit"); adv(300);
-    expect(tag(m)!.dataset.k).toBe("dot"); expect(tag(m)!.textContent).toBe(""); expect(m.q(".g-goz")!.dataset.d).toBe("goz-uzgun");
-    expect(m.q(".g-ter")!.classList.contains("acik")).toBe(true);
-    m.set("idle"); expect(m.q(".g-ter")!.classList.contains("acik")).toBe(false); expect(tag(m)!.dataset.s).toBe("out");
+    expect(tag(m)!.dataset.k).toBe("dot"); expect(tag(m)!.textContent).toBe(""); expect(m.q(".g-eye")!.dataset.d).toBe("eye-sad");
+    expect(m.q(".g-sweat")!.classList.contains("shown")).toBe(true);
+    m.set("idle"); expect(m.q(".g-sweat")!.classList.contains("shown")).toBe(false); expect(tag(m)!.dataset.s).toBe("out");
   });
-  it("sersem: spiral gözler, dil, yıldız halkası; girişte yuvarlanır (daze izi 360'a gider)", () => {
+  it("dizzy: spiral eyes, tongue, star ring; rolls on entry (the daze track goes to 360)", () => {
     const m = mount(56, "idle"); adv(300); m.set("dizzy"); adv(450);
-    expect(m.q(".g-goz")!.dataset.d).toBe("goz-sersem"); expect(m.q(".g-agiz")!.dataset.d).toBe("agiz-dil"); expect(m.q("div.fx-halka")!.classList.contains("acik")).toBe(true);
-    const deg = Number(/rotate\(([-\d.e]+)deg\)/.exec(m.q(".g-sal")!.style.transform)?.[1]);
-    expect(deg).toBeGreaterThan(30);   // 450 ms'de tur ortasında
+    expect(m.q(".g-eye")!.dataset.d).toBe("eye-dizzy"); expect(m.q(".g-mouth")!.dataset.d).toBe("mouth-tongue"); expect(m.q("div.fx-ring")!.classList.contains("shown")).toBe(true);
+    const deg = Number(/rotate\(([-\d.e]+)deg\)/.exec(m.q(".g-sway")!.style.transform)?.[1]);
+    expect(deg).toBeGreaterThan(30);   // mid-turn at 450 ms
   });
 });

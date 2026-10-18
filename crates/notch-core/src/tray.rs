@@ -133,7 +133,7 @@ mod tests {
                 raw(
                     "3",
                     r"{6D809377-6AF0-444B-8957-A3773F02200E}\WindowsApps\Buds\QuickControls.exe",
-                    Some("Galaxy Buds2 (0D48)\nikinci satır"),
+                    Some("Galaxy Buds2 (0D48)\nsecond line"),
                     None,
                 ),
                 raw("4", r"C:\Users\x\AppData\Local\Voicemod\Voicemod.exe", Some("  "), Some(1)),

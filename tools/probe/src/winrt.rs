@@ -15,11 +15,11 @@ fn mta() {
 
 fn access_text(s: RadioAccessStatus) -> String {
     match s {
-        RadioAccessStatus::Allowed => "Allowed (izin var)".into(),
-        RadioAccessStatus::DeniedByUser => "DeniedByUser (kullanıcı reddetti)".into(),
-        RadioAccessStatus::DeniedBySystem => "DeniedBySystem (Windows reddetti)".into(),
-        RadioAccessStatus::Unspecified => "Unspecified (belirsiz)".into(),
-        other => format!("bilinmeyen {}", other.0),
+        RadioAccessStatus::Allowed => "Allowed (permission granted)".into(),
+        RadioAccessStatus::DeniedByUser => "DeniedByUser (the user refused)".into(),
+        RadioAccessStatus::DeniedBySystem => "DeniedBySystem (Windows refused)".into(),
+        RadioAccessStatus::Unspecified => "Unspecified (unclear)".into(),
+        other => format!("unknown {}", other.0),
     }
 }
 
@@ -27,24 +27,24 @@ fn kind_text(k: RadioKind) -> &'static str {
     match k {
         RadioKind::WiFi => "Wi-Fi",
         RadioKind::Bluetooth => "Bluetooth",
-        RadioKind::MobileBroadband => "Mobil geniş bant",
+        RadioKind::MobileBroadband => "Mobile broadband",
         RadioKind::FM => "FM",
-        _ => "diğer",
+        _ => "other",
     }
 }
 
 fn state_text(s: windows::core::Result<RadioState>) -> String {
     match s {
-        Ok(RadioState::On) => "açık".into(),
-        Ok(RadioState::Off) => "kapalı".into(),
-        Ok(RadioState::Disabled) => "devre dışı".into(),
-        Ok(other) => format!("bilinmiyor ({})", other.0),
-        Err(error) => format!("okunamadı ({error})"),
+        Ok(RadioState::On) => "on".into(),
+        Ok(RadioState::Off) => "off".into(),
+        Ok(RadioState::Disabled) => "disabled".into(),
+        Ok(other) => format!("unknown ({})", other.0),
+        Err(error) => format!("could not be read ({error})"),
     }
 }
 
 fn radios_now() -> Result<Vec<Radio>, String> {
-    let list = Radio::GetRadiosAsync().and_then(|op| op.get()).map_err(|e| format!("Radyolar okunamadı: {e}"))?;
+    let list = Radio::GetRadiosAsync().and_then(|op| op.get()).map_err(|e| format!("Could not read the radios: {e}"))?;
     let n = list.Size().map_err(|e| e.to_string())?;
     Ok((0..n).filter_map(|i| list.GetAt(i).ok()).collect())
 }
@@ -56,7 +56,7 @@ fn key(r: &Radio) -> Option<(i32, String)> {
 fn set(r: &Radio, on: bool) -> String {
     match r.SetStateAsync(if on { RadioState::On } else { RadioState::Off }).and_then(|op| op.get()) {
         Ok(status) => access_text(status),
-        Err(error) => format!("HATA ({error})"),
+        Err(error) => format!("ERROR ({error})"),
     }
 }
 
@@ -64,9 +64,9 @@ fn set(r: &Radio, on: bool) -> String {
 pub fn restore_radios(marker: &Path) {
     mta();
     let m: RadiosMarker = read_json(marker).unwrap_or_default();
-    log(&format!("Radyo işareti: {} radyo açık olmalı, denetleniyor.", m.on.len()));
+    log(&format!("Radio marker: {} radios should be on, checking.", m.on.len()));
     let Ok(radios) = radios_now() else {
-        log("Radyolar okunamadı; işaret bir sonraki açılış için duruyor.");
+        log("The radios could not be read; the marker stays for the next start.");
         return;
     };
     let mut all_back = true;
@@ -77,7 +77,7 @@ pub fn restore_radios(marker: &Path) {
             let now = r.State().ok();
             all_back &= now == Some(RadioState::On);
             log(&format!(
-                "  {} '{}' açılıyor: {answer}; şimdi {}.",
+                "  turning {} '{}' on: {answer}; now {}.",
                 kind_text(RadioKind(k.0)),
                 k.1,
                 state_text(r.State())
@@ -87,7 +87,7 @@ pub fn restore_radios(marker: &Path) {
     if all_back {
         let _ = std::fs::remove_file(marker);
     } else {
-        log("Bir radyo geri açılmadı: işaret duruyor, 'notch-probe restore' yeniden dener. Olmazsa Windows Ayarlar'dan aç.");
+        log("A radio did not come back on: the marker stays, 'notch-probe restore' retries. If that fails, turn it on in Windows Settings.");
     }
 }
 
@@ -95,14 +95,14 @@ pub fn radios(dir: &Path) -> Result<(), String> {
     mta();
     let access = Radio::RequestAccessAsync().and_then(|op| op.get());
     log(&format!(
-        "Radio.RequestAccessAsync cevabı: {}",
+        "Radio.RequestAccessAsync answer: {}",
         match access {
             Ok(s) => access_text(s),
-            Err(ref e) => format!("HATA ({e})"),
+            Err(ref e) => format!("ERROR ({e})"),
         }
     ));
     let radios = radios_now()?;
-    log(&format!("{} radyo bulundu:", radios.len()));
+    log(&format!("{} radios found:", radios.len()));
     for r in &radios {
         let name = r.Name().map(|n| n.to_string()).unwrap_or_default();
         log(&format!("  {} '{name}': {}", r.Kind().map(kind_text).unwrap_or("?"), state_text(r.State())));
@@ -114,7 +114,7 @@ pub fn radios(dir: &Path) -> Result<(), String> {
         })
         .collect();
     if targets.is_empty() {
-        log("Açık Wi-Fi ya da Bluetooth yok: hiçbir şey kapatılmadı. (Denemek için önce ikisini Windows'tan aç.)");
+        log("No Wi-Fi or Bluetooth is on: nothing was turned off. (To try it, first turn both on in Windows.)");
         return Ok(());
     }
     let marker = radios_marker(dir);
@@ -125,14 +125,14 @@ pub fn radios(dir: &Path) -> Result<(), String> {
         for r in &targets {
             let name = r.Name().map(|n| n.to_string()).unwrap_or_default();
             log(&format!(
-                "  {} '{name}' kapatılıyor: {}; şimdi {}.",
+                "  turning {} '{name}' off: {}; now {}.",
                 r.Kind().map(kind_text).unwrap_or("?"),
                 set(r, false),
                 state_text(r.State())
             ));
         }
     }
-    log("5 sn bekleniyor (Windows'ta simgeler kapandı mı, bak)...");
+    log("Waiting 5 s (check whether the icons went off in Windows)...");
     std::thread::sleep(Duration::from_secs(5));
     let _ops = ops();
     if crate::exiting() {
@@ -141,7 +141,7 @@ pub fn radios(dir: &Path) -> Result<(), String> {
     for r in &targets {
         let name = r.Name().map(|n| n.to_string()).unwrap_or_default();
         log(&format!(
-            "  {} '{name}' geri açılıyor: {}; şimdi {}.",
+            "  turning {} '{name}' back on: {}; now {}.",
             r.Kind().map(kind_text).unwrap_or("?"),
             set(r, true),
             state_text(r.State())
@@ -159,27 +159,27 @@ pub fn smtc() -> Result<(), String> {
     };
     mta();
     let manager =
-        Manager::RequestAsync().and_then(|op| op.get()).map_err(|e| format!("Medya oturumları okunamadı: {e}"))?;
+        Manager::RequestAsync().and_then(|op| op.get()).map_err(|e| format!("Could not read the media sessions: {e}"))?;
     let sessions = manager.GetSessions().map_err(|e| e.to_string())?;
-    log(&format!("{} medya oturumu var.", sessions.Size().unwrap_or(0)));
+    log(&format!("{} media sessions.", sessions.Size().unwrap_or(0)));
     let Ok(session) = manager.GetCurrentSession() else {
-        log("Şu an çalan bir parça yok (geçerli oturum yok).");
+        log("No track is playing right now (no current session).");
         return Ok(());
     };
     let app = session.SourceAppUserModelId().map(|s| s.to_string()).unwrap_or_default();
     let props = session
         .TryGetMediaPropertiesAsync()
         .and_then(|op| op.get())
-        .map_err(|e| format!("Parça bilgisi okunamadı: {e}"))?;
+        .map_err(|e| format!("Could not read the track info: {e}"))?;
     let status = match session.GetPlaybackInfo().and_then(|p| p.PlaybackStatus()) {
-        Ok(Status::Playing) => "çalıyor",
-        Ok(Status::Paused) => "duraklatıldı",
-        Ok(Status::Stopped) => "durdu",
-        Ok(_) => "başka",
-        Err(_) => "bilinmiyor",
+        Ok(Status::Playing) => "playing",
+        Ok(Status::Paused) => "paused",
+        Ok(Status::Stopped) => "stopped",
+        Ok(_) => "other",
+        Err(_) => "unknown",
     };
     log(&format!(
-        "Çalan: '{}' — '{}' (albüm '{}'), uygulama {app}, durum: {status}.",
+        "Playing: '{}' — '{}' (album '{}'), app {app}, state: {status}.",
         props.Title().map(|s| s.to_string()).unwrap_or_default(),
         props.Artist().map(|s| s.to_string()).unwrap_or_default(),
         props.AlbumTitle().map(|s| s.to_string()).unwrap_or_default(),
@@ -194,32 +194,32 @@ pub fn dpapi() -> Result<(), String> {
         CryptProtectData, CryptUnprotectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
     };
     // A fixed test string: never user data.
-    const SAMPLE: &[u8] = b"Peeka DPAPI deneme metni 2026";
+    const SAMPLE: &[u8] = b"Peeka DPAPI trial text 2026";
     let input = CRYPT_INTEGER_BLOB { cbData: SAMPLE.len() as u32, pbData: SAMPLE.as_ptr() as *mut u8 };
     let mut sealed = CRYPT_INTEGER_BLOB::default();
     let mut opened = CRYPT_INTEGER_BLOB::default();
     // SAFETY: input points at a static buffer; the outputs are allocated by Windows and freed with LocalFree below.
     unsafe {
         CryptProtectData(&input, w!("notch-probe"), None, None, None, CRYPTPROTECT_UI_FORBIDDEN, &mut sealed)
-            .map_err(|e| format!("Şifreleme başarısız: {e}"))?;
+            .map_err(|e| format!("Encryption failed: {e}"))?;
         let unsealed = CryptUnprotectData(&sealed, None, None, None, None, CRYPTPROTECT_UI_FORBIDDEN, &mut opened);
         let same = unsealed.is_ok() && std::slice::from_raw_parts(opened.pbData, opened.cbData as usize) == SAMPLE;
         log(&format!(
-            "DPAPI: {} baytlık deneme metni {} bayta şifrelendi; çözme {}; sonuç {}.",
+            "DPAPI: a {}-byte trial text was encrypted to {} bytes; decryption {}; result {}.",
             SAMPLE.len(),
             sealed.cbData,
             match &unsealed {
-                Ok(()) => "tamam".to_string(),
-                Err(e) => format!("BAŞARISIZ ({e})"),
+                Ok(()) => "ok".to_string(),
+                Err(e) => format!("FAILED ({e})"),
             },
-            if same { "aynı (doğru)" } else { "FARKLI" }
+            if same { "same (correct)" } else { "DIFFERENT" }
         ));
         let _ = LocalFree(Some(HLOCAL(sealed.pbData as *mut _)));
         if !opened.pbData.is_null() {
             let _ = LocalFree(Some(HLOCAL(opened.pbData as *mut _)));
         }
         if !same {
-            return Err("DPAPI gidiş-dönüşü tutmadı".into());
+            return Err("The DPAPI round trip did not match".into());
         }
     }
     Ok(())

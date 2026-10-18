@@ -1,4 +1,4 @@
-//! Demo mode (`notch --demo`; CouCou analysis item 7): a host that never writes `plugins.json` or the share folder,
+//! Demo mode (`notch --demo`): a host that never writes `plugins.json` or the share folder,
 //! with a fake main assistant already paired in process: two Claude Code sessions on the card, one waiting approval,
 //! the status counts. Nothing reaches a pipe; what Notch would send the fake plugin goes nowhere.
 
@@ -21,11 +21,11 @@ impl Host {
     /// A demo host; `data_dir` is only where the real one would write (it never does). Returns what the app must
     /// still run (the approval's alert, UI events); the consent window and every send to the fake plugin are dropped.
     pub fn demo(data_dir: PathBuf, now: u64) -> (Self, Vec<Out>) {
-        // `main_seen`: no "ilk bağlantı" card for a plugin that is not real.
+        // `main_seen`: no "first connection" card for a plugin that is not real.
         let mut h = Self::with(data_dir, Registry { main_seen: true, ..Registry::default() }, false);
         let mut outs = vec![];
         h.connect(DEMO_CONN, Client::default());
-        let manifest = json!({"id": DEMO_ID, "name": "Örnek Asistan", "publisher": "Örnek", "version": "demo", "api": 1,
+        let manifest = json!({"id": DEMO_ID, "name": "Sample Assistant", "publisher": "Sample", "version": "demo", "api": 1,
             "scopes": ["island.protrusion", "card.module", "approvals.prompt", "composer.handler"]});
         outs.extend(h.line(DEMO_CONN, &rpc(1, "hello", manifest), now));
         let scopes = [Scope::IslandProtrusion, Scope::CardModule, Scope::ApprovalsPrompt, Scope::ComposerHandler];
@@ -33,14 +33,14 @@ impl Host {
             outs.extend(h.consent_respond(req, true, Some(&scopes), true, false, now + GUARD_MS).unwrap_or_default());
         }
         let at = now + GUARD_MS;
-        let card = json!({"tabs": [{"id": "cc", "title": "Claude Code", "icon": "terminal", "genel": true, "blocks": [
+        let card = json!({"tabs": [{"id": "cc", "title": "Claude Code", "icon": "terminal", "general": true, "blocks": [
             {"type": "list", "rows": [
-                {"title": "proje", "subtitle": "Testleri çalıştırıyor", "value": "4 dk", "state": "info",
+                {"title": "project", "subtitle": "Running tests", "value": "4 min", "state": "info",
                  "session": "demo-session-1"},
-                {"title": "notch", "subtitle": "Onay bekliyor", "value": "1 dk", "state": "attention",
+                {"title": "notch", "subtitle": "Waiting for approval", "value": "1 min", "state": "attention",
                  "session": "demo-session-2"}]}]}],
-            "summary": [{"title": "2 Claude Code oturumu", "value": "çalışıyor", "icon": "terminal"}]});
-        let approval = json!({"id": "demo-approval", "source": "Claude Code", "title": "Komut çalıştırmak istiyor",
+            "summary": [{"title": "2 Claude Code sessions", "value": "running", "icon": "terminal"}]});
+        let approval = json!({"id": "demo-approval", "source": "Claude Code", "title": "Wants to run a command",
             "risk": "low", "kind": "command", "command": "npm test", "cwd": "C:\\demo\\notch",
             "options": ["allow", "deny"], "expires_s": 3600});
         for (i, (method, params)) in [
@@ -72,7 +72,7 @@ mod tests {
         assert_eq!(h.assistant_counts().map(|c| c.approvals), Ok(1));
         assert!(outs.iter().any(|o| matches!(o, Out::AlertPut { .. })), "the approval goes into the alert list");
         assert!(!outs.iter().any(|o| matches!(o, Out::ConsentOpen | Out::Send(..))));
-        // A fake session id never resolves to a pid: "Terminali aç" cannot raise a stranger's window in demo.
+        // A fake session id never resolves to a pid: "Open terminal" cannot raise a stranger's window in demo.
         assert!(h.cc_session_pid("demo-session-1").is_err());
     }
 

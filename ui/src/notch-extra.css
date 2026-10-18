@@ -1,124 +1,124 @@
-/* notch.css maketten kopyalanmıştır (jetonlar ve kurallar aynen); bu dosya yalnız gerçek sayfa için gerekenleri ekler. */
+/* notch.css is copied from the mockup (tokens and rules unchanged); this file adds only what the real page needs. */
 :root { --font: "Inter Variable", "Inter", -apple-system, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
 html, body, #root { height: 100%; }
 html, body { background: transparent; }
 body { position: relative; overflow: hidden; }
-.cubuk { inset: 0 0 auto 0; } /* şerit pencerenin üstünde 30 px; pencerenin kalanı paneller için, tıklama geçirir */
+.bar { inset: 0 0 auto 0; } /* the strip is the top 30 px of the window; the rest of the window is for panels and passes clicks through */
 
-/* tek renk simge: alfa maskesi yazı rengiyle boyanır (§0i madde 7) */
-.uygIk.mono { background: currentColor; -webkit-mask: center / contain no-repeat; mask: center / contain no-repeat; }
-html[data-renkli] .uygIk.mono[style*="--ikon-renk"] { background: var(--ikon-renk) center / contain no-repeat; -webkit-mask: none; mask: none; }
-/* şerit, tepsi ve Başlat ızgarasında renkli simge yalnız üstüne gelince (maket: .renk yalnız :hover); aksi halde tek renk */
-html[data-renkli] :is(.sabit, .sekmeA, .favTray .tus, .uygHucre):not(:hover, .hoverli) .uygIk.mono[style*="--ikon-renk"] { background: currentColor; }
-.sat > .uygIk, .sat > svg.lucide { color: var(--l3); }
+/* monochrome icon: the alpha mask is painted with the text color (§0i item 7) */
+.appIcon.mono { background: currentColor; -webkit-mask: center / contain no-repeat; mask: center / contain no-repeat; }
+html[data-color] .appIcon.mono[style*="--icon-color"] { background: var(--icon-color) center / contain no-repeat; -webkit-mask: none; mask: none; }
+/* on the strip, tray and Start grid, color icons only on hover (mockup: .color only on :hover); monochrome otherwise */
+html[data-color] :is(.pin, .tabA, .favTray .key, .appCell):not(:hover, .hovered) .appIcon.mono[style*="--icon-color"] { background: currentColor; }
+.row > .appIcon, .row > svg.lucide { color: var(--l3); }
 
-/* şerit */
-.taraf { position: relative; }
-.sabitler { position: relative; display: flex; align-items: center; gap: 2px; height: 24px; width: auto; }
-.sabitler .sabit { position: relative; left: auto; top: auto; }
-.sekmePil { z-index: 0; }
-.sabit, .sekmeA { z-index: 1; }
-@keyframes isik { from { transform: translateX(-110%); } to { transform: translateX(110%); } }
+/* strip */
+.side { position: relative; }
+.pins { position: relative; display: flex; align-items: center; gap: 2px; height: 24px; width: auto; }
+.pins .pin { position: relative; left: auto; top: auto; }
+.tabPill { z-index: 0; }
+.pin, .tabA { z-index: 1; }
+@keyframes glow { from { transform: translateX(-110%); } to { transform: translateX(110%); } }
 
-/* paneller */
-.kes > .ic.orta { left: 0; }
-.govde { animation: girdi .38s var(--ease) both; }
-@keyframes girdi { from { opacity: 0; filter: blur(6px); transform: translateY(5px) scale(.985); } to { opacity: 1; filter: none; transform: none; } }
-.sarkan { z-index: 7; }
-.sarkan[aria-hidden="true"] { pointer-events: none; }
-.tumUyg { max-height: 184px; overflow: auto; }
-.tumUyg .sat, .istisnaEkle .sat { width: 100%; text-align: left; }
-.oneriIzgara .sat { cursor: pointer; }
-@media (hover: hover) and (pointer: fine) { .oneriIzgara .sat:hover, .istisnaEkle .sat:hover { background: rgba(255,255,255,.07); } }
-.istisnalar, .istisnaEkle { max-height: 300px; overflow: auto; }
-.sonuclar { max-height: 360px; overflow: auto; }
-.sat .mini { opacity: .6; }
-.sat:hover .mini, .sat:focus-within .mini { opacity: 1; }
-.eoUyari { display: flex; margin-top: 2px; }
-.bolumBas > span:first-child { flex: 1; }
+/* panels */
+.cut > .inner.middle { left: 0; }
+.body { animation: inputIn .38s var(--ease) both; }
+@keyframes inputIn { from { opacity: 0; filter: blur(6px); transform: translateY(5px) scale(.985); } to { opacity: 1; filter: none; transform: none; } }
+.dangling { z-index: 7; }
+.dangling[aria-hidden="true"] { pointer-events: none; }
+.allApps { max-height: 184px; overflow: auto; }
+.allApps .row, .addException .row { width: 100%; text-align: left; }
+.suggestionGrid .row { cursor: pointer; }
+@media (hover: hover) and (pointer: fine) { .suggestionGrid .row:hover, .addException .row:hover { background: rgba(255,255,255,.07); } }
+.exceptions, .addException { max-height: 300px; overflow: auto; }
+.results { max-height: 360px; overflow: auto; }
+.row .mini { opacity: .6; }
+.row:hover .mini, .row:focus-within .mini { opacity: 1; }
+.consentWarning { display: flex; margin-top: 2px; }
+.sectionHead > span:first-child { flex: 1; }
 
-/* sağ tık menüsü: 0,26 / 0,80 yayına yakın, ölçek .94 ve 4 px yukarıdan */
-.baglam.open { visibility: visible; animation: baglamAc .26s var(--ease) both; }
-@keyframes baglamAc { from { opacity: 0; transform: translateY(-4px) scale(.94); } to { opacity: 1; transform: none; } }
+/* context menu: close to the 0.26 / 0.80 spring, scale .94 and from 4 px above */
+.context.open { visibility: visible; animation: contextOpen .26s var(--ease) both; }
+@keyframes contextOpen { from { opacity: 0; transform: translateY(-4px) scale(.94); } to { opacity: 1; transform: none; } }
 
-/* durum kartı kaydırıcıları: 4 px çubuk, basınca düğme büyür (maketteki .hudiz görünümü, gerçek range) */
+/* status card sliders: 4 px track, the thumb grows on press (the mockup's .hudTrack look, real range input) */
 input[type=range].hud { -webkit-appearance: none; appearance: none; flex: 1; width: auto; height: 16px; background: transparent; cursor: pointer; }
 input[type=range].hud::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--l1) 0 var(--y, 0%), rgba(255,255,255,.16) var(--y, 0%) 100%); }
 input[type=range].hud::-webkit-slider-thumb { -webkit-appearance: none; width: 4px; height: 4px; border-radius: 50%; background: transparent; transition: transform .16s var(--ease); }
 input[type=range].hud:active::-webkit-slider-thumb { transform: scale(3); background: #fff; }
 .dsat { gap: 10px; }
-.kontrolIzgara .kutuDug:focus-visible { outline-offset: 2px; }
+.controlGrid .boxBtn:focus-visible { outline-offset: 2px; }
 
-/* basılı tut düğmesi: yazı + ipucu */
-.btn.tut .tutIpucu { color: var(--l2); } /* l3 tam 4,5:1 sınırındaydı (F-23) */
-.btn.tut.dolu2 .tutIpucu { color: var(--l1); }
+/* press-and-hold button: label + hint */
+.btn.hold .holdHint { color: var(--l2); } /* l3 was right at the 4.5:1 limit (F-23) */
+.btn.hold.filled2 .holdHint { color: var(--l1); }
 
-/* dar ekran (1366 ve altı): etkin olmayan pencerelerin adı gizlenir, açık sabitin altında nokta (maketle aynı kural, data-dar ile) */
-html[data-dar] .sabit.acikSabit { position: relative; }
+/* narrow screen (1366 and below): inactive windows hide their names, open pins get a dot underneath (same rule as the mockup, via data-narrow) */
+html[data-narrow] .pin.openPinned { position: relative; }
 
-/* sağ tık menüsü: odaktaki öğe vurgulanır (fareyle açılsa da; ok tuşlarıyla gezilir) */
-.baglam button:focus { background: var(--maviDolu); color: #fff; outline: none; }
-.baglam button:focus svg.lucide { color: #fff; }
+/* context menu: the focused item is highlighted (even when opened by mouse; navigate with arrow keys) */
+.context button:focus { background: var(--blueFill); color: #fff; outline: none; }
+.context button:focus svg.lucide { color: #fff; }
 
-/* Dalga 5: pencere önizlemesi (maket .onizleme / .kucuk), gizlilik noktası, ada yanı etiket */
-.onizleme{position:absolute;top:var(--BAR);z-index:7;padding:12px;display:flex;gap:8px;border-radius:0 0 26px 26px;corner-shape:squircle;
-  background:linear-gradient(180deg,var(--strip),var(--kart) 40px);
-  box-shadow:inset .5px 0 0 var(--kenar),inset -.5px 0 0 var(--kenar),inset 0 -.5px 0 var(--kenar),0 10px 28px rgba(0,0,0,.24),0 28px 72px rgba(0,0,0,.3);
+/* Wave 5: window preview (mockup .preview / .small), privacy dot, label beside the island */
+.preview{position:absolute;top:var(--BAR);z-index:7;padding:12px;display:flex;gap:8px;border-radius:0 0 26px 26px;corner-shape:squircle;
+  background:linear-gradient(180deg,var(--strip),var(--card) 40px);
+  box-shadow:inset .5px 0 0 var(--edge),inset -.5px 0 0 var(--edge),inset 0 -.5px 0 var(--edge),0 10px 28px rgba(0,0,0,.24),0 28px 72px rgba(0,0,0,.3);
   opacity:0;transform:translateY(-6px) scale(.98);transform-origin:50% 0;filter:blur(4px);pointer-events:none;
   transition:opacity .14s ease,transform .14s var(--ease),filter .14s ease}
-.onizleme.on{opacity:1;transform:none;filter:blur(0);pointer-events:auto;transition-duration:.22s,.34s,.22s;transition-timing-function:ease,cubic-bezier(.34,1.36,.64,1),ease}
-.onizleme::before,.onizleme::after{content:"";position:absolute;top:0;width:13px;height:13px}
-.onizleme::before{left:-13px;background:radial-gradient(circle at 0 100%,transparent 12.4px,var(--strip) 13px)}
-.onizleme::after{right:-13px;background:radial-gradient(circle at 100% 100%,transparent 12.4px,var(--strip) 13px)}
-.onizleme .kucuk{width:200px;text-align:left;border-radius:14px;corner-shape:squircle;padding:0;color:inherit}
-.onizleme .kucuk .resim{height:112px;border-radius:14px;corner-shape:squircle;background:var(--yukselti1,#1C1C1E);position:relative;overflow:hidden}
-.onizleme .kucuk .resim img{width:100%;height:100%;object-fit:cover;display:block}
-.onizleme .kucuk .resim.yukleniyor{background:linear-gradient(110deg,var(--yukselti1,#1C1C1E) 30%,var(--yukselti2,#2C2C2E) 50%,var(--yukselti1,#1C1C1E) 70%);background-size:200% 100%;animation:onizYuk 1.4s linear infinite}
-@keyframes onizYuk{to{background-position:-200% 0}}
-.onizleme .kucuk .ad{display:flex;align-items:center;gap:6px;margin-top:8px;color:var(--l2);font-size:12px}
-.onizleme .kucuk .ad span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.onizleme .kucuk.on .ad{color:var(--l1)}
-.gizlilikNokta{width:7px;height:7px;border-radius:50%;background:var(--turuncu);flex:none;margin:0 3px 0 2px;animation:nab 1.8s ease-out infinite}
-.gizlilikNokta[data-yalniz="kamera"]{background:var(--yesil)}
-.soluk{opacity:.5}
-/* Dalga 6: Windows bildirim kartı (Bildirimler, sağ üst) ve tepsi listesi */
-.bildM{align-items:flex-start}
-.bildM .uyg b{font:600 12px/1 var(--font)}
-.bildM .uygIk{width:13px;height:13px}
-.mGovde{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.mMetin{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.mDugme{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px}
-.tepsi .sat{width:100%;text-align:left;cursor:pointer}
-.tepsi .uygIk{width:16px;height:16px}
-.zamanSat{display:flex;gap:6px;align-items:center;margin-top:6px}
-.zamanSat input{height:28px;border:0;border-radius:14px;padding:0 10px;background:var(--e2);color:var(--l1);font:inherit;font-size:12px;min-width:0;box-sizing:border-box}
-.zamanSat input:focus-visible{outline:2px solid var(--camKenar,rgba(255,255,255,.5));outline-offset:1px}
-.zamanSat input.dk{-moz-appearance:textfield}
-.zamanSat input.dk{width:56px;text-align:center}
-.zamanSat input.ad{flex:1}
-.zamanSat input::placeholder{color:var(--l3);opacity:1}
-.mUyari{flex-direction:column;align-items:flex-start;gap:6px}
+.preview.on{opacity:1;transform:none;filter:blur(0);pointer-events:auto;transition-duration:.22s,.34s,.22s;transition-timing-function:ease,cubic-bezier(.34,1.36,.64,1),ease}
+.preview::before,.preview::after{content:"";position:absolute;top:0;width:13px;height:13px}
+.preview::before{left:-13px;background:radial-gradient(circle at 0 100%,transparent 12.4px,var(--strip) 13px)}
+.preview::after{right:-13px;background:radial-gradient(circle at 100% 100%,transparent 12.4px,var(--strip) 13px)}
+.preview .small{width:200px;text-align:left;border-radius:14px;corner-shape:squircle;padding:0;color:inherit}
+.preview .small .image{height:112px;border-radius:14px;corner-shape:squircle;background:var(--raise1,#1C1C1E);position:relative;overflow:hidden}
+.preview .small .image img{width:100%;height:100%;object-fit:cover;display:block}
+.preview .small .image.loading{background:linear-gradient(110deg,var(--raise1,#1C1C1E) 30%,var(--raise2,#2C2C2E) 50%,var(--raise1,#1C1C1E) 70%);background-size:200% 100%;animation:previewLoad 1.4s linear infinite}
+@keyframes previewLoad{to{background-position:-200% 0}}
+.preview .small .name{display:flex;align-items:center;gap:6px;margin-top:8px;color:var(--l2);font-size:12px}
+.preview .small .name span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.preview .small.on .name{color:var(--l1)}
+.privacyDot{width:7px;height:7px;border-radius:50%;background:var(--orange);flex:none;margin:0 3px 0 2px;animation:pulse 1.8s ease-out infinite}
+.privacyDot[data-only="camera"]{background:var(--green)}
+.dim{opacity:.5}
+/* Wave 6: Windows notification card (Notifications, top right) and tray list */
+.notifM{align-items:flex-start}
+.notifM .app b{font:600 12px/1 var(--font)}
+.notifM .appIcon{width:13px;height:13px}
+.mBody{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.mText{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.mBtn{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px}
+.tray .row{width:100%;text-align:left;cursor:pointer}
+.tray .appIcon{width:16px;height:16px}
+.timeRow{display:flex;gap:6px;align-items:center;margin-top:6px}
+.timeRow input{height:28px;border:0;border-radius:14px;padding:0 10px;background:var(--e2);color:var(--l1);font:inherit;font-size:12px;min-width:0;box-sizing:border-box}
+.timeRow input:focus-visible{outline:2px solid var(--glassEdge,rgba(255,255,255,.5));outline-offset:1px}
+.timeRow input.min{-moz-appearance:textfield}
+.timeRow input.min{width:56px;text-align:center}
+.timeRow input.name{flex:1}
+.timeRow input::placeholder{color:var(--l3);opacity:1}
+.mWarning{flex-direction:column;align-items:flex-start;gap:6px}
 
-/* Şerit maskotu (40 px, asılı poz): gövde şeridin ~12 px altına sarkar, hiçbir üst öğe kırpmaz. Tıklanabilir alanı Island `addHitProvider` ile bildirir. */
-.adaMerkez, .adaMk, .adaMk > .ms { overflow: visible; }
-/* Sayı balonu: şeridin (30 px) ve sarkan gövdenin (42 px) altında; tıklama geçirir, şerit öğelerini örtmez. */
-.mkBalon { position: absolute; left: 50%; top: 48px; transform: translateX(-50%); z-index: 8; pointer-events: none; white-space: nowrap; padding: 4px 10px; border-radius: 10px;
-  background: rgba(24, 24, 28, .94); color: var(--l1); font-size: 12px; line-height: 16px; box-shadow: inset 0 .5px 0 rgba(255,255,255,.14), 0 4px 14px rgba(0,0,0,.35); animation: adaGir .18s var(--ease) backwards; }
-.mkBalon.demoNot { top: 76px; }
-.demoRozet { position: absolute; top: 6px; z-index: 8; pointer-events: none; padding: 0 7px; height: 18px; line-height: 18px; border-radius: 9px; font-size: 11px; font-weight: 600;
-  background: rgba(255, 159, 10, .2); color: var(--turuncu, #FF9F0A); }
-/* Onay maskotunun rozet yanı ipucu ("N Reddet / Y İzin ver"): ipucu çipleriyle aynı dil. */
-.mascot-ipucu { font-size: 11px; color: var(--l3); margin-left: 4px; }
-.mascot-ipucu kbd { font: 600 11px/16px var(--font); padding: 0 5px; border-radius: 8px; background: rgba(255,255,255,.08); color: var(--l2); }
+/* Strip mascot (40 px, hanging pose): the body hangs ~12 px below the strip, no parent clips it. Island reports its clickable area via `addHitProvider`. */
+.islandCenter, .islandMascot, .islandMascot > .ms { overflow: visible; }
+/* Count bubble: below the strip (30 px) and the hanging body (42 px); passes clicks through, doesn't cover strip items. */
+.mkBubble { position: absolute; left: 50%; top: 48px; transform: translateX(-50%); z-index: 8; pointer-events: none; white-space: nowrap; padding: 4px 10px; border-radius: 10px;
+  background: rgba(24, 24, 28, .94); color: var(--l1); font-size: 12px; line-height: 16px; box-shadow: inset 0 .5px 0 rgba(255,255,255,.14), 0 4px 14px rgba(0,0,0,.35); animation: islandIn .18s var(--ease) backwards; }
+.mkBubble.demoNote { top: 76px; }
+.demoBadge { position: absolute; top: 6px; z-index: 8; pointer-events: none; padding: 0 7px; height: 18px; line-height: 18px; border-radius: 9px; font-size: 11px; font-weight: 600;
+  background: rgba(255, 159, 10, .2); color: var(--orange, #FF9F0A); }
+/* Hint beside the approval mascot's badge ("N Deny / Y Allow"): same language as the hint chips. */
+.mascot-hint { font-size: 11px; color: var(--l3); margin-left: 4px; }
+.mascot-hint kbd { font: 600 11px/16px var(--font); padding: 0 5px; border-radius: 8px; background: rgba(255,255,255,.08); color: var(--l2); }
 
-/* R1-7: eklenen çip kesikli çerçeveli öneriyle aynı kutuda (2 px kayma yoktu: çerçeve 1+1) */
-.govde .cip.eklendi { border: 1px solid transparent; }
+/* R1-7: an added chip sits in the same box as the dashed suggestion (no 2 px shift: border 1+1) */
+.body .chip.added { border: 1px solid transparent; }
 
-/* R3-6: yazı ölçeği (FPV §0i): 11 = 11/13, 12 = 12/16; ölçek dışı satır yükseklikleri düzeltildi */
-html .govde .kod { line-height: 16px; }
-html .mascot-ipucu, html .tus-ipucu, html .dokum .tr .kim, html .dokum .ipucu { line-height: 13px; }
-html .mascot-ipucu kbd, html .tus-ipucu kbd { line-height: 13px; }
-html .birak { line-height: 16px; }
+/* R3-6: type scale (FPV §0i): 11 = 11/13, 12 = 12/16; off-scale line heights fixed */
+html .body .code { line-height: 16px; }
+html .mascot-hint, html .key-hint, html .transcript .tr .who, html .transcript .hint { line-height: 13px; }
+html .mascot-hint kbd, html .key-hint kbd { line-height: 13px; }
+html .drop { line-height: 16px; }
 
-/* İkinci ekran şeridinde onay rozeti (scenario 40): şeridin ortasında mutlak konumlu, akışı etkilemez. */
-.onayRozet{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:2px 10px;border-radius:10px;background:var(--turuncu);color:#000;font:600 12px/16px var(--font);white-space:nowrap;pointer-events:none}
+/* Approval badge on the second screen's strip (scenario 40): absolutely positioned at the strip's center, out of flow. */
+.approvalBadge{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:2px 10px;border-radius:10px;background:var(--orange);color:#000;font:600 12px/16px var(--font);white-space:nowrap;pointer-events:none}

@@ -1,126 +1,126 @@
-/* Sadakat denetimi 2: kartlar. Yalnız yeni kurallar; notch.css, plugin.css ve island.css'e dokunmaz. Hareket her zaman açık (reduced-motion okunmaz). */
+/* Fidelity audit 2: cards. New rules only; doesn't touch notch.css, plugin.css or island.css. Motion is always on (reduced-motion is not read). */
 
-/* Genel: asistan | Claude Code | Sistem (maket j). Sütun sayısı kutu sayısına göre satır içinde verilir. */
-.izgara.modul.genel3 { grid-template-columns: 1.3fr 1fr .9fr; }
-.sat .oneriTag { margin-left: auto; }
-/* sekme çubuğu ada orta çizgisinde sabit genişlikte ortalanır: kart genişliği değişse de çubuğun ekran x'i değişmez (Y4) */
-/* sağ köşe grubu: genişliği sabit (464), kartın ortasında; × her kartta ve Modüller sekmelerinde aynı ekran noktasında (kart genişliği ≥ 520) (R1-1) */
-.modUst { display: flex; align-items: center; justify-content: flex-end; gap: 10px; width: 464px; max-width: 100%; margin-inline: auto; }
-.modUst .seg { flex: none; max-width: 388px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-.modUst .seg::-webkit-scrollbar { display: none; }
-.modUst { position: relative; }
-.modUst .seg .segb { flex: none; width: 32px; padding: 0; justify-content: center; }
-.modUst .seg .segb.on { background: none; box-shadow: none; }
-/* etkin sekmenin hapı: simgenin altında kayar, konumu IslandCards ölçer */
-.segPil { position: absolute; z-index: 0; left: 0; top: 2px; height: 28px; border-radius: 12px; corner-shape: squircle; background: rgba(255,255,255,.13); box-shadow: inset 0 .5px 0 rgba(255,255,255,.16); transition: transform .25s cubic-bezier(.32,.72,0,1), width .25s cubic-bezier(.32,.72,0,1); pointer-events: none; }
+/* General: assistant | Claude Code | System (mockup j). The column count is set inline from the number of boxes. */
+.grid.module.general3 { grid-template-columns: 1.3fr 1fr .9fr; }
+.row .suggestionTag { margin-left: auto; }
+/* the tab bar is fixed-width and centered on the island's midline: its screen x stays put even when the card width changes (Y4) */
+/* right corner group: fixed width (464), centered in the card; × sits at the same screen point on every card and Modules tab (card width ≥ 520) (R1-1) */
+.modTop { display: flex; align-items: center; justify-content: flex-end; gap: 10px; width: 464px; max-width: 100%; margin-inline: auto; }
+.modTop .seg { flex: none; max-width: 388px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.modTop .seg::-webkit-scrollbar { display: none; }
+.modTop { position: relative; }
+.modTop .seg .segb { flex: none; width: 32px; padding: 0; justify-content: center; }
+.modTop .seg .segb.on { background: none; box-shadow: none; }
+/* active tab pill: slides under the icon, IslandCards measures its position */
+.segPill { position: absolute; z-index: 0; left: 0; top: 2px; height: 28px; border-radius: 12px; corner-shape: squircle; background: rgba(255,255,255,.13); box-shadow: inset 0 .5px 0 rgba(255,255,255,.16); transition: transform .25s cubic-bezier(.32,.72,0,1), width .25s cubic-bezier(.32,.72,0,1); pointer-events: none; }
 .segTip { position: absolute; top: calc(100% + 4px); transform: translateX(-50%); z-index: 5; padding: 4px 8px; border-radius: 8px; background: var(--e1); color: var(--l1); font: 11px/13px var(--font); white-space: nowrap; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
-/* Sığmazsa satır kayar; kenarlar kayma konumuna göre solar (kayma yoksa solma da yok). Dişli satırın dışında, sabit. */
+/* If it doesn't fit the row scrolls; edges fade based on scroll position (no scroll, no fade). The gear sits outside the row, fixed. */
 @property --fl { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @property --fr { syntax: "<length>"; inherits: false; initial-value: 0px; }
-@keyframes segSolma { 0% { --fl: 0px; --fr: 22px; } 6% { --fl: 22px; } 94% { --fr: 22px; } 100% { --fl: 22px; --fr: 0px; } }
-.modUst .seg { animation: segSolma linear both; animation-timeline: scroll(self inline); -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--fl), #000 calc(100% - var(--fr)), transparent); mask-image: linear-gradient(90deg, transparent, #000 var(--fl), #000 calc(100% - var(--fr)), transparent); }
-.modUst > .mini { flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 14px; color: var(--l2); }
-.modUst > .mini svg.lucide { width: 15px; height: 15px; }
-@media (hover: hover) and (pointer: fine) { .modUst > .mini:hover { background: rgba(255,255,255,.1); color: var(--l1); } }
+@keyframes segFade { 0% { --fl: 0px; --fr: 22px; } 6% { --fl: 22px; } 94% { --fr: 22px; } 100% { --fl: 22px; --fr: 0px; } }
+.modTop .seg { animation: segFade linear both; animation-timeline: scroll(self inline); -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--fl), #000 calc(100% - var(--fr)), transparent); mask-image: linear-gradient(90deg, transparent, #000 var(--fl), #000 calc(100% - var(--fr)), transparent); }
+.modTop > .mini { flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 14px; color: var(--l2); }
+.modTop > .mini svg.lucide { width: 15px; height: 15px; }
+@media (hover: hover) and (pointer: fine) { .modTop > .mini:hover { background: rgba(255,255,255,.1); color: var(--l1); } }
 
-/* özet satırı simgeleri ve oturum durumları */
-.sat > .turuncuIk, .sat > .soluk { display: grid; place-items: center; flex: none; }
-.sat > .turuncuIk { color: var(--turuncu); }
-.sat > .soluk { color: var(--l3); opacity: 1; } /* .soluk .5 ile çarpılınca 2,4:1 kalıyordu (F-11) */
-.sat > .turuncuIk svg.lucide, .sat > .soluk svg.lucide { width: 16px; height: 16px; }
-.oturumlar .sat { --girinti: 22px; min-height: 40px; padding: 6px 0; } /* R3-1: tek satır 40, dolgu 6 */
-.oturumlar .sat:first-child { margin-top: 6px; }
-.tikYesil { color: var(--yesil); display: grid; place-items: center; flex: none; }
-.tikYesil svg.lucide { width: 16px; height: 16px; }
-.durumBos { width: 12px; flex: none; }
+/* summary row icons and session states */
+.row > .orangeIcon, .row > .dim { display: grid; place-items: center; flex: none; }
+.row > .orangeIcon { color: var(--orange); }
+.row > .dim { color: var(--l3); opacity: 1; } /* multiplied by .soluk's .5 it was only 2.4:1 (F-11) */
+.row > .orangeIcon svg.lucide, .row > .dim svg.lucide { width: 16px; height: 16px; }
+.sessions .row { --indent: 22px; min-height: 40px; padding: 6px 0; } /* R3-1: single row 40, padding 6 */
+.sessions .row:first-child { margin-top: 6px; }
+.tickGreen { color: var(--green); display: grid; place-items: center; flex: none; }
+.tickGreen svg.lucide { width: 16px; height: 16px; }
+.statusEmpty { width: 12px; flex: none; }
 
-/* kota çubuğu (ADR-0059) */
-.kota .kotaSat { display: flex; justify-content: space-between; }
-.kota .olc { position: relative; margin: 6px 0 4px; }
-.kota .esik { position: absolute; top: 0; bottom: 0; width: 1.5px; background: var(--l2); }
-.kota + .kota { margin-top: 4px; }
-.blokKutu .kota + .t13, .blokKutu .kota + .t12 { margin-top: 6px; }
-.kutu h4 .leadMk { margin-block: -6px; }
+/* usage limit bar (ADR-0059) */
+.quota .quotaRow { display: flex; justify-content: space-between; }
+.quota .meter { position: relative; margin: 6px 0 4px; }
+.quota .threshold { position: absolute; top: 0; bottom: 0; width: 1.5px; background: var(--l2); }
+.quota + .quota { margin-top: 4px; }
+.blockBox .quota + .t13, .blockBox .quota + .t12 { margin-top: 6px; }
+.box h4 .leadMascot { margin-block: -6px; }
 
-/* kartlar: boş, hata, yükleme */
-.mkOrta.dar { max-width: 460px; }
-.hataAyrinti { max-width: 400px; text-align: left; }
-.yuzGir { display: inline-flex; animation: yuzGir .6s var(--ease) both; }
-@keyframes yuzGir { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+/* cards: empty, error, loading */
+.mkCenter.narrow { max-width: 460px; }
+.errorDetail { max-width: 400px; text-align: left; }
+.faceIn { display: inline-flex; animation: faceIn .6s var(--ease) both; }
+@keyframes faceIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
-/* Ctrl+Space: sol ataş ve çip satırı */
-.yazkutu .solIk { display: grid; place-items: center; flex: none; }
-.yazkutu .solIk svg.lucide { width: 16px; height: 16px; }
-.yuv svg.lucide { width: 16px; height: 16px; }
+/* Ctrl+Space: left paperclip and chip row */
+.inputBox .leftIcon { display: grid; place-items: center; flex: none; }
+.inputBox .leftIcon svg.lucide { width: 16px; height: 16px; }
+.slot svg.lucide { width: 16px; height: 16px; }
 
-/* Modüller sekme gövdesi: sekmenin kendi kartı (.govde) iç içe ek dolgu açmaz; geçiş kısa */
-.modBody { display: flex; flex-direction: column; gap: 12px; animation: modGir .13s ease-out both; }
-@keyframes modGir { from { opacity: 0; } to { opacity: 1; } }
-/* Pano sekmesi çizilmeye hazır olana dek görünmez bekler; eski sekme yerinde kalır, kart tek yayla büyür */
-.modBody.bekle { position: absolute; left: 0; right: 0; top: 0; visibility: hidden; pointer-events: none; animation: none; }
-/* Modüller kökü giriş animasyonunu kendisi çalıştırmaz: kart katmanı (adaGir) yeter; :has(data-paylas) açılıp kapanınca kök yeniden oynayıp sekme çubuğunu kaydırıyordu */
-.govde.modKok { animation: none; }
-.modBody > .govde { padding: 0; animation: none; }
+/* Modules tab body: the tab's own card (.govde) adds no nested padding; short transition */
+.modBody { display: flex; flex-direction: column; gap: 12px; animation: modIn .13s ease-out both; }
+@keyframes modIn { from { opacity: 0; } to { opacity: 1; } }
+/* The Clipboard tab waits invisibly until it's ready to draw; the old tab stays put and the card grows in one spring */
+.modBody.waiting { position: absolute; left: 0; right: 0; top: 0; visibility: hidden; pointer-events: none; animation: none; }
+/* The Modules root doesn't run its own enter animation: the card layer (islandIn) is enough; when :has(data-paylas) toggled, the root replayed and shifted the tab bar */
+.body.modRoot { animation: none; }
+.modBody > .body { padding: 0; animation: none; }
 
-/* kart çıkışı: × her kartta; sekme çubuğu olmayan kartlarda üstte ince bir şerit (Modüller + ×) */
-.adaIc.conBar { display: flex; flex-direction: column; }
-.kartBar { position: relative; z-index: 2; order: -1; display: flex; justify-content: flex-end; gap: 6px; width: 464px; max-width: 100%; margin: 0 auto -16px; padding-top: 16px; }
-.kapat { height: 28px; min-width: 28px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 14px; color: var(--l2); font: 500 12px/16px var(--font); }
-.kapat svg.lucide { width: 15px; height: 15px; }
-.kapat.modGit { padding: 0 10px; }
-@media (hover: hover) and (pointer: fine) { .kapat:hover { background: rgba(255,255,255,.1); color: var(--l1); } }
+/* card exit: × on every card; cards without a tab bar get a thin bar on top (Modules + ×) */
+.islandInner.conBar { display: flex; flex-direction: column; }
+.cardBar { position: relative; z-index: 2; order: -1; display: flex; justify-content: flex-end; gap: 6px; width: 464px; max-width: 100%; margin: 0 auto -16px; padding-top: 16px; }
+.close { height: 28px; min-width: 28px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 14px; color: var(--l2); font: 500 12px/16px var(--font); }
+.close svg.lucide { width: 15px; height: 15px; }
+.close.modGo { padding: 0 10px; }
+@media (hover: hover) and (pointer: fine) { .close:hover { background: rgba(255,255,255,.1); color: var(--l1); } }
 
-/* çıkıntıda imleç üstündeyken "aç" işareti */
-.adaMerkez .acIk { position: absolute; right: 2px; top: 50%; translate: 0 -50%; width: 12px; height: 12px; display: grid; place-items: center; color: var(--l2); pointer-events: none; animation: girdi .18s var(--ease) both; }
-.adaMerkez .acIk svg.lucide { width: 10px; height: 10px; }
+/* "open" hint while the pointer is over the peek */
+.islandCenter .openIcon { position: absolute; right: 2px; top: 50%; translate: 0 -50%; width: 12px; height: 12px; display: grid; place-items: center; color: var(--l2); pointer-events: none; animation: inputIn .18s var(--ease) both; }
+.islandCenter .openIcon svg.lucide { width: 10px; height: 10px; }
 
-/* zamanlayıcı sekmesi: çalışan sayaç + kontroller formun üstünde */
-.calisanSat { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; }
-.calisanSat .cik { padding: 0; }
+/* timer tab: running countdown + controls above the form */
+.runningRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; }
+.runningRow .peekBar { padding: 0; }
 
-/* CPU geçmişi: henüz örnek gelmeyen çubuklar soluk kısa çizgi */
-.spark i.bos { opacity: .25; }
+/* CPU history: bars with no sample yet are a dim short line */
+.spark i.empty { opacity: .25; }
 
-/* ilk açılış: metin alanı ve düğme yuvaları sabit, sayfa değişince hiçbir şey kaymaz (O8) */
-.frMetin { min-height: 104px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
-.frDugme { justify-content: center; }
-.frDugme .btn { min-width: 84px; }
+/* first run: text area and button slots are fixed, nothing shifts when the page changes (O8) */
+.frText { min-height: 104px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.frBtn { justify-content: center; }
+.frBtn .btn { min-width: 84px; }
 
-/* ---- sürtünme 2 + tutarlılık + erişilebilirlik ---- */
-/* korumadaki onay düğmesi (useGuard): soluk, tıklama yutulur */
-[data-bekle] { opacity: .5; transition: opacity .15s ease; }
+/* ---- friction 2 + consistency + accessibility ---- */
+/* approval button while guarded (useGuard): dimmed, clicks are swallowed */
+[data-wait] { opacity: .5; transition: opacity .15s ease; }
 .srOnly { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 
-/* ortadaki içerik ekranın ~%40'ı kadar (genişlik Island'dan, max-width satır içi); uzun başlık üç nokta, sanatçı önce kısalır (R2-Y1) */
-.adaMk { width: max-content; }
-.adaMk > .ms { min-width: 0; flex: 0 1 auto; }
-.adaMk .ms > :is(.b6, .l1, .l2, .l3):not(.num) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.adaMk .ms > .l3 { flex-shrink: 20; }
-/* "Ad › Başlık" kimlik satırı (onay kaynağı, eklenti adı) da kısalır; başlık değil, o önce küçülür */
-.adaMk .ms > .onEk { min-width: 0; flex-shrink: 20; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.adaMk .ms > :is(svg, img, .kapak, .leadMk, .gor, .dalga, .nab, .ikK, .basHarf, .kayNokta, .sayac, .num) { flex: none; }
+/* center content is ~40% of the screen (width from Island, max-width inline); long titles get an ellipsis, the artist shrinks first (R2-Y1) */
+.islandMascot { width: max-content; }
+.islandMascot > .ms { min-width: 0; flex: 0 1 auto; }
+.islandMascot .ms > :is(.b6, .l1, .l2, .l3):not(.num) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.islandMascot .ms > .l3 { flex-shrink: 20; }
+/* the "Name › Title" identity line (approval source, plugin name) also shrinks; it shrinks before the title does */
+.islandMascot .ms > .prefix { min-width: 0; flex-shrink: 20; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.islandMascot .ms > :is(svg, img, .cover, .leadMascot, .seen, .wave, .pulse, .ikK, .initials, .recDot, .counter, .num) { flex: none; }
 
-/* küçük düğme her yerde 26 (çıkıntıda da); satır yüksekliği t12 */
+/* small button is 26 everywhere (in peeks too); line height t12 */
 .btn.kk { line-height: 16px; }
-.cik .btn.kk { height: 26px; padding: 0 11px; border-radius: 13px; }
+.peekBar .btn.kk { height: 26px; padding: 0 11px; border-radius: 13px; }
 
-/* sekme çubuğunda odak halkası kırpılmaz: halka sekmenin içinde (F-02) */
-.modUst .seg .segb:focus-visible { outline-offset: -2px; }
-.modUst > .kapat { flex: none; width: 28px; padding: 0; }
+/* the focus ring isn't clipped in the tab bar: the ring sits inside the tab (F-02) */
+.modTop .seg .segb:focus-visible { outline-offset: -2px; }
+.modTop > .close { flex: none; width: 28px; padding: 0; }
 
-/* Modüller: her sekme aynı alt sınırda; Müzik 179 ile Genel 404 arasında kart soluk almaz (H-1). Genel 404 = 14 + 32 + 12 + gövde 330 + 16 */
-/* tek yükseklik (R1-10): uzun sekme (Pano, eklenti) kendi içinde kayar, kart büyümez; odak halkası kırpılmasın diye 2 px pay */
+/* Modules: every tab has the same bottom edge; the card doesn't breathe between Music 179 and General 404 (H-1). General 404 = 14 + 32 + 12 + body 330 + 16 */
+/* one height (R1-10): long tabs (Clipboard, plugins) scroll inside, the card doesn't grow; 2 px slack so the focus ring isn't clipped */
 .modBody { height: 330px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; padding: 2px; margin: -2px; box-sizing: content-box; }
 
-/* bildirim listesi: son satır ortada kesilmez, altta solar (R2-D2) */
-.bilds { -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); padding-bottom: 14px; }
+/* notification list: the last row isn't cut mid-way, it fades at the bottom (R2-D2) */
+.notifs { -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); padding-bottom: 14px; }
 
-/* kart yay ile boyutlanırken pahalı boyama durur: buzlu cam, büyük gölge ve hale (kart oturunca geri gelir) */
-[data-yay] .sarkan .cam { -webkit-backdrop-filter: none; backdrop-filter: none; }
-[data-yay] .sarkan { box-shadow: inset .5px 0 0 var(--kn), inset -.5px 0 0 var(--kn), inset 0 -.5px 0 var(--kn), 0 6px 14px rgba(0,0,0,.2); }
-.adaStage #hale { transition: --amb1 .8s ease, --ambO .8s ease, opacity .2s ease; }
-[data-yay] #hale { opacity: 0; }
+/* while the card springs to size, expensive painting pauses: frosted glass, big shadow and halo (they return once the card settles) */
+[data-spring] .dangling .glass { -webkit-backdrop-filter: none; backdrop-filter: none; }
+[data-spring] .dangling { box-shadow: inset .5px 0 0 var(--edgeVis), inset -.5px 0 0 var(--edgeVis), inset 0 -.5px 0 var(--edgeVis), 0 6px 14px rgba(0,0,0,.2); }
+.islandStage #halo { transition: --amb1 .8s ease, --ambO .8s ease, opacity .2s ease; }
+[data-spring] #halo { opacity: 0; }
 
-/* R1-4: cevaplanan onay satırı yer tutucu olarak kalır, sonra yükseklik animasyonuyla çekilir */
-.sat.satBitti { overflow: hidden; max-height: 46px; transition: max-height .26s var(--ease), opacity .26s ease, padding .26s var(--ease), min-height .26s var(--ease); }
-.sat.satBitti.git { max-height: 0; min-height: 0; padding-block: 0; opacity: 0; }
+/* R1-4: an answered approval row stays as a placeholder, then collapses with a height animation */
+.row.rowDone { overflow: hidden; max-height: 46px; transition: max-height .26s var(--ease), opacity .26s ease, padding .26s var(--ease), min-height .26s var(--ease); }
+.row.rowDone.go { max-height: 0; min-height: 0; padding-block: 0; opacity: 0; }

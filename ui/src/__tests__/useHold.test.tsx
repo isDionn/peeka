@@ -4,11 +4,11 @@ import { HoldButton } from "../components/common";
 
 afterEach(() => vi.useRealTimers());
 
-describe("basılı tut onayı", () => {
-  it("1,2 sn basılı kalmadan çalışmaz, kalınca çalışır", () => {
+describe("press-and-hold confirmation", () => {
+  it("does not fire without holding for 1.2 s, fires when held", () => {
     vi.useFakeTimers();
     const done = vi.fn();
-    const { getByRole } = render(<HoldButton label="Kapat" icon={null} onDone={done} />);
+    const { getByRole } = render(<HoldButton label="Close" icon={null} onDone={done} />);
     const b = getByRole("button");
     fireEvent.pointerDown(b, { button: 0 });
     act(() => { vi.advanceTimersByTime(1000); });
@@ -19,10 +19,10 @@ describe("basılı tut onayı", () => {
     act(() => { vi.advanceTimersByTime(1250); });
     expect(done).toHaveBeenCalledOnce();
   });
-  it("klavyeyle (Enter basılı) de çalışır", () => {
+  it("also works with the keyboard (Enter held)", () => {
     vi.useFakeTimers();
     const done = vi.fn();
-    const { getByRole } = render(<HoldButton label="Kapat" icon={null} onDone={done} />);
+    const { getByRole } = render(<HoldButton label="Close" icon={null} onDone={done} />);
     fireEvent.keyDown(getByRole("button"), { key: "Enter" });
     act(() => { vi.advanceTimersByTime(1250); });
     expect(done).toHaveBeenCalledOnce();

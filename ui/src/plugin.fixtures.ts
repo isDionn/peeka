@@ -1,37 +1,37 @@
-// Eklenti örnek verisi: sahte köprü, tarayıcı önizlemesi ve testler aynı kayıtları kullanır (maket durumları c1, c2, c2r, c3, j, eo, aye).
+// Sample plugin data: the fake bridge, the browser preview and tests share these records (mockup states c1, c2, c2r, c3, j, eo, aye).
 import type { ApprovalItem, CardBlock, ConsentRequest, MeterBlock, ModuleEntry, ModuleTab, PluginInfo, PluginRef, ProtrusionItem, SurfacesView } from "./plugin-api";
 
-export const PUSULA: PluginRef = { id: "dev.example.pusula", name: "Pusula", main: true };
-export const OTHER: PluginRef = { id: "com.example.asistan", name: "Örnek Asistan", main: false };
+export const COMPASS: PluginRef = { id: "dev.example.compass", name: "Compass", main: true };
+export const OTHER: PluginRef = { id: "com.example.assistant", name: "Sample Assistant", main: false };
 
 export const EMPTY_SURFACES: SurfacesView = { protrusion: null, approvals: [], approvalTop: null, dropStripMs: null, tabs: [], summary: [], composer: null };
 
 export const APPROVAL_LOW: ApprovalItem = {
-  plugin: PUSULA, id: "ap-1", source: "Claude Code", title: "api-sunucu izin istiyor", risk: "low", kind: "command",
-  command: "npm run test -- --coverage", cwd: "~/projeler/api-sunucu", detail: "Opus, oturum kotasının %38'i",
-  options: ["allow", "always", "deny"], alwaysLabel: "Bu klasörde npm test", expiresS: 300,
+  plugin: COMPASS, id: "ap-1", source: "Claude Code", title: "api-server needs approval", risk: "low", kind: "command",
+  command: "npm run test -- --coverage", cwd: "~/projects/api-server", detail: "Opus, 38% of session quota",
+  options: ["allow", "always", "deny"], alwaysLabel: "npm test in this folder", expiresS: 300,
 };
 export const APPROVAL_HIGH: ApprovalItem = {
-  ...APPROVAL_LOW, id: "ap-2", title: "api-sunucu yüksek riskli bir komut istiyor", risk: "high",
-  command: "git push --force origin main", detail: "Uzak daldaki geçmişi siler, geri alınamaz.",
+  ...APPROVAL_LOW, id: "ap-2", title: "api-server wants to run a high-risk command", risk: "high",
+  command: "git push --force origin main", detail: "Overwrites the remote branch history. Can't be undone.",
 };
 export const APPROVAL_CHOICE: ApprovalItem = {
-  plugin: PUSULA, id: "ap-3", source: "Claude Code", title: "web-sitesi bir seçim bekliyor", risk: "low", kind: "plan",
-  detail: "Header için hangi yol? Planı onaylarsan uygulamaya geçerim.", options: ["allow", "deny"],
-  choices: [{ id: "genislet", label: "Var olan bileşeni genişlet" }, { id: "yeni", label: "Yeni bileşen yaz" }], freeText: true, expiresS: 600,
+  plugin: COMPASS, id: "ap-3", source: "Claude Code", title: "website is waiting for a choice", risk: "low", kind: "plan",
+  detail: "Which way for the header? Approve the plan and I'll start.", options: ["allow", "deny"],
+  choices: [{ id: "extend", label: "Extend the existing component" }, { id: "new", label: "Write a new component" }], freeText: true, expiresS: 600,
 };
 
 export const PROTRUSION: ProtrusionItem = {
-  plugin: PUSULA, title: "Tasarım incelemesi", subtitle: "14:45, 13 dk sonra", icon: "calendar", state: "info", mascot: "hazir",
-  actions: [{ id: "katil", label: "Katıl", style: "primary" }],
+  plugin: COMPASS, title: "Design review", subtitle: "2:45 PM, in 13 min", icon: "calendar", state: "info", mascot: "ready",
+  actions: [{ id: "join", label: "Join", style: "primary" }],
 };
 
-/** Maket dik / tik / kay: eklentiden gelen dikte, ticket ve kayıt çipleri (yalnız `live_text`, `timer`, düz alanlar). */
-export const DIKTE: ProtrusionItem = { plugin: PUSULA, title: "Dikte", state: "info", mascot: "dinliyor", liveText: { streamId: "dikte-1" }, actions: [{ id: "bitir", label: "Bitir" }] };
-export const TICKET: ProtrusionItem = { plugin: PUSULA, title: "Yeni ticket", subtitle: "Sırada 2 ticket", icon: "ticket", state: "attention", actions: [{ id: "ac", label: "Taslağı aç", style: "primary" }, { id: "sonra", label: "Sonra" }] };
-export const KAYIT: ProtrusionItem = {
-  plugin: PUSULA, title: "Kayıt", subtitle: "Tüm ekran, ses kapalı", state: "danger", timer: { startedAt: "2026-10-16T14:30:00Z" },
-  actions: [{ id: "duraklat", label: "Duraklat" }, { id: "durdur", label: "Durdur", style: "destructive" }],
+/** Mockup dik / tik / kay: dictation, ticket and recording chips from a plugin (only `live_text`, `timer`, plain fields). */
+export const DICTATION: ProtrusionItem = { plugin: COMPASS, title: "Dictation", state: "info", mascot: "listening", liveText: { streamId: "dictation-1" }, actions: [{ id: "finish", label: "Finish" }] };
+export const TICKET: ProtrusionItem = { plugin: COMPASS, title: "New ticket", subtitle: "2 tickets in queue", icon: "ticket", state: "attention", actions: [{ id: "open", label: "Open draft", style: "primary" }, { id: "later", label: "Later" }] };
+export const RECORDING: ProtrusionItem = {
+  plugin: COMPASS, title: "Recording", subtitle: "Full screen, sound off", state: "danger", timer: { startedAt: "2026-10-16T14:30:00Z" },
+  actions: [{ id: "pause", label: "Pause" }, { id: "stop", label: "Stop", style: "destructive" }],
 };
 
 export const SURFACES_FULL: SurfacesView = {
@@ -40,87 +40,88 @@ export const SURFACES_FULL: SurfacesView = {
   approvalTop: "ap-1",
   dropStripMs: null,
   tabs: [
-    { plugin: PUSULA, id: "pusula", title: "Pusula", icon: "ghost", blocks: [
-      { type: "heading", text: "Masaüstünde çalışıyor" },
-      { type: "list", rows: [{ title: "Faturaları klasöre taşıyor", sub: "adım 3/5", value: null }, { title: "3 not önerisi", sub: "Gözden geçir" }] },
-      { type: "progress", label: "Adım 3/5", value: 0.6 },
-      { type: "buttons", buttons: [{ id: "durdur", label: "Durdur", style: "destructive" }] },
+    { plugin: COMPASS, id: "compass", title: "Compass", icon: "ghost", blocks: [
+      { type: "heading", text: "Working on the desktop" },
+      { type: "list", rows: [{ title: "Moving invoices to a folder", sub: "step 3/5", value: null }, { title: "3 note suggestions", sub: "Review" }] },
+      { type: "progress", label: "Step 3/5", value: 0.6 },
+      { type: "buttons", buttons: [{ id: "stop", label: "Stop", style: "destructive" }] },
     ] },
-    { plugin: PUSULA, id: "claude", title: "Claude Code", icon: "terminal", blocks: [
-      { type: "kv", rows: [{ k: "Oturum, 5 sa", v: "%38" }, { k: "Hafta", v: "%61" }] },
-      { type: "text", text: "Bugün 1,2 M token, 84 cevap" },
+    { plugin: COMPASS, id: "claude", title: "Claude Code", icon: "terminal", blocks: [
+      { type: "kv", rows: [{ k: "Session, 5h", v: "38%" }, { k: "Week", v: "61%" }] },
+      { type: "text", text: "Today 1.2M tokens, 84 replies" },
     ] },
   ],
-  summary: [{ plugin: PUSULA, rows: [{ title: "Masaüstünde çalışıyor", sub: "Faturaları klasöre taşıyor" }, { title: "Sırada 1 iş", value: "Ekip: 2 ajan" }] }],
-  composer: { ...PUSULA, voice: true },
+  summary: [{ plugin: COMPASS, rows: [{ title: "Working on the desktop", sub: "Moving invoices to a folder" }, { title: "1 job queued", value: "Team: 2 agents" }] }],
+  composer: { ...COMPASS, voice: true },
 };
 
 export const CONSENT: ConsentRequest = {
-  requestId: "rq-1", plugin: { id: "dev.example.pusula", name: "Pusula", publisher: "Örnek", version: "2.1" },
-  program: { path: "C:\\Program Files\\Pusula\\pusula.exe", signedBy: null },
-  lookalike: "Pusula Core (bağlı eklenti)",
+  requestId: "rq-1", plugin: { id: "dev.example.compass", name: "Compass", publisher: "Example", version: "2.1" },
+  program: { path: "C:\\Program Files\\Compass\\compass.exe", signedBy: null },
+  lookalike: "Compass Core (connected plugin)",
   scopes: ["island.protrusion", "approvals.prompt", "composer.handler", "windows.read"],
   why: {
-    "island.protrusion": "Toplantı ve iş durumunu göstermek için", "approvals.prompt": "Claude Code izinleri için",
-    "composer.handler": "Sohbet için", "windows.read": "Hangi uygulamada olduğunu anlamak için",
+    "island.protrusion": "To show meeting and job status", "approvals.prompt": "For Claude Code approvals",
+    "composer.handler": "For chat", "windows.read": "To know which app you're in",
   },
-  expiresAt: 0, // sahte köprü açılışta Date.now()+112 sn yazar (maketteki "1:52")
+  expiresAt: 0, // the fake bridge writes Date.now()+112 s on open (the mockup's "1:52")
 };
 
 export const PLUGINS: PluginInfo[] = [
   {
-    id: "dev.example.pusula", name: "Pusula", publisher: "Örnek", version: "2.1", connected: true, lastSeen: null, main: true, messages24h: 312, approvals24h: 4, lookalike: null, launch: "C:\Program Files\Pusula\pusula.exe",
+    id: "dev.example.compass", name: "Compass", publisher: "Example", version: "2.1", connected: true, lastSeen: null, main: true, messages24h: 312, approvals24h: 4, lookalike: null, launch: "C:\\Program Files\\Compass\\compass.exe",
     scopes: [
       { scope: "island.protrusion", granted: true, uses24h: 41 }, { scope: "approvals.prompt", granted: true, uses24h: 4 },
       { scope: "composer.handler", granted: true, uses24h: 12 }, { scope: "card.module", granted: true, uses24h: 255 }, { scope: "windows.read", granted: true, uses24h: 0 },
     ],
   },
   {
-    id: "com.example.asistan", name: "Örnek Asistan", publisher: "Örnek", version: "1.2.0", connected: false, lastSeen: null, main: false, messages24h: 3, approvals24h: 0, lookalike: "Pusula", launch: null,
+    id: "com.example.assistant", name: "Sample Assistant", publisher: "Example", version: "1.2.0", connected: false, lastSeen: null, main: false, messages24h: 3, approvals24h: 0, lookalike: "Compass", launch: null,
     scopes: [{ scope: "island.protrusion", granted: true, uses24h: 3 }, { scope: "card.module", granted: false, uses24h: 0 }],
   },
 ];
 
+// Core module ids are wire names shared with Rust (CORE_MODULES) and stay as they are.
 export const MODULES: ModuleEntry[] = [
-  ["layout-grid", "Genel", 1, "Peeka"], ["music", "Müzik", 1, "Peeka"], ["clipboard", "Pano", 1, "Peeka"], ["inbox", "Raf", 1, "Peeka"], ["calendar", "Takvim", 1, "Peeka"],
-  ["timer", "Zamanlayıcı", 1, "Peeka"], ["cpu", "Sistem", 1, "Peeka"], ["bell", "Bildirimler", 1, "Peeka"],
-  ["ghost", "Pusula", 1, "Pusula eklentisi"], ["terminal", "Claude Code", 1, "Pusula eklentisi"], ["users", "Ekip", 1, "Pusula eklentisi"],
-].map(([icon, title, on, owner]) => ({ id: String(title).toLocaleLowerCase("tr"), title: String(title), icon: String(icon), owner: String(owner), on: !!on }));
+  ["general", "layout-grid", "General", 1, "Peeka"], ["music", "music", "Music", 1, "Peeka"], ["clipboard", "clipboard", "Clipboard", 1, "Peeka"], ["shelf", "inbox", "Shelf", 1, "Peeka"], ["calendar", "calendar", "Calendar", 1, "Peeka"],
+  ["timer", "timer", "Timer", 1, "Peeka"], ["system", "cpu", "System", 1, "Peeka"], ["notifications", "bell", "Notifications", 1, "Peeka"],
+  ["compass", "ghost", "Compass", 1, "Compass plugin"], ["claude code", "terminal", "Claude Code", 1, "Compass plugin"], ["team", "users", "Team", 1, "Compass plugin"],
+].map(([id, icon, title, on, owner]) => ({ id: String(id), title: String(title), icon: String(icon), owner: String(owner), on: !!on }));
 
-/* ---- örnek veri: maket c3, j, d1, d3 ---- */
+/* ---- sample data: mockup c3, j, d1, d3 ---- */
 const meter = (m: Omit<MeterBlock, "type">): CardBlock => ({ type: "meter", ...m }) as unknown as CardBlock;
 
-/** c3: ilk seçenek önerilen (kartta önceden seçili). */
+/** c3: the first choice is recommended (preselected on the card). */
 export const withRecommended = (a: ApprovalItem): ApprovalItem => ({ ...a, choices: (a.choices ?? []).map((c, i) => ({ ...c, recommended: i === 0 })) });
 
 const CLAUDE_TAB = {
-  plugin: PUSULA, id: "claude", title: "Claude Code", icon: "terminal", genel: true, blocks: [
-    meter({ label: "Oturum, 5 sa", value: 0.38, text: "%38", note: "2 sa 14 dk sonra sıfırlanır" }),
-    meter({ label: "Hafta", value: 0.61, text: "%61", note: "3 gün sonra sıfırlanır", mark: 0.8 }),
-    { type: "text", text: "Bugün 1,2 M token, 84 cevap" },
+  plugin: COMPASS, id: "claude", title: "Claude Code", icon: "terminal", general: true, blocks: [
+    meter({ label: "Session, 5h", value: 0.38, text: "38%", note: "Resets in 2h 14m" }),
+    meter({ label: "Week", value: 0.61, text: "61%", note: "Resets in 3 days", mark: 0.8 }),
+    { type: "text", text: "Today 1.2M tokens, 84 replies" },
     { type: "list", rows: [
-      { title: "api-sunucu", sub: "izin bekliyor", state: "waiting" }, { title: "web-sitesi", sub: "Header.tsx düzenliyor", state: "running" }, { title: "veri-temizlik", sub: "bitti, 10 dk önce", state: "done" },
+      { title: "api-server", sub: "waiting for approval", state: "waiting" }, { title: "website", sub: "editing Header.tsx", state: "running" }, { title: "data-cleanup", sub: "done, 10m ago", state: "done" },
     ] },
   ],
 } as ModuleTab;
-/** j: Pusula | Claude Code | Sistem. Özet satırları maketteki sırayla (çalışıyor, not, sıra); onay satırı onay şemasından araya girer. */
+/** j: Compass | Claude Code | System. Summary rows in mockup order (working, notes, queue); the approval row slots in from the approval schema. */
 export const SURFACES_J: SurfacesView = {
-  protrusion: null, approvals: [{ plugin: PUSULA, id: "ap-j", source: "Claude Code", title: "Ekran kaydını Drive'a yükle", risk: "low", kind: "other", options: ["allow", "deny"], expiresS: null }], approvalTop: null, dropStripMs: null,
+  protrusion: null, approvals: [{ plugin: COMPASS, id: "ap-j", source: "Claude Code", title: "Upload screen recording to Drive", risk: "low", kind: "other", options: ["allow", "deny"], expiresS: null }], approvalTop: null, dropStripMs: null,
   tabs: [
-    { plugin: PUSULA, id: "pusula", title: "Pusula", icon: "ghost", blocks: [{ type: "heading", text: "Masaüstünde çalışıyor" }, { type: "text", text: "Faturaları klasöre taşıyor, adım 3/5" }] },
+    { plugin: COMPASS, id: "compass", title: "Compass", icon: "ghost", blocks: [{ type: "heading", text: "Working on the desktop" }, { type: "text", text: "Moving invoices to a folder, step 3/5" }] },
     CLAUDE_TAB,
-    { plugin: PUSULA, id: "ekip", title: "Ekip", icon: "users", blocks: [{ type: "text", text: "2 ajan çalışıyor, 1 iş sırada" }] },
+    { plugin: COMPASS, id: "team", title: "Team", icon: "users", blocks: [{ type: "text", text: "2 agents working, 1 job queued" }] },
   ],
-  summary: [{ plugin: PUSULA, rows: [
-    { title: "Masaüstünde çalışıyor", sub: "Faturaları klasöre taşıyor, adım 3/5", icon: "pointer", state: "attention", action: { id: "durdur", label: "Durdur", style: "destructive" } },
-    { title: "3 not önerisi", value: "Gözden geçir", icon: "brain" },
-    { title: "Sırada 1 iş", value: "Ekip: 2 ajan çalışıyor", icon: "list" },
+  summary: [{ plugin: COMPASS, rows: [
+    { title: "Working on the desktop", sub: "Moving invoices to a folder, step 3/5", icon: "pointer", state: "attention", action: { id: "stop", label: "Stop", style: "destructive" } },
+    { title: "3 note suggestions", value: "Review", icon: "brain" },
+    { title: "1 job queued", value: "Team: 2 agents working", icon: "list" },
   ] as unknown as SurfacesView["summary"][number]["rows"] }],
-  composer: { ...PUSULA, voice: true },
+  composer: { ...COMPASS, voice: true },
 };
 
-/** d1 (düşünüyor) ve d3 (konuşuyor): çıkıntıda iki satırlı döküm; akış `plugin_stream` ile gelir (önizleme "Sen" ve "Pusula" satırlarını yayar). */
-export const VOICE_THINKING = { plugin: PUSULA, title: "Düşünüyorum", state: "info", mascot: "dusunuyor", transcript: { streamId: "ses" } } as ProtrusionItem;
-export const VOICE_SPEAKING = { plugin: PUSULA, title: "Konuşuyorum", state: "info", mascot: "konusuyor", transcript: { streamId: "ses" } } as ProtrusionItem;
-export const VOICE_SEN = "Yarın sabahki toplantıyı hatırlat, notları da hazırla.";
-export const VOICE_ASISTAN = "Tamam, 09:15'te hatırlatıyorum. Son üç toplantı notunu özetleyip yeni bir nota koydum.";
+/** d1 (thinking) and d3 (speaking): two-line transcript on the peek; the stream arrives via `plugin_stream` (the preview emits "You" and "Compass" lines). */
+export const VOICE_THINKING = { plugin: COMPASS, title: "Thinking", state: "info", mascot: "thinking", transcript: { streamId: "voice" } } as ProtrusionItem;
+export const VOICE_SPEAKING = { plugin: COMPASS, title: "Speaking", state: "info", mascot: "speaking", transcript: { streamId: "voice" } } as ProtrusionItem;
+export const VOICE_YOU = "Remind me about tomorrow morning's meeting, and get the notes ready.";
+export const VOICE_ASSISTANT = "Sure, I'll remind you at 9:15. I summarized the last three meeting notes into a new note.";

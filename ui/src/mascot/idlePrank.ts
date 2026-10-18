@@ -1,5 +1,5 @@
-// Boştaki muziplik zamanlayıcısı (FPV §0i madde 19, sahip kararı 8): 45-90 dk'da bir, günde en çok 6, kapatılabilir.
-// Saf: saat, rastgelelik ve "şu an engel var mı" dışarıdan verilir; kendi zamanlayıcısı yok, sahibi poll() çağırır (~1 sn).
+// Idle prank scheduler (FPV §0i item 19, owner decision 8): once every 45-90 min, at most 6 a day, can be turned off.
+// Pure: clock, randomness and "is something blocking right now" are passed in; no timer of its own, the owner calls poll() (~1 s).
 export const PRANK_MIN_MS = 45 * 60_000;
 export const PRANK_MAX_MS = 90 * 60_000;
 export const PRANK_PER_DAY = 6;
@@ -8,10 +8,10 @@ export const INPUT_QUIET_MS = 3_000;
 export interface PrankEnv {
   now(): number;
   random(): number;
-  enabled(): boolean;          // Ayarlar > "Maskot muziplikleri"
+  enabled(): boolean;          // Settings > "Mascot pranks"
   lastInputAgoMs(): number;    // GetLastInputInfo
   fullscreen(): boolean;
-  dnd(): boolean;              // Peeka rahatsız etme kipi ya da QUNS_BUSY
+  dnd(): boolean;              // Peeka Do Not Disturb or QUNS_BUSY
   presentation(): boolean;     // QUNS_PRESENTATION_MODE
   meeting(): boolean;
   cardOpen(): boolean;
@@ -28,7 +28,7 @@ export function createIdlePrank(env: PrankEnv, onPrank: () => void) {
 
   function poll(): PrankResult {
     const now = env.now();
-    if (!env.enabled()) { nextAt = null; return "off"; }   // açılınca sayaç baştan başlar, birikmiş muziplik patlamaz
+    if (!env.enabled()) { nextAt = null; return "off"; }   // turning it on restarts the countdown, no backlog of pranks fires
     if (nextAt === null) nextAt = now + gap();
     if (now < nextAt) return "wait";
     const d = new Date(now).toDateString();
@@ -39,7 +39,7 @@ export function createIdlePrank(env: PrankEnv, onPrank: () => void) {
       [env.presentation(), "presentation"], [env.meeting(), "meeting"], [env.cardOpen(), "card"], [env.musicPlaying(), "music"],
     ];
     const hit = blocked.find(([b]) => b);
-    if (hit) return hit[1];   // vakti geldi, engel kalkınca ilk poll'da çıkar; en az aralık yine de korunur
+    if (hit) return hit[1];   // it's due; fires on the first poll after the block lifts; the minimum gap still holds
     today++;
     nextAt = now + gap();
     onPrank();

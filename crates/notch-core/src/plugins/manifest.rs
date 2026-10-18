@@ -12,7 +12,7 @@ const MAX_NAME: usize = 40;
 const MAX_PUBLISHER: usize = 60;
 const MAX_VERSION: usize = 24;
 const MAX_WHY: usize = 200;
-/// On top of `items::display`'s `›`-likes: what else reads as "Asistan › Claude Code" in a name. All become '-'.
+/// On top of `items::display`'s `›`-likes: what else reads as "Assistant › Claude Code" in a name. All become '-'.
 const NAME_SEPARATORS: [char; 14] = ['>', '<', '/', '|', '¦', '‣', '→', '⇒', '⟶', '➔', '➜', '➤', '▸', '►'];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -55,7 +55,7 @@ pub fn valid_id(id: &str) -> bool {
 }
 
 /// A display name (Notch draws "<name> › <title>"): tags stripped, separators flattened, so a plugin cannot draw
-/// "Asistan › Claude Code" as its own name.
+/// "Assistant › Claude Code" as its own name.
 fn name_text(v: &Value, limit: usize) -> Option<String> {
     let s = super::items::display(v, limit)?;
     let s: String = s.chars().map(|c| if NAME_SEPARATORS.contains(&c) { '-' } else { c }).collect();
@@ -64,14 +64,14 @@ fn name_text(v: &Value, limit: usize) -> Option<String> {
 
 pub fn parse(p: &Value) -> Result<Manifest, String> {
     let get = |k: &str| p.get(k).unwrap_or(&Value::Null);
-    let id = get("id").as_str().filter(|s| valid_id(s)).ok_or("id: ters alan adı biçiminde olmalı (en çok 64)")?;
+    let id = get("id").as_str().filter(|s| valid_id(s)).ok_or("id: must be in reverse-domain form (64 characters at most)")?;
     let name = name_text(get("name"), MAX_NAME).ok_or("name gerekli")?;
     let publisher = name_text(get("publisher"), MAX_PUBLISHER).ok_or("publisher gerekli")?;
     let version = text(get("version"), MAX_VERSION).ok_or("version gerekli")?;
     if get("api").as_u64() != Some(u64::from(API_VERSION)) {
-        return Err(format!("api: bu Peeka yalnız {API_VERSION} konuşur"));
+        return Err(format!("api: this Peeka only speaks {API_VERSION}"));
     }
-    let list = get("scopes").as_array().ok_or("scopes bir liste olmalı")?;
+    let list = get("scopes").as_array().ok_or("scopes must be a list")?;
     let mut scopes = vec![];
     for s in list {
         let name = s.as_str().unwrap_or_default();
@@ -82,7 +82,7 @@ pub fn parse(p: &Value) -> Result<Manifest, String> {
         }
     }
     if scopes.is_empty() {
-        return Err("en az bir kapsam iste".into());
+        return Err("request at least one scope".into());
     }
     let why = get("why")
         .as_object()
@@ -94,7 +94,7 @@ pub fn parse(p: &Value) -> Result<Manifest, String> {
         .unwrap_or_default();
     let launch = match get("launch") {
         Value::Null => None,
-        v => Some(v.as_str().filter(|s| launch_path(s)).ok_or(r"launch: mutlak bir .exe yolu olmalı (C:\...\ad.exe)")?.into()),
+        v => Some(v.as_str().filter(|s| launch_path(s)).ok_or(r"launch: must be an absolute .exe path (C:\...\name.exe)")?.into()),
     };
     Ok(Manifest { id: id.into(), name, publisher, version, scopes, why, launch })
 }
@@ -105,16 +105,16 @@ mod tests {
     use serde_json::json;
 
     fn hello() -> Value {
-        json!({"id":"com.example.asistan","name":"Örnek Asistan","publisher":"Örnek","version":"1.2.0","api":1,
+        json!({"id":"com.example.assistant","name":"Sample Assistant","publisher":"Sample","version":"1.2.0","api":1,
                "scopes":["island.protrusion","card.module","composer.handler"],
-               "why":{"composer.handler":"Ctrl+Space için","clipboard.read":"istenmedi","x":"y"},
+               "why":{"composer.handler":"for Ctrl+Space","clipboard.read":"not requested","x":"y"},
                "icon":"https://evil.test/logo.png"})
     }
 
     #[test]
     fn the_doc_example_parses_and_extra_fields_are_ignored() {
         let m = parse(&hello()).unwrap();
-        assert_eq!(m.id, "com.example.asistan");
+        assert_eq!(m.id, "com.example.assistant");
         assert_eq!(m.scopes, [Scope::IslandProtrusion, Scope::CardModule, Scope::ComposerHandler]);
         assert_eq!(m.why.len(), 1, "why only for requested scopes");
     }
@@ -130,7 +130,7 @@ mod tests {
 
     #[test]
     fn ids_names_and_api_are_checked() {
-        for id in ["asistan", "Com.Example.X", "com..x", "-a.b", "a.b-", &format!("a.{}", "b".repeat(70)), "a.b/c"] {
+        for id in ["assistant", "Com.Example.X", "com..x", "-a.b", "a.b-", &format!("a.{}", "b".repeat(70)), "a.b/c"] {
             assert!(!valid_id(id), "{id}");
         }
         assert!(valid_id("dev.example.core") && valid_id("com.example-1.x2"));
@@ -141,18 +141,18 @@ mod tests {
         h["name"] = json!("\u{202e}\u{200b}");
         assert!(parse(&h).is_err(), "only invisible characters = no name");
         let mut h = hello();
-        h["name"] = json!("P\u{202e}usula\n");
-        assert_eq!(parse(&h).unwrap().name, "Pusula", "bidi and control characters are dropped");
+        h["name"] = json!("C\u{202e}ompass\n");
+        assert_eq!(parse(&h).unwrap().name, "Compass", "bidi and control characters are dropped");
     }
 
     #[test]
     fn separators_in_names_are_flattened() {
         for (raw, want) in [
-            ("Pusula › Claude Code", "Pusula - Claude Code"),
-            ("Notch » Güvenlik", "Notch - Güvenlik"),
-            ("Pusula > X / Y | Z", "Pusula - X - Y - Z"),
-            ("Pusula ‣ X → Y", "Pusula - X - Y"),
-            ("<b>Pusula</b> Yardım", "Pusula Yardım"),
+            ("Compass › Claude Code", "Compass - Claude Code"),
+            ("Notch » Security", "Notch - Security"),
+            ("Compass > X / Y | Z", "Compass - X - Y - Z"),
+            ("Compass ‣ X → Y", "Compass - X - Y"),
+            ("<b>Compass</b> Help", "Compass Help"),
         ] {
             let mut h = hello();
             h["name"] = json!(raw);

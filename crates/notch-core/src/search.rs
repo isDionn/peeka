@@ -1,4 +1,4 @@
-//! Ctrl+K's Windows-settings and files groups (Wave 4). Settings: a fixed list of `ms-settings:` pages with Turkish
+//! Ctrl+K's Windows-settings and files groups (Wave 4). Settings: a fixed list of `ms-settings:` pages with English
 //! names; the page can open only these (by id, never a URI it sends). Files: one read-only `SELECT` against the
 //! Windows Search index (`SystemIndex`), built here so the escaping is tested: the owner's words are reduced to
 //! letters, digits and `. - _` before they go inside `CONTAINS('"…*"')`, so nothing typed can end the string or add
@@ -6,51 +6,51 @@
 
 use crate::clip::secret::fold_tr;
 
-/// (URI, Turkish name, extra words to match). Ctrl+K's pages: `search_open` opens one only if Notch listed it in the
+/// (URI, name, extra words to match). Ctrl+K's pages: `search_open` opens one only if Notch listed it in the
 /// last results or recents. The strip's fixed links are the separate `fidelity::SETTINGS_URIS`.
 pub const SETTINGS: &[(&str, &str, &str)] = &[
-    ("ms-settings:", "Ayarlar", "windows ayarlari"),
-    ("ms-settings:display", "Ekran", "parlaklik cozunurluk olcek monitor gece isigi"),
-    ("ms-settings:nightlight", "Gece ışığı", "mavi isik"),
-    ("ms-settings:sound", "Ses", "hoparlor mikrofon cikis giris"),
-    ("ms-settings:notifications", "Bildirimler", "uyari"),
-    ("ms-settings:quiethours", "Odak / Rahatsız etmeyin", "odaklanma sessiz"),
-    ("ms-settings:powersleep", "Güç ve uyku", "pil uyku ekran kapanma"),
-    ("ms-settings:batterysaver", "Pil tasarrufu", "batarya sarj"),
-    ("ms-settings:storagesense", "Depolama", "disk alan temizlik"),
-    ("ms-settings:multitasking", "Çoklu görev", "pencere yaslama"),
-    ("ms-settings:clipboard", "Pano", "kopyala yapistir gecmis"),
-    ("ms-settings:about", "Hakkında", "bilgisayar adi surum sistem"),
-    ("ms-settings:bluetooth", "Bluetooth ve cihazlar", "kulaklik fare klavye"),
-    ("ms-settings:printers", "Yazıcılar ve tarayıcılar", "yazici"),
-    ("ms-settings:mousetouchpad", "Fare", "imlec dokunmatik"),
-    ("ms-settings:network-status", "Ağ ve internet", "ag internet baglanti"),
-    ("ms-settings:network-wifi", "Wi-Fi", "kablosuz wifi"),
-    ("ms-settings:network-vpn", "VPN", "sanal ozel ag"),
-    ("ms-settings:personalization", "Kişiselleştirme", "tema"),
-    ("ms-settings:personalization-background", "Arka plan", "duvar kagidi"),
-    ("ms-settings:colors", "Renkler", "karanlik mod koyu acik"),
-    ("ms-settings:lockscreen", "Kilit ekranı", "kilit"),
-    ("ms-settings:taskbar", "Görev çubuğu", "taskbar"),
-    ("ms-settings:fonts", "Yazı tipleri", "font"),
-    ("ms-settings:appsfeatures", "Yüklü uygulamalar", "kaldir program"),
-    ("ms-settings:defaultapps", "Varsayılan uygulamalar", "tarayici acilis"),
-    ("ms-settings:startupapps", "Başlangıç uygulamaları", "acilista baslat"),
-    ("ms-settings:yourinfo", "Hesap bilgileri", "kullanici hesap"),
-    ("ms-settings:signinoptions", "Oturum açma seçenekleri", "parola pin windows hello"),
-    ("ms-settings:dateandtime", "Tarih ve saat", "saat dilimi"),
-    ("ms-settings:regionlanguage", "Dil ve bölge", "dil klavye turkce"),
-    ("ms-settings:gaming-gamebar", "Oyun", "game bar"),
-    ("ms-settings:easeofaccess", "Erişilebilirlik", "metin boyutu buyutec"),
-    ("ms-settings:privacy", "Gizlilik ve güvenlik", "izin"),
-    ("ms-settings:privacy-microphone", "Mikrofon izinleri", "mikrofon gizlilik"),
-    ("ms-settings:privacy-webcam", "Kamera izinleri", "kamera gizlilik"),
-    ("ms-settings:windowsdefender", "Windows Güvenliği", "virus defender"),
-    ("ms-settings:windowsupdate", "Windows Update", "guncelleme"),
-    ("ms-settings:backup", "Yedekleme", "yedek onedrive"),
-    ("ms-settings:troubleshoot", "Sorun giderme", "onar"),
-    ("ms-settings:recovery", "Kurtarma", "sifirla"),
-    ("ms-settings:developers", "Geliştiriciler için", "gelistirici modu"),
+    ("ms-settings:", "Settings", "windows settings"),
+    ("ms-settings:display", "Display", "brightness resolution scale monitor night light"),
+    ("ms-settings:nightlight", "Night light", "blue light"),
+    ("ms-settings:sound", "Sound", "speaker microphone output input"),
+    ("ms-settings:notifications", "Notifications", "alert"),
+    ("ms-settings:quiethours", "Focus / Do not disturb", "focus quiet"),
+    ("ms-settings:powersleep", "Power & sleep", "battery sleep screen off"),
+    ("ms-settings:batterysaver", "Battery saver", "battery charge"),
+    ("ms-settings:storagesense", "Storage", "disk space cleanup"),
+    ("ms-settings:multitasking", "Multitasking", "window snap"),
+    ("ms-settings:clipboard", "Clipboard", "copy paste history"),
+    ("ms-settings:about", "About", "pc name version system"),
+    ("ms-settings:bluetooth", "Bluetooth & devices", "headset mouse keyboard"),
+    ("ms-settings:printers", "Printers & scanners", "printer"),
+    ("ms-settings:mousetouchpad", "Mouse", "cursor touchpad"),
+    ("ms-settings:network-status", "Network & internet", "network internet connection"),
+    ("ms-settings:network-wifi", "Wi-Fi", "wireless wifi"),
+    ("ms-settings:network-vpn", "VPN", "virtual private network"),
+    ("ms-settings:personalization", "Personalization", "theme"),
+    ("ms-settings:personalization-background", "Background", "wallpaper"),
+    ("ms-settings:colors", "Colors", "dark mode light"),
+    ("ms-settings:lockscreen", "Lock screen", "lock"),
+    ("ms-settings:taskbar", "Taskbar", "task bar"),
+    ("ms-settings:fonts", "Fonts", "font"),
+    ("ms-settings:appsfeatures", "Installed apps", "uninstall program"),
+    ("ms-settings:defaultapps", "Default apps", "browser open"),
+    ("ms-settings:startupapps", "Startup apps", "startup boot"),
+    ("ms-settings:yourinfo", "Your info", "user account"),
+    ("ms-settings:signinoptions", "Sign-in options", "password pin windows hello"),
+    ("ms-settings:dateandtime", "Date & time", "time zone"),
+    ("ms-settings:regionlanguage", "Language & region", "language keyboard"),
+    ("ms-settings:gaming-gamebar", "Gaming", "game bar"),
+    ("ms-settings:easeofaccess", "Accessibility", "text size magnifier"),
+    ("ms-settings:privacy", "Privacy & security", "permission"),
+    ("ms-settings:privacy-microphone", "Microphone permissions", "microphone privacy"),
+    ("ms-settings:privacy-webcam", "Camera permissions", "camera privacy"),
+    ("ms-settings:windowsdefender", "Windows Security", "virus defender"),
+    ("ms-settings:windowsupdate", "Windows Update", "updates"),
+    ("ms-settings:backup", "Backup", "onedrive"),
+    ("ms-settings:troubleshoot", "Troubleshoot", "fix repair"),
+    ("ms-settings:recovery", "Recovery", "reset"),
+    ("ms-settings:developers", "For developers", "developer mode"),
 ];
 
 /// Pages whose name or words contain every typed word (folded, Turkish-aware), at most `max`.
@@ -113,10 +113,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn settings_match_turkish_names_and_words() {
-        let hits = settings("parlak", 5);
-        assert_eq!(hits[0], ("ms-settings:display", "Ekran"));
-        assert!(settings("GÖREV çub", 5).iter().any(|(u, _)| *u == "ms-settings:taskbar"));
+    fn settings_match_names_and_words() {
+        let hits = settings("bright", 5);
+        assert_eq!(hits[0], ("ms-settings:display", "Display"));
+        assert!(settings("TASK bar", 5).iter().any(|(u, _)| *u == "ms-settings:taskbar"));
         assert!(settings("", 5).is_empty());
         assert_eq!(setting_uri("ms-settings:sound"), Some("ms-settings:sound"));
         assert_eq!(setting_uri("ms-settings:sound;calc.exe"), None, "only the listed URIs open");
@@ -129,7 +129,7 @@ mod tests {
             "x' OR 1=1 --",
             "a'); DROP TABLE SystemIndex; --",
             "\"*\" OR SCOPE='file:C:/Windows'",
-            "fatura\u{0}gizli",
+            "invoice\u{0}hidden",
             "../../etc",
         ] {
             let Some(sql) = files_sql(q, 20) else { continue };
@@ -139,9 +139,9 @@ mod tests {
             assert_eq!(sql.matches("SCOPE=").count(), 1, "the owner cannot widen the scope: {sql}");
         }
         assert_eq!(
-            files_sql("Rapor şubat.pdf", 5).unwrap(),
-            "SELECT TOP 5 System.ItemUrl FROM SystemIndex WHERE SCOPE='file:' AND CONTAINS(System.FileName, '\"Rapor*\"') \
-             AND CONTAINS(System.FileName, '\"şubat.pdf*\"') ORDER BY System.DateModified DESC"
+            files_sql("Report march.pdf", 5).unwrap(),
+            "SELECT TOP 5 System.ItemUrl FROM SystemIndex WHERE SCOPE='file:' AND CONTAINS(System.FileName, '\"Report*\"') \
+             AND CONTAINS(System.FileName, '\"march.pdf*\"') ORDER BY System.DateModified DESC"
         );
         assert_eq!(files_sql("'; --", 5), None, "nothing searchable left");
     }

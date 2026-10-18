@@ -39,7 +39,7 @@ pub mod tray;
 #[cfg(test)]
 pub(crate) mod test_util;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// The only place the product name lives in Rust (the other is `tauri.conf.json`).
 pub const PRODUCT_NAME: &str = "Peeka";
@@ -60,6 +60,25 @@ fn data_dir_from(over: Option<std::ffi::OsString>, local: Option<std::ffi::OsStr
     }
 }
 
+/// Names in the data folder that used to be Turkish (old, new); a parent comes before the names inside it.
+const OLD_NAMES: [(&str, &str); 4] = [
+    ("pano", "clipboard"),
+    ("clipboard/gecmis.json", "clipboard/history.json"),
+    ("clipboard/gizli.bin", "clipboard/vault.bin"),
+    ("paylasim", "share"),
+];
+
+/// Startup, before anything opens these: renames each old name once, only when the new one isn't there (never
+/// overwrites; a failed rename leaves the old name in place).
+pub fn migrate_data_dir(dir: &Path) {
+    for (old, new) in OLD_NAMES {
+        let (old, new) = (dir.join(old), dir.join(new));
+        if old.exists() && !new.exists() {
+            let _ = std::fs::rename(old, new);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -69,5 +88,24 @@ mod tests {
         assert_eq!(data_dir_from(Some("X:\\t".into()), Some("C:\\L".into())), Some(PathBuf::from("X:\\t")));
         assert_eq!(data_dir_from(None, Some("C:\\L".into())), Some(PathBuf::from("C:\\L").join("notch")));
         assert_eq!(data_dir_from(Some("".into()), None), None);
+    }
+
+    #[test]
+    fn the_old_turkish_names_are_renamed_once_and_never_overwrite() {
+        let tmp = crate::test_util::Tmp::new();
+        tmp.write("pano/gecmis.json", b"h");
+        tmp.write("pano/gizli.bin", b"v");
+        tmp.write("pano/img/a.png", b"i");
+        tmp.write("paylasim/x.txt", b"s");
+        tmp.write("share/keep.txt", b"new");
+        migrate_data_dir(tmp.path());
+        let read = |rel: &str| std::fs::read(tmp.path().join(rel)).ok();
+        assert_eq!(read("clipboard/history.json").as_deref(), Some(&b"h"[..]));
+        assert_eq!(read("clipboard/vault.bin").as_deref(), Some(&b"v"[..]));
+        assert_eq!(read("clipboard/img/a.png").as_deref(), Some(&b"i"[..]));
+        assert!(!tmp.path().join("pano").exists());
+        assert_eq!(read("paylasim/x.txt").as_deref(), Some(&b"s"[..]), "share already exists: the old folder stays");
+        migrate_data_dir(tmp.path());
+        assert_eq!(read("clipboard/history.json").as_deref(), Some(&b"h"[..]));
     }
 }

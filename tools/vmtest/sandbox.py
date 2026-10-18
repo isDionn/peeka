@@ -1,4 +1,4 @@
-"""Drive a Windows Sandbox from the host through one mapped folder (see ARASTIRMA.md for why not Cua).
+"""Drive a Windows Sandbox from the host through one mapped folder (see RESEARCH.md for why not Cua).
 
 Host -> guest: out/cmd/NNN.ps1. Guest -> host: out/res/NNN.json, out/shots/*.png.
 Only three folders are ever mapped: the probe build (RO), the notch build (RO, if present), out/ (RW).
@@ -84,7 +84,7 @@ class Sandbox:
         for f in ("ready.txt", "testwin-clicks.txt", "agent-error.txt"):
             (self.out / f).unlink(missing_ok=True)
         for name in ("agent.ps1", "testwin.ps1"):
-            # BOM so Windows PowerShell 5.1 reads the Turkish strings as UTF-8.
+            # BOM so Windows PowerShell 5.1 reads the scripts as UTF-8.
             (self.out / name).write_text((HERE / name).read_text(encoding="utf-8"), encoding="utf-8-sig")
         for dll in RUNTIME_DLLS:
             src = Path(r"C:\Windows\System32") / dll

@@ -2,7 +2,6 @@
 //! Mode, package identity, notification access, and a 1 s poll of the Notification Center. Toast text is handed to
 //! the callback and kept nowhere here; this file writes no file and no log line (`mirror` test checks).
 //!
-//! Inspired by HeyyCzer/windows-dynamic-island (ideas only; no code copied).
 
 #[cfg(windows)]
 use std::sync::atomic::{AtomicBool, Ordering};

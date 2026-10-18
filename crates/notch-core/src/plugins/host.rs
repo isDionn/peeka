@@ -1,6 +1,6 @@
 //! The plugin host: one state for every connection, the pending consent, the plugins' items and the owner's
 //! commands. Pure: the caller passes bytes and Unix ms in and runs the [`Out`]s it gets back (send a line, close a
-//! connection, emit a UI event, touch the alert list). `src-tauri/src/plugins.rs` is that caller; the tests here are.
+//! connection, emit a UI event, touch the alert list). `crates/notch-app/src/plugins.rs` is that caller; the tests here are.
 //!
 //! Every method of a connected plugin is checked against the registry at the moment of the call, so turning a scope
 //! off or removing a plugin in Settings takes effect on its very next message.
@@ -46,7 +46,7 @@ const LATER: [&str; 4] = ["media.read", "windows.read", "notifications.post", "n
 /// `search.results`: at most this many rows per plugin and query.
 const SEARCH_MAX: usize = 8;
 
-/// What the UI hears about; `src-tauri` turns each into its `emit("…")` (names: `notch/ui/src/plugin-api.ts`).
+/// What the UI hears about; `crates/notch-app` turns each into its `emit("…")` (names: `notch/ui/src/plugin-api.ts`).
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum UiEvent {
     /// `plugins_changed` (null): the page calls `plugin_list` again.
@@ -141,7 +141,7 @@ pub struct StreamPiece {
     pub truncated: bool,
     /// The stream ended.
     pub done: bool,
-    /// `voice.transcript`'s `speaker` (e.g. "Sen"), passed through; none = no label.
+    /// `voice.transcript`'s `speaker` (e.g. "You"), passed through; none = no label.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub speaker: Option<String>,
 }
@@ -216,7 +216,7 @@ pub struct PluginInfo {
     pub scopes: Vec<ScopeState>,
     /// The paired plugin or reserved name this one looks like.
     pub lookalike: Option<String>,
-    /// The exe "Başlat" runs while this plugin is the main assistant (shown so the owner sees what it is).
+    /// The exe "Launch" runs while this plugin is the main assistant (shown so the owner sees what it is).
     pub launch: Option<String>,
 }
 
@@ -230,19 +230,20 @@ pub struct ModuleEntry {
     pub on: bool,
 }
 
-/// Notch's own Modules tabs (id, title, icon); plugin tabs are "<plugin id>/<tab id>".
+/// Notch's own Modules tabs (id, title, icon). The ids are wire names (saved settings and UI; registry.rs maps the old
+/// Turkish ids on load); plugin tabs are "<plugin id>/<tab id>".
 pub const CORE_MODULES: [(&str, &str, &str); 8] = [
-    ("genel", "Genel", "layout-grid"),
-    ("müzik", "Müzik", "music"),
-    ("pano", "Pano", "clipboard"),
-    ("raf", "Raf", "inbox"),
-    ("takvim", "Takvim", "calendar"),
-    ("zamanlayıcı", "Zamanlayıcı", "timer"),
-    ("sistem", "Sistem", "cpu"),
-    ("bildirimler", "Bildirimler", "bell"),
+    ("general", "General", "layout-grid"),
+    ("music", "Music", "music"),
+    ("clipboard", "Clipboard", "clipboard"),
+    ("shelf", "Shelf", "inbox"),
+    ("calendar", "Calendar", "calendar"),
+    ("timer", "Timer", "timer"),
+    ("system", "System", "cpu"),
+    ("notifications", "Notifications", "bell"),
 ];
 
-/// A pano item as `clipboard.read` would return it. shortcut: no source yet (Wave 4 fills `Host::clipboard`); the
+/// A clipboard item as `clipboard.read` would return it. shortcut: no source yet (Wave 4 fills `Host::clipboard`); the
 /// password filter below is what the API promises and is tested now.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct ClipItem {
@@ -265,7 +266,7 @@ pub enum OwnerErr {
     /// Within 300 ms of display: ignored, the prompt stays.
     Ignored,
     Invalid,
-    /// No main assistant connected (the UI says "Asistan bağlı değil").
+    /// No main assistant connected (the UI says "Assistant not connected").
     NoMain,
     Io,
     /// The main assistant has not sent this yet.
@@ -427,7 +428,7 @@ pub struct Host {
     voice: Option<VoiceView>,
     lock: Lock,
     last_sweep: u64,
-    /// The pano's plugin view (`clip::Pano::plugin_items`, never a password item), refreshed on every change.
+    /// The clipboard's plugin view (`clip::ClipHistory::plugin_items`, never a password item), refreshed on every change.
     pub clipboard: Vec<ClipItem>,
     /// The Ctrl+K query the plugins were last asked (`search.query`) and what they answered.
     search_req: u64,
@@ -491,7 +492,7 @@ impl Host {
 
     fn save(&self, out: &mut Vec<Out>) {
         if self.persist && registry::save(&registry::path(&self.data_dir), &self.reg).is_err() {
-            out.push(Out::Log("eklenti kaydı (plugins.json) yazılamadı".into()));
+            out.push(Out::Log("could not write the plugin registry (plugins.json)".into()));
         }
     }
 
@@ -534,12 +535,12 @@ impl Host {
             return out;
         }
         if raw.len() > MAX_CARD_MESSAGE {
-            out.push(Out::Send(conn, error_line(&Value::Null, &fail(code::TOO_LARGE, "mesaj 256 KB'yi aşıyor"))));
+            out.push(Out::Send(conn, error_line(&Value::Null, &fail(code::TOO_LARGE, "message exceeds 256 KB"))));
             out.push(Out::Close(conn));
             return out;
         }
         let Ok(msg) = serde_json::from_slice::<Value>(raw) else {
-            out.push(Out::Send(conn, error_line(&Value::Null, &fail(code::PARSE, "JSON değil"))));
+            out.push(Out::Send(conn, error_line(&Value::Null, &fail(code::PARSE, "not JSON"))));
             return out;
         };
         let id = msg.get("id").cloned();
@@ -547,7 +548,7 @@ impl Host {
         let method = msg.get("method").and_then(Value::as_str).map(str::to_string);
         let id_ok = id.as_ref().is_none_or(|i| i.is_string() || i.is_i64() || i.is_u64());
         let (Some(method), true, true) = (method, msg.get("jsonrpc") == Some(&json!("2.0")), id_ok) else {
-            out.push(Out::Send(conn, error_line(&rid, &fail(code::INVALID_REQUEST, "JSON-RPC 2.0 isteği değil"))));
+            out.push(Out::Send(conn, error_line(&rid, &fail(code::INVALID_REQUEST, "not a JSON-RPC 2.0 request"))));
             return out;
         };
         let plugin = match &self.conns[&conn].phase {
@@ -555,7 +556,7 @@ impl Host {
             _ => "-".into(),
         };
         let res = if raw.len() > MAX_MESSAGE && method != "card.module.set" {
-            Err(fail(code::TOO_LARGE, "mesaj 64 KB'yi aşıyor (yalnız card.module.set 256 KB)"))
+            Err(fail(code::TOO_LARGE, "message exceeds 64 KB (only card.module.set may be 256 KB)"))
         } else {
             self.limit(conn, &method, now).and_then(|()| {
                 let params = msg.get("params").cloned().unwrap_or(Value::Null);
@@ -576,7 +577,7 @@ impl Host {
                 } else {
                     "?"
                 };
-                self.log(conn, now, || format!("eklenti {plugin} {shown} -> {}", e.code), &mut out);
+                self.log(conn, now, || format!("plugin {plugin} {shown} -> {}", e.code), &mut out);
                 if id.is_some() || e.close {
                     out.push(Out::Send(conn, error_line(&rid, &e)));
                 }
@@ -591,13 +592,13 @@ impl Host {
     /// Control and stream messages in separate buckets. A stream message over 40/s is still taken:
     /// it is merged into the same 50 ms batch.
     fn limit(&mut self, conn: ConnId, method: &str, now: u64) -> Result<(), RpcErr> {
-        let c = self.conns.get_mut(&conn).ok_or_else(|| fail(code::UNAUTHORIZED, "bağlantı yok"))?;
+        let c = self.conns.get_mut(&conn).ok_or_else(|| fail(code::UNAUTHORIZED, "no such connection"))?;
         if STREAM_METHODS.contains(&method) {
             let _merged = c.stream.hit(now, limits::STREAM_MAX, limits::STREAM_WINDOW_MS).is_some();
             return Ok(());
         }
         match c.control.hit(now, limits::CONTROL_MAX, limits::CONTROL_WINDOW_MS) {
-            Some(wait) => Err(retry(code::RATE, "çok fazla mesaj", wait)),
+            Some(wait) => Err(retry(code::RATE, "too many messages", wait)),
             None => Ok(()),
         }
     }
@@ -613,14 +614,14 @@ impl Host {
     ) -> Result<Option<Value>, RpcErr> {
         let phase = match &self.conns[&conn].phase {
             Phase::New => None,
-            Phase::Waiting => return Err(retry(code::BUSY, "onay penceresi açık, cevap bekleniyor", BUSY_RETRY_S)),
+            Phase::Waiting => return Err(retry(code::BUSY, "the approval window is open, waiting for an answer", BUSY_RETRY_S)),
             Phase::Ready(p) => Some(p.clone()),
         };
         match (phase, method) {
             (None, "hello") => self.hello(conn, p, rid, now, out),
             (None, "auth") => self.auth(conn, p, now, out).map(Some),
-            (None, _) => Err(closing(fail(code::UNAUTHORIZED, "önce hello ya da auth"))),
-            (Some(_), "hello" | "auth") => Err(fail(code::INVALID_REQUEST, "zaten bağlı")),
+            (None, _) => Err(closing(fail(code::UNAUTHORIZED, "send hello or auth first"))),
+            (Some(_), "hello" | "auth") => Err(fail(code::INVALID_REQUEST, "already connected")),
             (Some(pid), m) => self.call(conn, &pid, m, p, now, out).map(Some),
         }
     }
@@ -635,21 +636,21 @@ impl Host {
     ) -> Result<Option<Value>, RpcErr> {
         let m = manifest::parse(p).map_err(|e| closing(fail(code::INVALID_PARAMS, e)))?;
         if self.reg.blocked.contains(&m.id) {
-            return Err(closing(fail(code::DENIED, "sahip bu eklentiyi bir daha sormamayı seçti")));
+            return Err(closing(fail(code::DENIED, "the owner chose not to be asked about this plugin again")));
         }
         let main_name =
             self.reg.main.as_deref().filter(|id| *id != m.id).and_then(|id| self.reg.get(id)).map(|r| r.name.clone());
         if names::reserved(&m.name, main_name.as_deref()) {
             return Err(closing(fail(
                 code::INVALID_PARAMS,
-                "bu ad kullanılamaz (Peeka, Windows, Sistem, ana asistanın adı ya da Peeka/ana asistan adıyla başlayan ad)",
+                "this name is not allowed (Peeka, Windows, System, the main assistant's name, or a name starting with Peeka or the main assistant's name)",
             )));
         }
         if self.reg.plugins.iter().any(|r| r.id != m.id && names::same(&r.name, &m.name)) {
-            return Err(closing(fail(code::INVALID_PARAMS, "bu görünen ad başka bir eklentide")));
+            return Err(closing(fail(code::INVALID_PARAMS, "this display name belongs to another plugin")));
         }
         if self.consent.is_some() {
-            return Err(closing(retry(code::BUSY, "başka bir onay bekliyor", BUSY_RETRY_S)));
+            return Err(closing(retry(code::BUSY, "another approval is pending", BUSY_RETRY_S)));
         }
         let exe = self.conns[&conn].client.exe.clone();
         while self.pairings.front().is_some_and(|(t, _, _)| now.saturating_sub(*t) >= PAIRING_WINDOW_MS) {
@@ -659,11 +660,11 @@ impl Host {
         if self.pairings.iter().filter(same_source).count() >= PAIRING_MAX {
             let oldest = self.pairings.iter().find(same_source).map_or(now, |(t, _, _)| *t);
             let wait = (PAIRING_WINDOW_MS - now.saturating_sub(oldest)).div_ceil(1000);
-            return Err(closing(retry(code::RATE, "10 dakikada en çok 3 eşleşme isteği", wait)));
+            return Err(closing(retry(code::RATE, "at most 3 pairing requests in 10 minutes", wait)));
         }
         if self.pairings.len() >= PAIRING_MAX_ALL {
             let wait = (PAIRING_WINDOW_MS - now.saturating_sub(self.pairings[0].0)).div_ceil(1000);
-            return Err(closing(retry(code::RATE, "10 dakikada en çok 6 eşleşme isteği (bütün eklentiler)", wait)));
+            return Err(closing(retry(code::RATE, "at most 6 pairing requests in 10 minutes (all plugins)", wait)));
         }
         self.pairings.push_back((now, m.id.clone(), exe));
         let lookalike = self.lookalike_of(&m.id, &m.name);
@@ -692,7 +693,7 @@ impl Host {
     fn auth(&mut self, conn: ConnId, p: &Value, now: u64, out: &mut Vec<Out>) -> Result<Value, RpcErr> {
         let (id, token) = (p.get("id").and_then(Value::as_str), p.get("token").and_then(Value::as_str));
         let rec = id.zip(token).and_then(|(i, t)| self.reg.verify(i, t)).cloned();
-        let Some(rec) = rec else { return Err(closing(fail(code::UNAUTHORIZED, "kimlik ya da jeton geçersiz"))) };
+        let Some(rec) = rec else { return Err(closing(fail(code::UNAUTHORIZED, "invalid id or token"))) };
         // One connection per plugin: the newer one wins.
         for old in self.ready_conns(&rec.id) {
             out.push(Out::Close(old));
@@ -724,22 +725,22 @@ impl Host {
         now: u64,
         out: &mut Vec<Out>,
     ) -> Result<Value, RpcErr> {
-        let need = scope_of(method).ok_or_else(|| fail(code::NO_METHOD, "böyle bir yöntem yok"))?;
-        let rec = self.reg.get(pid).cloned().ok_or_else(|| closing(fail(code::UNAUTHORIZED, "eklenti kaldırıldı")))?;
+        let need = scope_of(method).ok_or_else(|| fail(code::NO_METHOD, "no such method"))?;
+        let rec = self.reg.get(pid).cloned().ok_or_else(|| closing(fail(code::UNAUTHORIZED, "plugin removed")))?;
         self.messages.entry(pid.into()).or_default().hit(now);
         if let Some(s) = need {
             if !rec.active(s) {
-                return Err(fail(code::FORBIDDEN, format!("bu yöntem '{}' kapsamı ister", s.name())));
+                return Err(fail(code::FORBIDDEN, format!("this method needs the '{}' scope", s.name())));
             }
             self.usage.entry((pid.into(), s)).or_default().hit(now);
         }
         if LATER.contains(&method) {
-            return Err(fail(code::NO_METHOD, "bu yöntemin kaynağı henüz yok"));
+            return Err(fail(code::NO_METHOD, "this method has no source yet"));
         }
         let main = self.reg.is_main(pid);
         let assistant_only = assistant::METHODS.iter().any(|(n, _)| *n == method);
         if (method.starts_with("composer.") || method.starts_with("voice.") || assistant_only) && !main {
-            return Err(fail(code::NOT_MAIN, "yalnız ana asistan"));
+            return Err(fail(code::NOT_MAIN, "main assistant only"));
         }
         let who = Who { name: &rec.name, main };
         let bad = |e: items::Bad| fail(code::INVALID_PARAMS, e);
@@ -752,9 +753,9 @@ impl Host {
             "island.protrusion.set" => {
                 let item = items::protrusion(p, who, pid, now).map_err(bad)?;
                 if !self.protrusions.contains_key(pid) {
-                    let c = self.conns.get_mut(&conn).ok_or_else(|| fail(code::UNAUTHORIZED, "bağlantı yok"))?;
+                    let c = self.conns.get_mut(&conn).ok_or_else(|| fail(code::UNAUTHORIZED, "no such connection"))?;
                     if let Some(w) = c.opens.hit(now, limits::PROTRUSION_OPENS_MAX, limits::PROTRUSION_WINDOW_MS) {
-                        return Err(retry(code::RATE, "dakikada en çok 6 çıkıntı açılır", w));
+                        return Err(retry(code::RATE, "at most 6 peeks per minute", w));
                     }
                 }
                 self.protrusions.insert(pid.into(), item);
@@ -771,7 +772,7 @@ impl Host {
                 let m = items::module(p, who, pid, now).map_err(bad)?;
                 if m.skipped > 0 {
                     let n = m.skipped;
-                    self.log(conn, now, || format!("eklenti {pid} card.module.set: {n} bilinmeyen blok atlandı"), out);
+                    self.log(conn, now, || format!("plugin {pid} card.module.set: {n} unknown blocks skipped"), out);
                 }
                 self.modules.insert(pid.into(), m);
                 out.push(Out::Ui(UiEvent::SurfacesChanged));
@@ -796,7 +797,7 @@ impl Host {
                 let key = (pid.to_string(), a.id.clone());
                 let mine = self.approvals.keys().filter(|(k, _)| k == pid).count();
                 if !self.approvals.contains_key(&key) && mine >= MAX_APPROVALS {
-                    return Err(fail(code::BUSY, "en çok 20 bekleyen onay"));
+                    return Err(fail(code::BUSY, "at most 20 pending approvals"));
                 }
                 out.push(Out::AlertPut { alert: approval_alert(&a), system: true });
                 self.approvals.insert(key, a);
@@ -843,7 +844,7 @@ impl Host {
             }
             "lock.signal" => {
                 if p.get("locked").and_then(Value::as_bool) != Some(true) {
-                    return Err(bad("lock.signal yalnız kilitler; kilidi sahip Peeka'da açar".into()));
+                    return Err(bad("lock.signal only locks; the owner unlocks in Peeka".into()));
                 }
                 out.extend(self.lock_set(Reason::Plugin, true));
                 ok
@@ -864,7 +865,7 @@ impl Host {
                         r.get("id").and_then(|v| items::display(v, 64)),
                         r.get("title").and_then(|v| items::display(v, 120)),
                     ) else {
-                        return Err(bad("her satırda id ve title gerekli".into()));
+                        return Err(bad("every row needs id and title".into()));
                     };
                     let subtitle = r.get("subtitle").and_then(|v| items::display(v, 200));
                     let plugin = self.plugin_ref(pid);
@@ -873,7 +874,7 @@ impl Host {
                 ok
             }
             m if assistant_only => self.assistant_call(pid, m, p, now, out),
-            _ => Err(fail(code::NO_METHOD, "böyle bir yöntem yok")),
+            _ => Err(fail(code::NO_METHOD, "no such method")),
         }
     }
 
@@ -881,7 +882,7 @@ impl Host {
         let bad = |e: String| fail(code::INVALID_PARAMS, e);
         items::no_markup_fields(p).map_err(bad)?;
         if p.get("action").is_some_and(|a| !a.is_null()) || p.get("color").is_some_and(|a| !a.is_null()) {
-            return Err(bad("eklenti uyarısında bağlantı (action) ve renk yok".into()));
+            return Err(bad("a plugin alert has no link (action) and no color".into()));
         }
         let notify = p.get("notify").and_then(Value::as_bool).unwrap_or(true);
         let id = p.get("id").and_then(|v| items::display(v, 64)).ok_or_else(|| bad("id gerekli".into()))?;
@@ -897,11 +898,11 @@ impl Host {
                 a.action = Some(crate::alerts::Action::TaskManager);
                 a.action_label = Some(crate::alerts::TASK_MANAGER_LABEL.into());
             }
-            Some(_) => return Err(bad("open yalnız \"task_manager\" olabilir".into())),
+            Some(_) => return Err(bad("open can only be \"task_manager\"".into())),
         }
         let mine = self.alert_ids.entry(pid.into()).or_default();
         if !mine.contains(&id) && mine.len() >= MAX_ALERTS {
-            return Err(fail(code::BUSY, "en çok 20 uyarı"));
+            return Err(fail(code::BUSY, "at most 20 alerts"));
         }
         mine.insert(id.clone());
         a.id = format!("{}:{id}", source(pid));
@@ -914,7 +915,7 @@ impl Host {
 
     fn composer(&mut self, pid: &str, method: &str, p: &Value, now: u64, out: &mut Vec<Out>) -> Result<Value, RpcErr> {
         let turn = p.get("turn").and_then(Value::as_u64).filter(|t| self.turns.get(t).is_some_and(|x| x.plugin == pid));
-        let turn = turn.ok_or_else(|| fail(code::INVALID_PARAMS, "bilinmeyen ya da kapanmış tur"))?;
+        let turn = turn.ok_or_else(|| fail(code::INVALID_PARAMS, "unknown or closed turn"))?;
         let key = StreamKey::Composer(turn);
         match method {
             "composer.delta" => {
@@ -953,7 +954,7 @@ impl Host {
                     ComposerEvent::new(turn, ComposerKind::Done)
                 } else {
                     let msg =
-                        p.get("message").and_then(|v| items::display(v, 300)).unwrap_or_else(|| "Bir hata oldu".into());
+                        p.get("message").and_then(|v| items::display(v, 300)).unwrap_or_else(|| "Something went wrong".into());
                     ComposerEvent { message: Some(msg), ..ComposerEvent::new(turn, ComposerKind::Error) }
                 };
                 out.push(Out::Ui(UiEvent::Composer(e)));
@@ -1015,7 +1016,7 @@ impl Host {
     fn finish_consent(&mut self, granted: bool, never_ask: bool, out: &mut Vec<Out>) {
         let Some(c) = self.consent.take() else { return };
         if !granted {
-            let e = fail(code::DENIED, "sahip izin vermedi");
+            let e = fail(code::DENIED, "the owner denied it");
             if self.conns.contains_key(&c.conn) {
                 out.push(Out::Send(c.conn, error_line(&c.rpc_id, &e)));
                 out.push(Out::Close(c.conn));
@@ -1081,7 +1082,7 @@ impl Host {
                 self.turns.remove(&t);
                 self.streams.end(&StreamKey::Composer(t));
                 let e = ComposerEvent {
-                    message: Some("Bağlantı koptu".into()),
+                    message: Some("Connection lost".into()),
                     ..ComposerEvent::new(t, ComposerKind::Error)
                 };
                 out.push(Out::Ui(UiEvent::Composer(e)));
@@ -1172,7 +1173,7 @@ impl Host {
         Ok(out)
     }
 
-    /// "Kaldır": the digest goes, open connections close, everything it put up goes. Also lifts "bir daha sorma".
+    /// "Remove": the digest goes, open connections close, everything it put up goes. Also lifts "never ask again".
     pub fn revoke(&mut self, id: &str, now: u64) -> Result<Vec<Out>, OwnerErr> {
         let mut out = vec![];
         if let Some(r) = self.reg.get(id).cloned() {
@@ -1197,7 +1198,7 @@ impl Host {
         Ok(out)
     }
 
-    /// "Bağlantıyı kes": closes; the plugin may come back with its token.
+    /// "Disconnect": closes; the plugin may come back with its token.
     pub fn disconnect_plugin(&mut self, id: &str) -> Result<Vec<Out>, OwnerErr> {
         self.reg.get(id).ok_or(OwnerErr::Unknown)?;
         Ok(self.ready_conns(id).into_iter().map(Out::Close).collect())
@@ -1249,7 +1250,7 @@ impl Host {
         active.then(|| id.clone()).zip(self.conn_of(&id))
     }
 
-    /// Ctrl+Space's box was sent: one turn to the main assistant. Err(NoMain) = "Asistan bağlı değil".
+    /// Ctrl+Space's box was sent: one turn to the main assistant. Err(NoMain) = "Assistant not connected".
     pub fn composer_submit(
         &mut self,
         text: &str,
@@ -1268,7 +1269,7 @@ impl Host {
             p.len() <= 1024 && !p.chars().any(char::is_control) && (p.get(1..3) == Some(":\\") || p.starts_with("\\\\"))
         };
         // A file/rack copy in the share folder also goes inline when it is small UTF-8 text: Claude Code's deny rules
-        // close Notch's folder, so the path alone is unreadable for it (eklenti-api.md §13 "Ekler").
+        // close Notch's folder, so the path alone is unreadable for it (docs/plugin-api.md §13 "Ekler").
         let build = |inline: bool| -> Result<String, OwnerErr> {
             let mut list = vec![];
             let mut budget = INLINE_BUDGET;
@@ -1307,7 +1308,7 @@ impl Host {
     }
 
     /// The owner answered an approval. Within 300 ms of it appearing: ignored. From the protrusion at high risk:
-    /// refused (only "Ayrıntı" is there). Only the offered options count; "deny" always works.
+    /// refused (only "Details" is there). Only the offered options count; "deny" always works.
     #[allow(clippy::too_many_arguments)]
     pub fn approval_respond(
         &mut self,
@@ -1501,7 +1502,7 @@ impl Host {
         v
     }
 
-    /// Whether Ctrl+Space has someone to talk to (false = the UI says "Asistan bağlı değil").
+    /// Whether Ctrl+Space has someone to talk to (false = the UI says "Assistant not connected").
     pub fn main_connected(&self) -> bool {
         self.main_ready().is_some()
     }
@@ -1573,7 +1574,7 @@ impl Host {
             })
             .collect();
         for m in self.modules.values() {
-            let owner = format!("{} eklentisi", self.plugin_ref(&m.plugin.id).name);
+            let owner = format!("{} plugin", self.plugin_ref(&m.plugin.id).name);
             for t in &m.tabs {
                 let id = format!("{}/{}", m.plugin.id, t.id);
                 let icon = t.icon.clone().unwrap_or_else(|| "layout-grid".into());

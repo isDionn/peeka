@@ -1,6 +1,6 @@
-//! Sadakat 3 (the mock-up audit): the small rules behind the commands the UI fixers coded against fakes
-//! (`ui/src/fidelity-api.ts`, `fidelity-cards-api.ts`, bridge.ts "SADAKAT BLOĞU"). Pure, so `cargo test --lib`
-//! covers them; the Windows calls are in `notch-win`, the thin commands in `src-tauri/src/commands.rs`.
+//! Fidelity 3 (the mock-up audit): the small rules behind the commands the UI fixers coded against fakes
+//! (`ui/src/fidelity-api.ts`, `fidelity-cards-api.ts`, bridge.ts "FIDELITY BLOCK"). Pure, so `cargo test --lib`
+//! covers them; the Windows calls are in `notch-win`, the thin commands in `crates/notch-app/src/commands.rs`.
 
 use std::path::{Path, PathBuf};
 
@@ -11,17 +11,19 @@ use crate::plugins::host::{AttachKind, Attachment, OwnerErr};
 /// The only ms-settings pages `open_windows_settings` opens: exactly the strip's and panels' fixed links, taken
 /// straight from the page with no search behind them (nothing else, no prefix match). Ctrl+K has its own, larger
 /// list (`search::SETTINGS`), opened only after Notch listed the page.
-pub const SETTINGS_URIS: [&str; 8] = [
+pub const SETTINGS_URIS: [&str; 9] = [
     "ms-settings:",
     "ms-settings:network-wifi",
     "ms-settings:bluetooth",
     "ms-settings:quiethours",
-    // The low-battery protrusion's "Pil tasarrufu ayarları" (Wave 5).
+    // The low-battery protrusion's "Battery saver settings" (Wave 5).
     "ms-settings:batterysaver",
     "ms-settings:developers",
     "ms-settings:privacy-notifications",
-    // Sadakat 3: "Windows bildirim ayarları".
+    // Fidelity 3: "Windows notification settings".
     "ms-settings:notifications",
+    // About > "Check for updates": opens the releases page in the browser; Peeka itself makes no request.
+    "https://github.com/isDionn/peeka/releases/latest",
 ];
 
 pub fn settings_uri(uri: &str) -> Option<&'static str> {
@@ -38,7 +40,7 @@ pub fn island_hidden(until: Option<u64>, now: u64) -> bool {
 /// `recent_files`: at most this many rows (the Start panel shows 4).
 pub const RECENT_MAX: usize = 8;
 
-/// fidelity-api.ts `RecentItem` (no `icon`: the "Sık kullanılan" app rows have no source yet).
+/// fidelity-api.ts `RecentItem` (no `icon`: the "Frequent" app rows have no source yet).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct RecentItem {
     pub id: String,
@@ -47,15 +49,15 @@ pub struct RecentItem {
     pub kind: &'static str,
 }
 
-/// Plain relative age; no clock time ("Dün 17:40" would need the local time zone, which std does not have).
+/// Plain relative age; no clock time ("Yesterday 17:40" would need the local time zone, which std does not have).
 pub fn ago(ms: u64) -> String {
     let min = ms / 60_000;
     match min {
-        0 => "Az önce".into(),
-        1..=59 => format!("{min} dk önce"),
-        60..=1439 => format!("{} sa önce", min / 60),
-        1440..=2879 => "Dün".into(),
-        _ => format!("{} gün önce", min / 1440),
+        0 => "Just now".into(),
+        1..=59 => format!("{min}m ago"),
+        60..=1439 => format!("{}h ago", min / 60),
+        1440..=2879 => "Yesterday".into(),
+        _ => format!("{}d ago", min / 1440),
     }
 }
 
@@ -70,7 +72,7 @@ pub fn recent_kind(name: &str) -> &'static str {
     }
 }
 
-/// The Recent folder's shortcuts (`sunum.pdf.lnk`, modified Unix ms) -> the newest `RECENT_MAX` file rows and the
+/// The Recent folder's shortcuts (`slides.pdf.lnk`, modified Unix ms) -> the newest `RECENT_MAX` file rows and the
 /// `.lnk` paths by the same index (`open_recent` takes only those ids). A shortcut whose name has no extension
 /// is a folder or a shell item and is left out.
 pub fn recent(mut lnks: Vec<(PathBuf, u64)>, now: u64) -> (Vec<RecentItem>, Vec<PathBuf>) {
@@ -144,7 +146,7 @@ pub struct UiAttachment {
 }
 
 /// The page's kinds -> the host's attachments: a screenshot or file the owner made with `composer_scan` /
-/// `composer_attach_file` (taken from `pending` in order), the newest pano link, every shelf file (once).
+/// `composer_attach_file` (taken from `pending` in order), the newest clipboard link, every shelf file (once).
 /// `NotYet` for `window_image`; `Invalid` when a kind has nothing behind it.
 pub fn resolve(
     asked: &[UiAttachment],
@@ -182,7 +184,7 @@ pub fn resolve(
     Ok(out)
 }
 
-/// The newest pano text that is a plain web link (the plugin view: never a password item).
+/// The newest clipboard text that is a plain web link (the plugin view: never a password item).
 pub fn newest_link(items: &[crate::plugins::host::ClipItem]) -> Option<&str> {
     items
         .iter()
@@ -213,27 +215,27 @@ mod tests {
     }
 
     #[test]
-    fn ages_in_plain_turkish() {
-        assert_eq!(ago(30_000), "Az önce");
-        assert_eq!(ago(5 * 60_000), "5 dk önce");
-        assert_eq!(ago(3 * 3_600_000), "3 sa önce");
-        assert_eq!(ago(30 * 3_600_000), "Dün");
-        assert_eq!(ago(4 * 86_400_000), "4 gün önce");
+    fn ages_in_plain_english() {
+        assert_eq!(ago(30_000), "Just now");
+        assert_eq!(ago(5 * 60_000), "5m ago");
+        assert_eq!(ago(3 * 3_600_000), "3h ago");
+        assert_eq!(ago(30 * 3_600_000), "Yesterday");
+        assert_eq!(ago(4 * 86_400_000), "4d ago");
     }
 
     #[test]
     fn recent_rows_newest_first_files_only_and_known_ids() {
         let p = |s: &str| PathBuf::from(format!("C:\\R\\{s}"));
         let lnks = vec![
-            (p("eski.xlsx.lnk"), 1_000),
+            (p("old.xlsx.lnk"), 1_000),
             (p("Belgeler.lnk"), 9_000), // a folder: no extension in the name
-            (p("sunum.pdf.lnk"), 8_000),
+            (p("slides.pdf.lnk"), 8_000),
             (p("not-a-link.txt"), 9_500),
         ];
         let (rows, paths) = recent(lnks, 8_000 + 120_000);
-        assert_eq!(rows.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), ["sunum.pdf", "eski.xlsx"]);
-        assert_eq!((rows[0].kind, rows[0].sub.as_str(), rows[1].kind), ("pdf", "2 dk önce", "sheet"));
-        assert_eq!(recent_target(&paths, "r1"), Some(p("eski.xlsx.lnk").as_path()));
+        assert_eq!(rows.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), ["slides.pdf", "old.xlsx"]);
+        assert_eq!((rows[0].kind, rows[0].sub.as_str(), rows[1].kind), ("pdf", "2m ago", "sheet"));
+        assert_eq!(recent_target(&paths, "r1"), Some(p("old.xlsx.lnk").as_path()));
         for bad in ["r2", "r01", "r-1", "x0", "", "r", "../r0"] {
             assert_eq!(recent_target(&paths, bad), None, "{bad}");
         }
@@ -256,7 +258,7 @@ mod tests {
         let file = Attachment { kind: AttachKind::File, path: Some("s-b.xlsx".into()), text: None };
         let mut pending = vec![shot("s-1.png"), file.clone(), shot("s-2.png")];
         let ask = |k| UiAttachment { kind: k };
-        let shelf = vec!["raf-a.pdf".to_string(), "raf-b.pdf".to_string()];
+        let shelf = vec!["shelf-a.pdf".to_string(), "shelf-b.pdf".to_string()];
         let asked = [
             ask(UiAttachKind::ScreenImage),
             ask(UiAttachKind::File),
@@ -284,7 +286,7 @@ mod tests {
         let t = |s: &str, password: bool| ClipItem { kind: "text".into(), text: Some(s.into()), path: None, password };
         let items = [
             t("https://secret.test/x", true),
-            t("merhaba", false),
+            t("hello", false),
             t(" https://ok.test/y ", false),
             t("https://z.test", false),
         ];

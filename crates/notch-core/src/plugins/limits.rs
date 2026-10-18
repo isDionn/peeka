@@ -150,12 +150,12 @@ mod tests {
     fn deltas_merge_into_one_batch_per_50_ms_and_nothing_is_lost() {
         let mut c = Coalescer::default();
         let k = StreamKey::Composer(1);
-        for (i, w) in ["Mer", "ha", "ba", " dü", "nya"].iter().enumerate() {
+        for (i, w) in ["Hel", "lo", " wo", "rl", "d"].iter().enumerate() {
             c.push(k.clone(), w, 1000 + i as u64);
         }
         assert!(c.due(1049, false).is_empty(), "not yet 50 ms");
         let b = c.due(1050, false);
-        assert_eq!(b, [Batch { key: k.clone(), text: "Merhaba dünya".into(), truncated: false }]);
+        assert_eq!(b, [Batch { key: k.clone(), text: "Hello world".into(), truncated: false }]);
         assert!(c.due(2000, false).is_empty() && c.is_empty());
         c.push(k.clone(), "!", 2000);
         assert_eq!(c.end(&k).unwrap().text, "!");
@@ -167,7 +167,7 @@ mod tests {
         let mut c = Coalescer::default();
         let k = StreamKey::Live("p".into(), "s".into());
         c.push(k.clone(), &"a".repeat(STREAM_TOTAL - 1), 0);
-        c.push(k.clone(), "ğğ", 0); // 2 bytes each: none fits in the last byte
+        c.push(k.clone(), "éé", 0); // 2 bytes each: none fits in the last byte
         let b = c.due(50, false);
         assert_eq!((b[0].text.len(), b[0].truncated), (STREAM_TOTAL - 1, true));
         c.push(k.clone(), "more", 60);

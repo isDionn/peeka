@@ -1,8 +1,8 @@
-// Sadakat 3 kancaları (hooks.ts'e dokunmadan): adanın geçici gizli durumu, kart yükleme gecikmesi, ek türleri, ilk bağlantı.
+// Fidelity 3 hooks (without touching hooks.ts): the island's temporary hidden state, card load delay, attachment kinds, first connection.
 import { useEffect, useState } from "react";
 import { bridge, type ComposerKind } from "./bridge";
 
-/** Ada geçici gizli mi (Rust `island_hidden` + `island_hidden_changed`). Şerit orta kısmı ve ada sayfası bunu okur. */
+/** Is the island temporarily hidden (Rust `island_hidden` + `island_hidden_changed`). The strip's middle and the island page read it. */
 export function useIslandHidden(): boolean {
   const [hidden, setHidden] = useState(false);
   useEffect(() => {
@@ -14,7 +14,7 @@ export function useIslandHidden(): boolean {
   return hidden;
 }
 
-/** Yükleme 800 ms'yi geçmezse iskelet hiç görünmez (maket ky). */
+/** If loading takes under 800 ms the skeleton never shows (mockup ky). */
 export function useDelayed(on: boolean, ms = 800): boolean {
   const [shown, setShown] = useState(false);
   useEffect(() => {
@@ -25,14 +25,14 @@ export function useDelayed(on: boolean, ms = 800): boolean {
   return on && shown;
 }
 
-/** Ek türleri: komut yoksa (Rust henüz bilmiyor) yalnız `window_image`. */
+/** Attachment kinds: without the command (Rust doesn't know it yet) only `window_image`. */
 export function useComposerKinds(): ReadonlySet<ComposerKind> {
   const [k, setK] = useState<ReadonlySet<ComposerKind>>(new Set<ComposerKind>(["window_image"]));
   useEffect(() => { let live = true; bridge.call("composer_kinds").then((l) => { if (live) setK(new Set(l)); }).catch(() => undefined); return () => { live = false; }; }, []);
   return k;
 }
 
-/** asistan ilk bağlandı (ilk2), hayatta bir kez. İkinci dönen işlev söndürür. */
+/** The assistant connected for the first time (ilk2), once ever. The second returned function clears it. */
 export function useFirstConnect(): [boolean, () => void] {
   const [on, setOn] = useState(false);
   useEffect(() => {
@@ -44,7 +44,7 @@ export function useFirstConnect(): [boolean, () => void] {
   return [on, () => { setOn(false); bridge.call("first_connect_ack").catch(() => undefined); }];
 }
 
-/** Dişli düğmesi: Ayarlar › Modüller. Shell: şerit sayfası bu mesajı dinleyip `aym` panelini açmalı (bkz. rapor). */
+/** Gear button: Settings › Modules. Shell: the strip page should listen for this message and open the `modules` panel (see report). */
 export function openModuleSettings() {
-  try { const c = new BroadcastChannel("notch-xwin"); c.postMessage({ t: "open-panel", panel: "aym" }); c.close(); } catch { /* kanal yok */ }
+  try { const c = new BroadcastChannel("notch-xwin"); c.postMessage({ t: "open-panel", panel: "modules" }); c.close(); } catch { /* no channel */ }
 }

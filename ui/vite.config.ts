@@ -9,6 +9,6 @@ export default defineConfig({
   clearScreen: false,
   build: { rollupOptions: { input: { index: page("index.html"), island: page("island.html"), preview: page("preview.html"), consent: page("consent.html") } } },
   server: { host: "127.1.2.7", port: 5174, strictPort: true },
-  // maxWorkers: varsayılan (çekirdek - 1 = 19 jsdom) testleri birbirine aç bırakıyor; 5 sn'lik varsayılan süre ve gerçek zamanlı bekleyen testler yük altında düşüyordu. 8 işçide her koşu yeşil (~45 sn).
+  // maxWorkers: the default (cores - 1 = 19 jsdom workers) starved the tests; the 5 s default timeout and real-time waits failed under load. With 8 workers every run is green (~45 s).
   test: { environment: "jsdom", globals: true, setupFiles: ["./src/test-setup.ts"], exclude: ["e2e/**", "node_modules/**", "dist/**"], maxWorkers: 8 },
 });

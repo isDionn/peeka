@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-/** Basılı tut onayı (Kapat, Yeniden başlat): `ms` boyunca basılı kalırsa `onDone`. Fare, dokunma ve klavye (Enter/Boşluk) aynı yoldan. */
+/** Press-and-hold confirm (Shut down, Restart): `onDone` if held for `ms`. Mouse, touch and keyboard (Enter/Space) take the same path. */
 export function useHold(onDone: () => void, ms = 1200) {
   const [holding, setHolding] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);

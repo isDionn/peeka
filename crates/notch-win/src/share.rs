@@ -1,6 +1,6 @@
 //! `share_open` (Wave 5): the Windows share sheet for one of Notch's own items, through `IDataTransferManagerInterop`
-//! on the island window (no "Yakın paylaşım" of our own: the sheet offers Windows's). Which items may go and what
-//! they carry: `notch_core::shelf::ShareTarget` (`Pano::share_sheet`, `Shelf::path`); never a password.
+//! on the island window (no "Nearby Share" of our own: the sheet offers Windows's). Which items may go and what
+//! they carry: `notch_core::shelf::ShareTarget` (`ClipHistory::share_sheet`, `Shelf::path`); never a password.
 //! Must run on the thread that owns the window (a sync Tauri command = the main thread).
 
 #[cfg(windows)]

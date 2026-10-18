@@ -4,8 +4,8 @@ import { claimMascot, mascotOwner, resetMascotRegistry, useSingleMascot } from "
 
 afterEach(resetMascotRegistry);
 
-describe("tek maskot kaydı", () => {
-  it("büyük öncelik kazanır, eşitte ilk gelen", () => {
+describe("single-mascot registry", () => {
+  it("higher priority wins, the first to arrive on a tie", () => {
     claimMascot("strip", 20);
     expect(mascotOwner()).toBe("strip");
     const off = claimMascot("card", 28);
@@ -14,11 +14,11 @@ describe("tek maskot kaydı", () => {
     off();
     expect(mascotOwner()).toBe("strip");
   });
-  it("hepsi çıkınca sahip yok", () => {
+  it("no owner once all have left", () => {
     const off = claimMascot("a", 20); off();
     expect(mascotOwner()).toBeNull();
   });
-  it("kanca: aynı anda yalnız biri görünür, kart gelince şerit gizlenir", () => {
+  it("hook: only one is visible at a time, the strip hides when the card appears", () => {
     const seen: Record<string, boolean> = {};
     const Probe = ({ id, p }: { id: string; p: number }) => { seen[id] = useSingleMascot(p); return null; };
     const { rerender } = render(<Probe id="strip" p={20} />);
@@ -28,7 +28,7 @@ describe("tek maskot kaydı", () => {
     rerender(<Probe id="strip" p={20} />);
     expect(seen.strip).toBe(true);
   });
-  it("want=false kayıt olmaz", () => {
+  it("want=false doesn't register", () => {
     const seen: Record<string, boolean> = {};
     const Probe = () => { seen.x = useSingleMascot(20, false); return null; };
     render(<Probe />);

@@ -10,7 +10,7 @@ pub struct Battery {
     /// On the charger (`ACLineStatus` 1); true at 100 % too, where `charging` is false.
     pub plugged: bool,
     /// On battery: time left, "3 sa 10 dk". While charging: the approximate time to full (`time_to_full`; the page
-    /// says "yaklaşık"). None when Windows does not know.
+    /// says "about"). None when Windows does not know.
     pub remaining: Option<String>,
 }
 
@@ -32,7 +32,7 @@ pub fn battery_from_raw(flag: u8, percent: u8, life_secs: u32, ac_line: u8) -> O
 
 /// Approximate seconds to full from `SYSTEM_BATTERY_STATE` (mWh, and `Rate` in mW, positive while charging; the
 /// field is a LONG Windows hands out as ULONG). None when it is not charging or the numbers make no sense. Linear:
-/// the last few percent charge slower, so this reads short near full (the page says "yaklaşık").
+/// the last few percent charge slower, so this reads short near full (the page says "about").
 pub fn time_to_full(max_mwh: u32, remaining_mwh: u32, rate_raw: u32) -> Option<u32> {
     let rate = rate_raw as i32;
     if rate <= 0 || max_mwh == 0 || remaining_mwh >= max_mwh {
@@ -86,7 +86,7 @@ pub fn network_from_level(level: i32) -> Network {
 }
 
 /// One radio tile: on/off and what it is connected to. `name` (Wi-Fi SSID, Bluetooth device) is None until Notch can
-/// read it (Wave 2); the UI then shows "Açık" rather than a made-up name.
+/// read it (Wave 2); the UI then shows "Open" rather than a made-up name.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Radio {
     pub on: bool,

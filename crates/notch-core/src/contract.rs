@@ -1,6 +1,6 @@
 //! The command names the UI may call (`ui/src/bridge.ts` `Commands`) and the event names Rust emits. One list each,
-//! checked by the tests below: commands against the `generate_handler!` block in `src-tauri/src/app.rs`, events
-//! against every `emit("...")` in `src-tauri/src/`, both against `ui/src/commands.generated.ts` (the UI's tsc checks
+//! checked by the tests below: commands against the `generate_handler!` block in `crates/notch-app/src/app.rs`, events
+//! against every `emit("...")` in `crates/notch-app/src/`, both against `ui/src/commands.generated.ts` (the UI's tsc checks
 //! that file against `Commands`), and for duplicates. `cargo test --lib` runs it, so the bin crate is checked even
 //! though the bin itself is not tested.
 
@@ -67,11 +67,11 @@ pub const COMMANDS: &[&str] = &[
     "clip_share",
     "clip_edit",
     "clip_drag",
-    // Peeka Faz C: the copy strip's big preview, open with the default app, onto the shelf
+    // Peeka Phase C: the copy strip's big preview, open with the default app, onto the shelf
     "clip_open",
     "clip_to_shelf",
     "clip_preview",
-    // Peeka Faz C: "İndirme bitti" (Downloads folder, names and sizes only)
+    // Peeka Phase C: "Download finished" (Downloads folder, names and sizes only)
     "download_open",
     "download_show_in_folder",
     "search_index_state",
@@ -96,7 +96,7 @@ pub const COMMANDS: &[&str] = &[
     "mirror_open_app",
     "mirror_ask",
     "notif_copy_code",
-    // Sadakat 3 (shapes: ui/src/fidelity-api.ts, fidelity-cards-api.ts, bridge.ts SADAKAT BLOĞU)
+    // Fidelity 3 (shapes: ui/src/fidelity-api.ts, fidelity-cards-api.ts, bridge.ts FIDELITY BLOCK)
     "quit_app",
     "open_start_menu",
     "island_hide",
@@ -105,7 +105,7 @@ pub const COMMANDS: &[&str] = &[
     "recent_files",
     "open_recent",
     "start_pins",
-    // Sadakat 3: from the main assistant (notch_core::plugins::host::assistant)
+    // Fidelity 3: from the main assistant (notch_core::plugins::host::assistant)
     "assistant_counts",
     "assistant_open",
     "calendar_next",
@@ -119,11 +119,11 @@ pub const COMMANDS: &[&str] = &[
     "shelf_suggest",
     "shelf_memory",
     "assistant_start",
-    // Sadakat 3: Ctrl+Space attachments (fidelity-cards-api.ts)
+    // Fidelity 3: Ctrl+Space attachments (fidelity-cards-api.ts)
     "composer_kinds",
     "composer_scan",
     "composer_attach_file",
-    // Kapsam izleme: an elevated window's "Görev Yöneticisi'ni aç" (`WindowInfo.elevated`)
+    // Scope tracking: an elevated window's "Open Task Manager" (`WindowInfo.elevated`)
     "open_task_manager",
     // Tab order strip <-> island, only while a Notch window holds the focus
     "focus_strip",
@@ -132,7 +132,7 @@ pub const COMMANDS: &[&str] = &[
     "typing_focus",
 ];
 
-/// Every event Rust emits to the pages. Payloads: see the header of `src-tauri/src/app.rs`.
+/// Every event Rust emits to the pages. Payloads: see the header of `crates/notch-app/src/app.rs`.
 pub const EVENTS: &[&str] = &[
     "windows_changed",
     "pins_changed",
@@ -211,7 +211,7 @@ mod tests {
 
     #[test]
     fn the_tauri_handler_registers_exactly_these() {
-        let app = std::fs::read_to_string(notch_root().join("src-tauri/src/app.rs")).unwrap();
+        let app = std::fs::read_to_string(notch_root().join("crates/notch-app/src/app.rs")).unwrap();
         let start = app.find("generate_handler![").expect("generate_handler! in app.rs");
         let block = &app[start..start + app[start..].find(']').unwrap()];
         let registered: BTreeSet<&str> = block
@@ -225,7 +225,7 @@ mod tests {
     #[test]
     fn the_app_emits_exactly_these_events() {
         let mut emitted = BTreeSet::new();
-        for entry in std::fs::read_dir(notch_root().join("src-tauri/src")).unwrap() {
+        for entry in std::fs::read_dir(notch_root().join("crates/notch-app/src")).unwrap() {
             let src = std::fs::read_to_string(entry.unwrap().path()).unwrap();
             for part in src.split("emit(\"").skip(1) {
                 emitted.insert(part.split('"').next().unwrap().to_string());

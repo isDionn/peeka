@@ -9,14 +9,14 @@ import { useSettings } from "../hooks";
 import { useIslandHidden } from "../hooks.fidelity";
 import type { MenuState } from "./Strip";
 
-/** Sağ tık menüsü. Ok tuşlarıyla gezilir, Esc kapatır ve odak açan öğeye döner. Uygulama menüsü: Sabitle, Yeni pencere, Pencereyi kapat, Uygulamadan çık.
- * Şerit menüsü (maket sr): Peeka ayarları, Görev çubuğunu geri getir, Adayı geçici gizle, Peeka'yı kilitle; ortadaki çipin altında açılır. "Çık" onay sorusunu açar (`onQuit`). */
+/** Right-click menu. Arrow keys move, Esc closes and focus returns to the opener. App menu: Pin, New window, Close window, Quit app.
+ * Strip menu (mockup sr): Peeka settings, Restore taskbar, Hide island for now, Lock Peeka; opens under the center chip. "Quit" opens the confirmation (`onQuit`). */
 export function ContextMenu({ menu, pins, windows, locked, onClose, onPins, onSettings, onQuit }: {
-  menu: MenuState; pins: PinnedApp[]; windows: WindowInfo[]; /** Peeka zaten kilitliyse "Peeka'yı kilitle" satırı çıkmaz. */ locked?: boolean; onClose: () => void;
-  onPins: (appIds: string[]) => void; onSettings: () => void; /** "Çık": Peeka'nın kendi onay sorusunu açar (ADR-0062; Durum panelindeki "Peeka'yı kapat" ikinci yol, sahip kararı 2026-10-17). */ onQuit?: () => void;
+  menu: MenuState; pins: PinnedApp[]; windows: WindowInfo[]; /** No "Lock Peeka" item when Peeka is already locked. */ locked?: boolean; onClose: () => void;
+  onPins: (appIds: string[]) => void; onSettings: () => void; /** "Quit": opens Peeka's own confirmation (ADR-0062; "Quit Peeka" in the Status panel is the second route, owner decision 2026-10-17). */ onQuit?: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [armed, setArmed] = useState(false); // "Uygulamadan çık" kaydedilmemiş işi kaybettirebilir: ilk tık onay ister (O10)
+  const [armed, setArmed] = useState(false); // "Quit app" can lose unsaved work: the first click asks for confirmation (O10)
   useFocusTrap(ref, onClose);
   const arrows = (e: React.KeyboardEvent) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -25,7 +25,7 @@ export function ContextMenu({ menu, pins, windows, locked, onClose, onPins, onSe
     const i = items.indexOf(document.activeElement as HTMLElement);
     items[(i + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length].focus();
   };
-  const [denied, setDenied] = useState(false); // kapatma/çıkış reddedildi (yönetici pencere): menü açık kalır ve Görev Yöneticisi önerilir
+  const [denied, setDenied] = useState(false); // close/quit was denied (elevated window): the menu stays open and offers Task Manager
   const attempt = (p: Promise<unknown>) => p.then(onClose, (e) => { if (String(e) === "denied") setDenied(true); else onClose(); });
   const done = (fn: () => void) => () => { fn(); onClose(); };
   const settings = useSettings();
@@ -34,16 +34,16 @@ export function ContextMenu({ menu, pins, windows, locked, onClose, onPins, onSe
   if (menu.kind === "strip") {
     const hideKeys = settings?.shortcuts.hide_island ?? "Ctrl+Shift+A";
     return (
-      <div ref={ref} className="baglam open" role="menu" aria-label="Peeka menüsü" style={{ left: menu.x }} data-hit onKeyDown={arrows}>
-        <div className="baslik"><AppWindow />Peeka</div>
-        <button role="menuitem" data-autofocus onClick={done(onSettings)}><Settings />Peeka ayarları</button>
-        <button role="menuitem" onClick={done(() => bridge.call("restore_taskbar"))}><PanelBottom />Görev çubuğunu geri getir</button>
+      <div ref={ref} className="context open" role="menu" aria-label="Peeka menu" style={{ left: menu.x }} data-hit onKeyDown={arrows}>
+        <div className="title"><AppWindow />Peeka</div>
+        <button role="menuitem" data-autofocus onClick={done(onSettings)}><Settings />Peeka settings</button>
+        <button role="menuitem" onClick={done(() => bridge.call("restore_taskbar"))}><PanelBottom />Restore taskbar</button>
         <button role="menuitem" onClick={done(() => { bridge.call("island_hide", { on: !hidden }).catch(() => undefined); })}>
-          {hidden ? <Eye /> : <EyeOff />}{hidden ? "Adayı geri getir" : "Adayı geçici gizle"}<span className="tus-ipucu" style={{ marginLeft: "auto" }}>{hideKeys}</span>
+          {hidden ? <Eye /> : <EyeOff />}{hidden ? "Show island" : "Hide island for now"}<span className="key-hint" style={{ marginLeft: "auto" }}>{hideKeys}</span>
         </button>
         <hr />
-        {!locked && <button role="menuitem" onClick={done(() => { bridge.call("lock_now").catch(() => undefined); })}><Lock />Peeka'yı kilitle</button>}
-        <button role="menuitem" onClick={done(() => onQuit?.())}><Power />Çık</button>
+        {!locked && <button role="menuitem" onClick={done(() => { bridge.call("lock_now").catch(() => undefined); })}><Lock />Lock Peeka</button>}
+        <button role="menuitem" onClick={done(() => onQuit?.())}><Power />Quit</button>
       </div>
     );
   }
@@ -53,33 +53,33 @@ export function ContextMenu({ menu, pins, windows, locked, onClose, onPins, onSe
   const w = item ? pickWindow(item) : null;
   const ids = pins.map((p) => p.appId);
   return (
-    <div ref={ref} className="baglam open" role="menu" aria-label={item?.name ?? "Uygulama"} style={{ left: menu.x }} data-hit onKeyDown={arrows}>
-      {item && <div className="baslik"><AppIcon src={item.icon} /><span className="baslikAd" title={item.name}>{item.name}</span></div>}
+    <div ref={ref} className="context open" role="menu" aria-label={item?.name ?? "App"} style={{ left: menu.x }} data-hit onKeyDown={arrows}>
+      {item && <div className="title"><AppIcon src={item.icon} /><span className="titleName" title={item.name}>{item.name}</span></div>}
       <button role="menuitem" onClick={done(() => onPins(isPinned ? ids.filter((i) => i !== menu.appId) : [...ids, menu.appId]))}>
-        {isPinned ? <PinOff /> : <Pin />}{isPinned ? "Sabitlemeyi kaldır" : "Sabitle"}
+        {isPinned ? <PinOff /> : <Pin />}{isPinned ? "Unpin" : "Pin"}
       </button>
-      <button role="menuitem" data-autofocus onClick={done(() => bridge.call("new_window", { appId: menu.appId }))}><AppWindow />Yeni pencere</button>
+      <button role="menuitem" data-autofocus onClick={done(() => bridge.call("new_window", { appId: menu.appId }))}><AppWindow />New window</button>
       {w && (
         <>
           <hr />
-          <button role="menuitem" onClick={() => attempt(bridge.call("close_window", { hwnd: w.hwnd }))}><X />Pencereyi kapat</button>
-          <button role="menuitem" className={armed ? "yikici" : undefined} onClick={armed ? () => attempt(bridge.call("quit_app", { appId: menu.appId })) : () => setArmed(true)}><CircleX />{armed ? "Emin misin? Tekrar tıkla" : "Uygulamadan çık"}</button>
-          {(denied || w.elevated) && <button role="menuitem" onClick={done(() => { bridge.call("open_task_manager").catch(() => undefined); })}><Activity />Görev Yöneticisi'ni aç</button>}
+          <button role="menuitem" onClick={() => attempt(bridge.call("close_window", { hwnd: w.hwnd }))}><X />Close window</button>
+          <button role="menuitem" className={armed ? "destructive" : undefined} onClick={armed ? () => attempt(bridge.call("quit_app", { appId: menu.appId })) : () => setArmed(true)}><CircleX />{armed ? "Sure? Click again" : "Quit app"}</button>
+          {(denied || w.elevated) && <button role="menuitem" onClick={done(() => { bridge.call("open_task_manager").catch(() => undefined); })}><Activity />Open Task Manager</button>}
         </>
       )}
     </div>
   );
 }
 
-/** Peeka'dan çıkış onayı: Peeka'nın kendi sorusu (Windows penceresi değil). Vazgeç varsayılan odak. */
+/** Quit confirmation: Peeka's own prompt (not a Windows dialog). Cancel has default focus. */
 export function QuitConfirm({ onCancel }: { onCancel: () => void }) {
   return (
-    <div className="govde" style={{ gap: 10 }}>
-      <div className="t17 b6">Peeka'dan çıkılsın mı?</div>
-      <div className="t13 l2 b4">Windows görev çubuğu geri gelir. Peeka'yı yeniden açana kadar şerit olmaz.</div>
-      <div className="dugmeler" style={{ justifyContent: "flex-end" }}>
-        <button className="btn cam" data-autofocus onClick={onCancel}>Vazgeç</button>
-        <button className="btn yikiciDolu" onClick={() => { bridge.call("quit"); onCancel(); }}>Çık</button>
+    <div className="body" style={{ gap: 10 }}>
+      <div className="t17 b6">Quit Peeka?</div>
+      <div className="t13 l2 b4">The Windows taskbar comes back. The strip stays off until you open Peeka again.</div>
+      <div className="buttons" style={{ justifyContent: "flex-end" }}>
+        <button className="btn glass" data-autofocus onClick={onCancel}>Cancel</button>
+        <button className="btn destructiveFill" onClick={() => { bridge.call("quit"); onCancel(); }}>Quit</button>
       </div>
     </div>
   );

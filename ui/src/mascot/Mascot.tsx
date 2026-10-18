@@ -6,39 +6,39 @@ import { LOVE_MOODS, REACT, createClickCounter, createReactionGate } from "./mot
 import { useSingleMascot } from "./useSingleMascot";
 import "./mascot.css";
 
-/** Tıklanabilir gövde dikdörtgeni (istemci koordinatı, CSS px). */
+/** Clickable body rectangle (client coordinates, CSS px). */
 export interface HitRect { x: number; y: number; width: number; height: number }
 
 export interface MascotHandle {
   hop(): void; prank(): void;
-  /** Dokunma tepkileri: tokat (~600 ms, sonra önceki hal) ve sevgi (kalpler). */
+  /** Touch reactions: slap (~600 ms, then the previous look) and love (hearts). */
   slap(): void; love(): void;
-  /** Dosya yutma: sy 0,78 -> 1,18 -> 1 (80/130/220 ms), ağız açık. */
+  /** File swallow: sy 0.78 -> 1.18 -> 1 (80/130/220 ms), mouth open. */
   swallow(): void;
-  /** Asılı pozda (size=40) gövdenin tıklanabilir dikdörtgeni; başka boyda tüm kutu. Görünmezken null. */
+  /** In the hanging pose (size=40) the body's clickable rectangle; at other sizes the whole box. null while invisible. */
   hitRect(): HitRect | null;
-  /** Çizim döngüsü çalışıyor mu (hareketsizken false). */
+  /** Is the draw loop running (false when still). */
   running(): boolean;
 }
 
 export interface MascotProps {
-  /** Kutu genişliği (px): 24 şerit (siluet, allıksız), 40 şeritten taşan asılı poz (kutu 40x30, gövde ~12 px sarkar; üst öğe taşmayı kırpmamalı),
-   *  56 kart, 96 büyük kart (boş/uyku/ilk açılış); 28 ve 22 eski boylar, 27 ve altı siluet. Yükseklik 4/3 (40'ta 30). */
+  /** Box width (px): 24 strip (silhouette, no blush), 40 hanging pose overflowing the strip (box 40x30, body hangs ~12 px; parents mustn't clip the overflow),
+   *  56 card, 96 big card (idle/sleep/first run); 28 and 22 are legacy sizes, 27 and below silhouette. Height 4/3 (30 at 40). */
   size: number;
   mood: Mood;
-  /** ADR-0062 §2: yüz yalnız ana asistanın. Değilse Peeka'nın nötr simgesi (ya da `fallback`) çizilir. */
+  /** ADR-0062 §2: the face belongs to the main assistant only. Otherwise Peeka's neutral icon (or `fallback`) is drawn. */
   isMainAssistant: boolean;
-  /** Tıklama: küçük zıplama (96 px'te sersemleme), sonra bu çağrılır (kart açma). */
+  /** Click: a small hop (a daze at 96 px), then this is called (opening a card). */
   onPoke?: () => void;
-  /** İmleç, bu pencerenin istemci koordinatında (CSS px). `null` = imleç yok (merkeze bakar). Verilmezse pencere pointermove'u dinlenir. */
+  /** Cursor in this window's client coordinates (CSS px). `null` = no cursor (looks at the center). If omitted, the window's pointermove is used. */
   cursor?: { x: number; y: number } | null;
-  /** Ekranda tek maskot kuralı (§0i madde 23): varsayılan açık; öncelik = size, büyük olan kazanır. */
+  /** One-mascot-on-screen rule (§0i item 23): on by default; priority = size, the larger wins. */
   single?: boolean;
-  /** Durgun kare (ekran görüntüsü, hareketsiz yerler): yay, kırpma, süzülme yok. */
+  /** Still frame (screenshots, static spots): no spring, blink or float. */
   still?: boolean;
-  /** Dosya maskotun üstüne bırakılınca: maskot yutar (swallow) ve bu çağrılır. */
+  /** When a file is dropped on the mascot: it swallows it, then this is called. */
   onFileDrop?: (files: File[]) => void;
-  /** Rozet yanındaki klavye ipucu yuvası (örn. `<kbd>Y</kbd>`); yalnız ≥56 px'te izin halinde görünür, içeriği çağıran çizer. */
+  /** Keyboard hint slot beside the badge (e.g. `<kbd>Y</kbd>`); shown only at ≥56 px in the approval mood, the caller draws its content. */
   badgeHint?: ReactNode;
   fallback?: ReactNode;
   className?: string;
@@ -60,7 +60,7 @@ function MainMascot({ size, mood, onPoke, cursor, single = true, still = false, 
   const host = useRef<HTMLDivElement>(null);
   const hit = useRef<HTMLDivElement>(null);
   const ghost = useRef<Ghost | null>(null);
-  // tokat seli (3 sn'de 5 tıklama) geçici "dizzy" hali verir; süresi dolunca asıl hale döner
+  // a slap flood (5 clicks in 3 s) gives a temporary "dizzy" mood; when it ends the real mood returns
   const [forced, setForced] = useState<Mood | null>(null);
   const shown = forced ?? mood;
   const moodRef = useRef(shown); moodRef.current = shown;
@@ -89,7 +89,7 @@ function MainMascot({ size, mood, onPoke, cursor, single = true, still = false, 
     },
   }), []);
 
-  // Göz takibi: cursor verilmişse ondan (Rust beslemesi), yoksa pencere pointermove'undan (önizleme). 28 px altında Ghost yok sayar.
+  // Eye tracking: from `cursor` if given (Rust feed), otherwise from the window's pointermove (preview). Ghost ignores it below 28 px.
   const fed = cursor !== undefined;
   useEffect(() => {
     if (!visible || !plan.eyeTracking) return;
@@ -99,7 +99,7 @@ function MainMascot({ size, mood, onPoke, cursor, single = true, still = false, 
     return () => removeEventListener("pointermove", move);
   }, [visible, size, fed, cursor?.x, cursor?.y]);
 
-  // son 3 sn'de klavye varsa kırpma yok
+  // no blinking if the keyboard was used in the last 3 s
   useEffect(() => {
     const key = () => { if (ghost.current) ghost.current.lastInput = performance.now(); };
     addEventListener("keydown", key, true);
@@ -108,7 +108,7 @@ function MainMascot({ size, mood, onPoke, cursor, single = true, still = false, 
 
   if (!visible) return null;
   const poke = () => {
-    // 96 px (boş/uyku kartı): 1 tıklama ezilme + 800 ms sersem, 1,7 sn'de 3 tıklama 3,3 sn. Diğer boylarda tokat (hız sınırlı; asıl eylem yine çalışır).
+    // 96 px (idle/sleep card): 1 click squash + 800 ms daze, 3 clicks in 1.7 s 3.3 s. Other sizes slap (rate limited; the real action still runs).
     clearTimeout(loveT.current);
     if (size === DAZE_SIZE) ghost.current?.daze(clicks.current());
     else {
@@ -118,7 +118,7 @@ function MainMascot({ size, mood, onPoke, cursor, single = true, still = false, 
     }
     onPoke?.();
   };
-  // Üstünde 1,9 sn durunca sevgi (yalnız sakin hallerde, 8 sn'de en çok bir)
+  // Love after hovering 1.9 s (calm moods only, at most once every 8 s)
   const hover = {
     onPointerEnter: () => { clearTimeout(loveT.current); loveT.current = setTimeout(() => { if (LOVE_MOODS.has(moodRef.current) && gate.current.love()) ghost.current?.love(); }, REACT.loveHoverMs); },
     onPointerLeave: () => clearTimeout(loveT.current),
@@ -139,7 +139,7 @@ function MainMascot({ size, mood, onPoke, cursor, single = true, still = false, 
       {...(hang ? {} : handlers)}
     >
       {hang && <div ref={hit} className="mascot-hit" style={{ left: HANG.hit.x, top: HANG.hit.y, width: HANG.hit.w, height: HANG.hit.h }} {...handlers} />}
-      {plan.badge && mood === "approval" && badgeHint != null && <span className="mascot-ipucu">{badgeHint}</span>}
+      {plan.badge && mood === "approval" && badgeHint != null && <span className="mascot-hint">{badgeHint}</span>}
     </div>
   );
 }

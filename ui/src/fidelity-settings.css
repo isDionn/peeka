@@ -1,0 +1,58 @@
+/* Fidelity check 3 (mockup yon-3d-son.html). Imported from components; may load BEFORE main-common.ts, so conflicting rules are strengthened with an html prefix. */
+
+/* T1/T2: tray, a small 4x2 grid under the strip (mockup .trayFly) */
+html .body.trayGrid { padding: 6px; gap: 0; }
+.trayIconGrid { display: grid; grid-template-columns: repeat(4, 40px); gap: 2px; }
+.trayIconGrid button { width: 40px; height: 40px; border-radius: 6px; display: grid; place-items: center; position: relative; color: var(--l1); }
+.trayIconGrid button svg.lucide { width: 16px; height: 16px; }
+.trayIconGrid button .appIcon { width: 16px; height: 16px; }
+@media (hover: hover) and (pointer: fine) { .trayIconGrid button:hover { background: rgba(255,255,255,.08); } }
+.trayIconGrid .noResults { grid-column: 1 / -1; }
+.badge { position: absolute; top: 1px; right: 1px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px; background: var(--redFill); color: #fff; font: 700 11px/15px var(--font); text-align: center; pointer-events: none; }
+/* T3: frequent tray icons on the strip */
+.favTray { display: inline-flex; align-items: center; gap: 2px; }
+.favTray .key { position: relative; min-width: 28px; padding: 0 6px; }
+.favTray .badge { top: 0; right: 0; }
+.favTray .appIcon { width: 15px; height: 15px; }
+
+/* O2: status card assistant section */
+.assistantHead { display: flex; align-items: center; gap: 6px; margin: 2px 0 -6px 4px; }
+.assistantHead .mascot, .assistantHead .mascot-neutral { margin-block: -3px; }
+.row > .alertIcon { color: var(--orange); }
+
+/* A1: the search "ask the assistant" tile is dark (mascot) */
+html .result.assistantAsk .tile { background: var(--e2); color: var(--l1); overflow: visible; }
+
+/* B1: Start Recommended rows */
+.suggestionGrid .row .tip { width: 22px; height: 22px; display: grid; place-items: center; flex: none; }
+.suggestionGrid .row .tip svg.lucide, .suggestionGrid .row > svg.lucide { width: 16px; height: 16px; }
+.suggestionGrid .row .sub { flex: 1; min-width: 0; text-align: left; }
+.startResult { max-height: 300px; overflow: auto; }
+.startResult .row { width: 100%; text-align: left; cursor: pointer; }
+
+/* W1: setup wizard */
+.setup .list .row > svg.lucide { color: var(--l3); }
+.setup .list .row > .tick { color: var(--green); display: grid; }
+
+/* G1: the eye icon that stands in for the island on the strip */
+.hiddenIsland { color: var(--l3); display: inline-flex; align-items: center; }
+.hiddenIsland svg.lucide { width: 15px; height: 15px; }
+
+/* P1: a dragged clipboard item's source is dimmed; P2: on a selected thumbnail the first button gets a white ring, white sparkle */
+.pg.dragging, .row.dragging { opacity: .35; transition: opacity .16s ease; }
+.pg.selected .action button:first-child { box-shadow: 0 0 0 1.5px #fff, inset 0 .5px 0 rgba(255,255,255,.3); }
+html .pg .action .ask, html .mini.ask { color: #fff; }
+
+/* S5: exception list, grouped row */
+.exceptionGroup { width: 100%; text-align: left; cursor: pointer; }
+.exceptions .row .mini { opacity: 0; }
+.exceptions .row:hover .mini, .exceptions .row:focus-within .mini { opacity: 1; }
+
+/* S11: "More settings" disclosure heading */
+.otherSettings { align-self: flex-start; gap: 4px; }
+.otherSettings svg.lucide { width: 13px; height: 13px; transition: transform .2s var(--ease); }
+.otherSettings[aria-expanded="true"] svg.lucide { transform: rotate(90deg); }
+
+/* S6/S7: bridge row and bottom buttons under Plugins */
+.settingsFoot { display: flex; gap: 8px; flex-wrap: wrap; }
+.permissionHistory .row { min-height: 36px; }

@@ -1,41 +1,41 @@
-// Tauri dışında çalışan sahte arka uç: gerçekçi veri, bellekte durum, aynı olay yolu. Önizleme ve testler bunu kullanır.
+// Fake back end used outside Tauri: realistic data, in-memory state, the same event path. Used by the preview and tests.
 import type { TrayIconX, CalendarNext, Alert, AssistantCounts, BridgeState, PermissionEvent, RecentItem, AlertsView, AllCommands, AllEvents, CallArgs, CommandName, Commands, ClipChange, ClipItem, ClipPlain, ComposerEvent, ConsentAnswer, LockState, MirrorState, MirrorView, Notice, TrayIcon, ShelfItem, TimerState, PrivacyState, ConsentRequest, ModuleEntry, PluginCommands, PluginInfo, SurfacesView, Media, MonitorInfo, PinnedApp, SearchResult, Settings, Status, SysmonTick, VolumeOsd, WindowInfo } from "./bridge";
 import { APP_NAMES, iconOf } from "./fakeIcons";
 import { EMPTY_SURFACES, MODULES, PLUGINS } from "./plugin.fixtures";
 
-const DEFAULT_CALENDAR: CalendarNext = { detail: "14:45, 30 dk, görüntülü toplantı", next: [{ time: "16:00", title: "Haftalık plan", source: "Takvim" }, { time: "18:00", title: "Akşam özeti", source: "Asistan rutini" }] };
+const DEFAULT_CALENDAR: CalendarNext = { detail: "2:45 PM, 30 min, video call", next: [{ time: "4:00 PM", title: "Weekly planning", source: "Calendar" }, { time: "6:00 PM", title: "Evening recap", source: "Assistant routine" }] };
 const ref = (appId: string) => ({ appId, name: APP_NAMES[appId] ?? appId, icon: iconOf(appId) });
 const ALL_APPS = ["explorer", "chrome", "vscode", "terminal", "spotify", "discord", "snip", "steam", "settings", "notepad", "calc", "word", "onedrive", "nvidia"];
-// ADR-0062 §2'deki 13 uygulama; simgesi olmayanlar genel kareyle görünür.
+// The 13 apps from ADR-0062 §2; those without an icon show a generic tile.
 const EXCEPTION_APPS = ["word", "outlook", "outlook-new", "chrome", "edge", "firefox", "brave", "opera", "vivaldi", "slack", "discord", "vscode", "teams"];
-const EXCEPTION_NAMES: Record<string, string> = { outlook: "Outlook", "outlook-new": "Yeni Outlook", edge: "Edge", firefox: "Firefox", brave: "Brave", opera: "Opera", vivaldi: "Vivaldi", slack: "Slack", teams: "Teams" };
+const EXCEPTION_NAMES: Record<string, string> = { outlook: "Outlook", "outlook-new": "New Outlook", edge: "Edge", firefox: "Firefox", brave: "Brave", opera: "Opera", vivaldi: "Vivaldi", slack: "Slack", teams: "Teams" };
 
-// çizilmiş örnek küçük resimler (gerçek üründe gerçek görüntü gelir)
+// drawn sample thumbnails (the real product gets real images)
 const shot = (a: string, b: string, c: string) => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100"><rect width="160" height="100" fill="${a}"/><rect width="160" height="10" fill="rgba(0,0,0,.35)"/><rect x="10" y="20" width="60" height="6" rx="3" fill="${c}"/><rect x="10" y="32" width="90" height="4" rx="2" fill="rgba(255,255,255,.35)"/><rect x="10" y="40" width="80" height="4" rx="2" fill="rgba(255,255,255,.2)"/><rect x="10" y="58" width="48" height="32" rx="5" fill="${b}"/><rect x="64" y="58" width="48" height="32" rx="5" fill="rgba(255,255,255,.12)"/></svg>`);
 const art = (a: string, b: string, c: string) => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="160" height="100" fill="url(#g)"/><circle cx="62" cy="34" r="22" fill="${c}" opacity=".8"/><path d="M0 74 Q40 56 80 70 T160 66 V100 H0Z" fill="rgba(20,10,60,.55)"/></svg>`);
-/** Önizleme ve testlerdeki sahte parola: yalnız `clip_reveal` bunu döner; hiçbir liste, olay ya da günlük taşımaz. */
+/** Fake password for the preview and tests: only `clip_reveal` returns it; no list, event or log carries it. */
 export const FAKE_SECRET = "Kd9!mPq2-zR7v";
-const FILES: [string, string][] = [["ekran-kaydı.mp4", "Masaüstü, 38 MB"], ["ekran-goruntusu-1016.png", "Resimler"], ["q3-rapor.xlsx", "Belgeler"], ["sunum-taslak.pdf", "İndirilenler"]];
-const SETTINGS: [string, string][] = [["Ekran: ölçek ve düzen", "Sistem"], ["Ekran koruyucu", "Kişiselleştirme"], ["Bildirimler", "Sistem"], ["Ses", "Sistem"]];
-const BRAIN: [string, string][] = [["Ekran okuma notları", "projeler"], ["Toplantı notları, Ekim", "toplantılar"], ["Ekim hedefleri", "planlar"]];
+const FILES: [string, string][] = [["screen-recording.mp4", "Desktop, 38 MB"], ["screenshot-1016.png", "Pictures"], ["q3-report.xlsx", "Documents"], ["presentation-draft.pdf", "Downloads"]];
+const SETTINGS: [string, string][] = [["Display: scale and layout", "System"], ["Screen saver", "Personalization"], ["Notifications", "System"], ["Sound", "System"]];
+const BRAIN: [string, string][] = [["Screen reader notes", "projects"], ["Meeting notes, October", "meetings"], ["October goals", "plans"]];
 
-const lower = (s: string) => s.toLocaleLowerCase("tr");
+const lower = (s: string) => s.toLocaleLowerCase("en-US");
 import { sortAlerts } from "./lib/alerts";
 
-// çizilmiş örnek kapaklar (gerçek üründe SMTC'nin kapağı gelir)
+// drawn sample covers (the real product gets the SMTC cover)
 const cover = (a: string, b: string, c: string) => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="120" height="120" fill="url(#g)"/><circle cx="60" cy="52" r="20" fill="${c}"/><path d="M0 92 Q30 74 60 88 T120 84 V120 H0Z" fill="rgba(80,20,110,.7)"/></svg>`);
 const TRACKS = [
-  { title: "Gece Treni", artist: "Lodos", album: "Kıyı", durationMs: 232_000, art: cover("#ffb347", "#ff5e62", "#fff1d6") },
-  { title: "Mavi Saat", artist: "Deniz Ayaz", album: "Liman", durationMs: 198_000, art: cover("#0b2a4a", "#0e7c86", "#9be3c4") },
+  { title: "Night Train", artist: "Lowtide", album: "Shoreline", durationMs: 232_000, art: cover("#ffb347", "#ff5e62", "#fff1d6") },
+  { title: "Blue Hour", artist: "June Avery", album: "Harbor", durationMs: 198_000, art: cover("#0b2a4a", "#0e7c86", "#9be3c4") },
 ];
 
 type W4Names = "search_index_state" | "search_open" | "search_ask" | "clip_list" | "clip_copy" | "clip_pin" | "clip_delete" | "clip_clear" | "clip_reveal" | "clip_share" | "clip_edit" | "clip_drag" | "clip_visible" | "lock_state" | "lock_now" | "lock_release";
 type W5Names = "window_preview" | "share_open" | "shelf_list" | "shelf_ask" | "timer_get" | "timer_start" | "timer_control" | "privacy_get" | "tray_open" | "mirror_state" | "mirror_enable" | "mirror_disable" | "mirror_list" | "mirror_dismiss" | "mirror_open_app" | "mirror_ask";
 type W7Names = "recent_files" | "open_recent" | "start_pins" | "open_start_menu" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "cc_focus_terminal" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus";
-/** Peeka Faz C: pano, indirme, kod kopyalama komutları. */
+/** Peeka Phase C: clipboard, download and copy-code commands. */
 type W8Names = "notif_copy_code" | "clip_open" | "clip_to_shelf" | "clip_preview" | "download_open" | "download_show_in_folder";
 const svg = (inner: string) => "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${inner}</g></svg>`);
 const GLYPH = {
@@ -43,17 +43,17 @@ const GLYPH = {
   shield: svg('<path d="M12 3 5 6v5c0 4.4 2.9 8.2 7 10 4.1-1.8 7-5.6 7-10V6z"/><path d="m9 12 2 2 4-4"/>'),
   usb: svg('<circle cx="10" cy="19" r="2"/><path d="M10 17V7m0 0-3 3m3-3 3 3M12 12h5v-2"/><rect x="15" y="7" width="4" height="3"/>'),
 };
-/** Rust rozet sayısı vermez; sahtede Discord'a bir tane konur ki rozet çizimi (`badge` varsa) test edilebilsin. */
+/** Rust gives no badge count; the fake puts one on Discord so badge drawing (when `badge` exists) can be tested. */
 const trayX = (id: string, name: string, icon: string, promoted = false, badge?: number): TrayIconX => ({ id: "exe:c:/apps/" + id + ".exe", name, exe: "C:/apps/" + id + ".exe", promoted, icon, ...(badge ? { badge } : null) });
 const TRAY_X: TrayIconX[] = [
   trayX("discord", "Discord", iconOf("discord"), true, 3), trayX("steam", "Steam", iconOf("steam")), trayX("onedrive", "OneDrive", iconOf("onedrive"), true),
   trayX("nvidia", "NVIDIA", iconOf("nvidia")), trayX("spotify", "Spotify", iconOf("spotify")),
-  trayX("bluetooth", "Bluetooth", GLYPH.bluetooth), trayX("guvenlik", "Windows Güvenliği", GLYPH.shield), trayX("usb", "Donanımı güvenle kaldır", GLYPH.usb),
+  trayX("bluetooth", "Bluetooth", GLYPH.bluetooth), trayX("security", "Windows Security", GLYPH.shield), trayX("usb", "Safely Remove Hardware", GLYPH.usb),
 ];
 const RECENT: RecentItem[] = [
-  { id: "r0", name: "sunum-taslak.pdf", sub: "Az önce", kind: "pdf" }, { id: "r1", name: "q3-rapor.xlsx", sub: "Dün", kind: "sheet" },
-  { id: "r2", name: "ekran-kaydı.mp4", sub: "2 dk önce", kind: "video" }, { id: "r3", name: "toplanti-notlari.docx", sub: "3 sa önce", kind: "other" },
-  { id: "r4", name: "kapak-taslak.png", sub: "4 gün önce", kind: "image" },
+  { id: "r0", name: "presentation-draft.pdf", sub: "Just now", kind: "pdf" }, { id: "r1", name: "q3-report.xlsx", sub: "Yesterday", kind: "sheet" },
+  { id: "r2", name: "screen-recording.mp4", sub: "2m ago", kind: "video" }, { id: "r3", name: "meeting-notes.docx", sub: "3h ago", kind: "other" },
+  { id: "r4", name: "cover-draft.png", sub: "4d ago", kind: "image" },
 ];
 const TRAY: TrayIcon[] = [
   { id: "exe:c:/apps/discord.exe", name: "Discord", exe: "C:/apps/Discord.exe", promoted: true, icon: "" },
@@ -86,41 +86,41 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     pins = ["explorer", "chrome", "vscode", "steam"];
     const w = (hwnd: number, appId: string, title: string, active = false, monitor = "m1"): WindowInfo => ({ ...ref(appId), hwnd, title, active, monitor });
     windows = [
-      w(1, "explorer", "Ekran görüntüleri"), w(2, "chrome", "Hava durumu, Ankara", true), w(3, "chrome", "Belgeler, Q3 raporu"),
-      w(4, "vscode", "Header.tsx, web-sitesi"), w(5, "terminal", "PowerShell"), w(6, "spotify", "Gece Treni, Lodos"), w(7, "discord", "Genel"),
-      w(8, "notepad", "notlar.txt", false, "m2"),
+      w(1, "explorer", "Screenshots"), w(2, "chrome", "Weather, Seattle", true), w(3, "chrome", "Docs, Q3 report"),
+      w(4, "vscode", "Header.tsx, website"), w(5, "terminal", "PowerShell"), w(6, "spotify", "Night Train, Lowtide"), w(7, "discord", "general"),
+      w(8, "notepad", "notes.txt", false, "m2"),
     ];
     status = {
       volume: 64, muted: false, brightness: 80,
-      wifi: { on: true, name: "Ev-5G" }, bluetooth: { on: true, name: "Buds Pro" }, dnd: false,
+      wifi: { on: true, name: "Home-5G" }, bluetooth: { on: true, name: "Buds Pro" }, dnd: false,
       dndUntil: null, network: "internet",
-      battery: hasBattery ? { percent: 78, charging: false, plugged: false, remaining: "3 sa 10 dk" } : null,
+      battery: hasBattery ? { percent: 78, charging: false, plugged: false, remaining: "3h 10m" } : null,
     };
     track = 0;
     media = { app: "Spotify", ...TRACKS[0], playing: true, positionMs: 84_000, positionAt: Date.now(), canPrevious: true, canNext: true, canSeek: true };
     const old = (id: string, title: string, subtitle: string, icon: string, ago: number, extra: Partial<Alert> = {}): Alert =>
       ({ id, title, subtitle, icon, color: null, progress: null, priority: 50, action: null, style: "standard", expand: false, kind: "alert", source: "api", expiresAt: null, updatedAt: nowMs() - ago * 1000, review: null, ...extra });
     alerts = [
-      old("rapor", "Rapor hazır", "Haftalık özet Notlara eklendi", "bitti", 180),
-      old("disk", "Disk %91 dolu", "Geçici dosyalar temizlenebilir", "warning", 420, { review: { title: "Geçici dosyaları sileyim mi?", detail: "4,3 GB boşalır, geri dönüşüm kutusuna gitmez", items: [{ name: "Windows geçici dosyaları", size: "3,2 GB" }, { name: "Tarayıcı önbelleği", size: "1,1 GB" }] } }),
-      old("discord", "Deniz: Akşam 8 uygun mu?", "Discord, Windows bildirimi", "chat", 720),
-      old("ozet", "Akşam özeti 18:00", "Asistan rutini", "clock", 3 * 3600),
+      old("report", "Report ready", "Weekly summary added to Notes", "done", 180),
+      old("disk", "Disk 91% full", "Temporary files can be cleaned up", "warning", 420, { review: { title: "Delete temporary files?", detail: "Frees 4.3 GB; files skip the Recycle Bin", items: [{ name: "Windows temporary files", size: "3.2 GB" }, { name: "Browser cache", size: "1.1 GB" }] } }),
+      old("discord", "Sam: Does 8 tonight work?", "Discord, Windows notification", "chat", 720),
+      old("recap", "Evening recap at 6:00 PM", "Assistant routine", "clock", 3 * 3600),
     ];
     const MIN = 60_000;
     const plain = (id: string, kind: ClipPlain["kind"], ago: number, x: Partial<ClipPlain>): ClipPlain =>
       ({ id, kind, text: null, sub: null, thumb: null, source: null, createdAt: nowMs() - ago * MIN, pinned: false, screenshot: false, ...x });
     clips = [
-      plain("c1", "image", 2, { sub: "Ekran alıntısı", thumb: shot("#1d2433", "#3A7BFF", "#FFD60A"), screenshot: true }),
-      plain("c2", "image", 18, { sub: "deniz.jpg", thumb: art("#0b2a4a", "#0e7c86", "#9be3c4") }),
-      plain("c3", "image", 60, { sub: "Ekran alıntısı", thumb: shot("#f2f2f4", "#30D158", "#1d1d1f"), screenshot: true }),
-      plain("c4", "image", 180, { sub: "kapak-taslak.png", thumb: art("#ffb347", "#ff5e62", "#fff1d6") }),
-      plain("c5", "file", 5, { text: "sunum-taslak.pdf", sub: "2,4 MB, İndirilenler" }),
+      plain("c1", "image", 2, { sub: "Screen snip", thumb: shot("#1d2433", "#3A7BFF", "#FFD60A"), screenshot: true }),
+      plain("c2", "image", 18, { sub: "beach.jpg", thumb: art("#0b2a4a", "#0e7c86", "#9be3c4") }),
+      plain("c3", "image", 60, { sub: "Screen snip", thumb: shot("#f2f2f4", "#30D158", "#1d1d1f"), screenshot: true }),
+      plain("c4", "image", 180, { sub: "cover-draft.png", thumb: art("#ffb347", "#ff5e62", "#fff1d6") }),
+      plain("c5", "file", 5, { text: "presentation-draft.pdf", sub: "2.4 MB, Downloads" }),
       { id: "c6", kind: "password", source: "Bitwarden", createdAt: nowMs() - 7 * MIN, expiresAt: nowMs() - 7 * MIN + 60 * MIN, pinned: false },
-      plain("c7", "text", 9, { text: "ornek.com/raporlar/q3-ozet", hint: "link" }),
-      plain("c8", "text", 14, { text: "Toplantı notu: bütçe Cuma'ya kadar netleşecek" }),
-      plain("c9", "file", 40, { text: "ekran-kaydı.mp4", sub: "38 MB, Masaüstü" }),
+      plain("c7", "text", 9, { text: "example.com/reports/q3-summary", hint: "link" }),
+      plain("c8", "text", 14, { text: "Meeting note: budget gets locked in by Friday" }),
+      plain("c9", "file", 40, { text: "screen-recording.mp4", sub: "38 MB, Desktop" }),
       plain("c10", "text", 60, { text: "#3A7BFF", hint: "color" }),
-      plain("c11", "text", 180, { text: "git switch -c ozellik/notch", hint: "command" }),
+      plain("c11", "text", 180, { text: "git switch -c feature/notch", hint: "command" }),
     ];
     lock = { locked: false, reason: null };
     hidden = false; firstConnect = false; calendar = structuredClone(DEFAULT_CALENDAR); bridgeState = { installed: true, healthy: true, lastEventAgoS: 120 };
@@ -139,7 +139,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   const pinned = (): PinnedApp[] => pins.map(ref);
   let nextHwnd = 100;
   const handlers: { [K in Exclude<CommandName, W4Names | W5Names | W7Names | W8Names>]: (a: Commands[K]["args"]) => Commands[K]["ret"] } = {
-    get_monitor: ({ monitor }): MonitorInfo => ({ id: monitor, primary: monitor === "m1", hasBattery, radios: "ok", brightness: true, user: "Yerel hesap", hz: 144 }),
+    get_monitor: ({ monitor }): MonitorInfo => ({ id: monitor, primary: monitor === "m1", hasBattery, radios: "ok", brightness: true, user: "Local account", hz: 144 }),
     list_windows: ({ monitor }) => windows.filter((w) => w.monitor === monitor).map((w) => ({ ...w })),
     get_pins: pinned,
     set_pins: ({ appIds }) => { pins = [...appIds]; emit("pins_changed", null); return pinned(); },
@@ -147,15 +147,15 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     close_window: ({ hwnd }) => { const m = windows.find((w) => w.hwnd === hwnd)?.monitor ?? "m1"; windows = windows.filter((w) => w.hwnd !== hwnd); emit("windows_changed", { monitor: m }); },
     new_window: ({ appId }) => { windows.push({ ...ref(appId), hwnd: nextHwnd++, title: ref(appId).name, active: false, monitor: "m1" }); emit("windows_changed", { monitor: "m1" }); },
     launch_app: ({ appId }) => { windows.forEach((w) => (w.active = false)); windows.push({ ...ref(appId), hwnd: nextHwnd++, title: ref(appId).name, active: true, monitor: "m1" }); emit("windows_changed", { monitor: "m1" }); },
-    list_apps: () => ALL_APPS.map(ref).sort((a, b) => a.name.localeCompare(b.name, "tr")),
+    list_apps: () => ALL_APPS.map(ref).sort((a, b) => a.name.localeCompare(b.name, "en-US")),
     search: ({ query }) => {
       const t = lower(query.trim());
-      const apps: SearchResult[] = ALL_APPS.map(ref).filter((a) => !t || lower(a.name).includes(t)).map((a) => ({ id: "app:" + a.appId, kind: "app", title: a.name, subtitle: "Uygulama", appId: a.appId, icon: a.icon, hwnd: null }));
+      const apps: SearchResult[] = ALL_APPS.map(ref).filter((a) => !t || lower(a.name).includes(t)).map((a) => ({ id: "app:" + a.appId, kind: "app", title: a.name, subtitle: "App", appId: a.appId, icon: a.icon, hwnd: null }));
       const wins: SearchResult[] = windows.filter((w) => !t || lower(w.title).includes(t) || lower(w.name).includes(t)).map((w) => ({ id: "win:" + w.hwnd, kind: "window", title: w.title, subtitle: w.name, appId: w.appId, icon: w.icon, hwnd: w.hwnd }));
       const other = (kind: "file" | "setting", rows: [string, string][]): SearchResult[] => rows.map(([title, sub]) => ({ id: kind + ":" + title, kind, title, subtitle: sub, appId: "", icon: "", hwnd: null }));
       const files = other("file", FILES), sets = other("setting", SETTINGS);
       const main = plugins.find((x) => x.main && x.connected);
-      const notes: SearchResult[] = main ? BRAIN.map(([title, sub]) => ({ id: "plug:" + main.id + ":" + title, kind: "plugin", title, subtitle: sub, appId: "", icon: "", hwnd: null, plugin: { id: main.id, name: main.name, main: true }, group: "Notlar" })) : [];
+      const notes: SearchResult[] = main ? BRAIN.map(([title, sub]) => ({ id: "plug:" + main.id + ":" + title, kind: "plugin", title, subtitle: sub, appId: "", icon: "", hwnd: null, plugin: { id: main.id, name: main.name, main: true }, group: "Notes" })) : [];
       if (t) {
         const has = (r: SearchResult) => lower(r.title).includes(t);
         return [...apps.slice(0, 3), ...wins.slice(0, 3), ...(filesIndex ? files.filter(has) : []).slice(0, 3), ...sets.filter(has).slice(0, 3), ...notes.filter(has).slice(0, 3)];
@@ -167,7 +167,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     set_volume: ({ value }) => { status = { ...status, volume: value, muted: value === 0 }; emit("status_changed", status); },
     set_brightness: ({ value }) => { status = { ...status, brightness: value }; emit("status_changed", status); },
     set_radio: ({ kind, on }) => {
-      status = kind === "wifi" ? { ...status, wifi: { on, name: on ? "Ev-5G" : null } } : { ...status, bluetooth: { on, name: on ? "Buds Pro" : null } };
+      status = kind === "wifi" ? { ...status, wifi: { on, name: on ? "Home-5G" : null } } : { ...status, bluetooth: { on, name: on ? "Buds Pro" : null } };
       emit("status_changed", status);
     },
     set_dnd: ({ on }) => { status = { ...status, dnd: on }; emit("status_changed", status); },
@@ -179,7 +179,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     get_settings: () => structuredClone(settings),
     set_settings: ({ patch }) => {
       const sc = patch.shortcuts;
-      if (sc) { const used = Object.values({ ...settings.shortcuts, ...sc }); if (new Set(used).size !== used.length) return { ok: false, error: "Bu kısayol başka bir işleve atanmış." }; }
+      if (sc) { const used = Object.values({ ...settings.shortcuts, ...sc }); if (new Set(used).size !== used.length) return { ok: false, error: "This shortcut is already used for something else." }; }
       settings = { ...settings, ...patch, shortcuts: { ...settings.shortcuts, ...sc } };
       emit("settings_changed", structuredClone(settings));
       return { ok: true, error: null };
@@ -210,7 +210,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     taskbar_set_mode: ({ mode }) => { settings = { ...settings, taskbarHide: mode }; emit("settings_changed", structuredClone(settings)); },
   };
 
-  /* ---- eklenti yüzeyleri (plugin-api.ts): bellekte durum, sahibin tıklamaları `log`a düşer ---- */
+  /* ---- plugin surfaces (plugin-api.ts): in-memory state, the owner's clicks land in `log` ---- */
   let surfaces: SurfacesView = EMPTY_SURFACES;
   let consent: ConsentRequest | null = null;
   let plugins: PluginInfo[] = structuredClone(PLUGINS);
@@ -226,10 +226,10 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       log.push({ cmd: "composer_submit", args: a });
       const t = ++turn;
       const ev = (e: Omit<ComposerEvent, "turn">, ms: number) => setTimeout(() => emit("composer_event", { turn: t, ...e }), ms);
-      ev({ kind: "delta", text: "Tamam. 09:30'daki Tasarım incelemesi için " }, 60);
-      ev({ kind: "delta", text: "09:15'te hatırlatacağım." }, 160);
-      ev({ kind: "chip", label: "3 not okundu", chipKind: "source" }, 220);
-      ev({ kind: "chip", label: "Hatırlatma 09:15", chipKind: "reminder" }, 260);
+      ev({ kind: "delta", text: "OK. I'll remind you about the 9:30 AM design review " }, 60);
+      ev({ kind: "delta", text: "at 9:15." }, 160);
+      ev({ kind: "chip", label: "Read 3 notes", chipKind: "source" }, 220);
+      ev({ kind: "chip", label: "Reminder 9:15 AM", chipKind: "reminder" }, 260);
       ev({ kind: "done" }, 300);
       return { turn: t };
     },
@@ -250,7 +250,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     },
   };
 
-  /* ---- Dalga 4: pano, kilit, arama yardımcıları (bridge.ts) ---- */
+  /* ---- Wave 4: clipboard, lock, search helpers (bridge.ts) ---- */
   let filesIndex = true;
   const unlocked = () => clips.filter((c) => !lock.locked || c.kind !== "password");
   const find = (id: string) => clips.find((c) => c.id === id);
@@ -275,7 +275,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     lock_release: () => { log.push({ cmd: "lock_release", args: null }); if (lock.reason !== "windows") { lock = { locked: false, reason: null }; emit("lock_changed", { ...lock }); } },
   };
 
-  /* ---- Dalga 5: pencere önizlemesi, paylaşım, raf, zamanlayıcı, gizlilik (bridge.ts) ---- */
+  /* ---- Wave 5: window preview, share, shelf, timer, privacy (bridge.ts) ---- */
   let shelf: ShelfItem[] = [];
   let timer: TimerState | null = null;
   let privacy: PrivacyState = { mic: [], camera: [] };
@@ -330,15 +330,15 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       if (!plugins.some((x) => x.main && x.connected)) throw "not_connected";
       log.push({ cmd: "mirror_ask", args: a });
       const t = ++turn;
-      // Asistan taslağı hazırlar: yanıt sohbet olayı olarak akar (sağ üst kartın taslak görünümü bunu okur)
-      setTimeout(() => { emit("composer_event", { turn: t, kind: "delta", text: "Olur, 8 uygun. Görüşürüz." }); emit("composer_event", { turn: t, kind: "done" }); }, 150);
+      // The assistant drafts a reply: it streams as a chat event (the top-right card's draft view reads it)
+      setTimeout(() => { emit("composer_event", { turn: t, kind: "delta", text: "Sure, 8 works. See you then." }); emit("composer_event", { turn: t, kind: "done" }); }, 150);
       return { turn: t };
     },
   };
   let previewDelay = 0;
 
-  /* Sadakat 3 (Rust `commands.rs` aynası) */
-  /** Önizleme/test: Rust'ın bildirdiği indirmeler (kimlik -> ad). */
+  /* Fidelity 3 (mirrors Rust `commands.rs`) */
+  /** Preview/test: downloads reported by Rust (id -> name). */
   const downloads = new Map<string, string>();
   const w8: { [K in W8Names]: (a: Commands[K]["args"]) => Commands[K]["ret"] } = {
     notif_copy_code: (a) => { if (lock.locked) throw "denied"; if (!notices.some((n) => n.id === a.id && n.hasCode)) throw "missing"; log.push({ cmd: "notif_copy_code", args: a }); },
@@ -352,7 +352,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   const w7: { [K in W7Names]: (a: Commands[K]["args"]) => Commands[K]["ret"] } = {
     recent_files: () => structuredClone(RECENT),
     open_recent: (a) => { log.push({ cmd: "open_recent", args: a }); },
-    // Windows 11 Başlat sabitlerini okutmaz: Rust hep boş döner, sayfa kendi listesine düşer.
+    // Windows 11 doesn't expose Start pins: Rust always returns empty and the page falls back to its own list.
     start_pins: () => [],
     open_start_menu: () => { log.push({ cmd: "open_start_menu", args: null }); },
     quit_app: (a) => { log.push({ cmd: "quit_app", args: a }); },
@@ -363,31 +363,31 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     assistant_open: (a) => { log.push({ cmd: "assistant_open", args: a }); },
     calendar_next: () => structuredClone(calendar),
     claude_bridge_state: () => ({ ...bridgeState }),
-    // Rust gibi: demo kipinde `refused`; kurulum elle tıklanınca bu Peeka'yı gösterir, kaldırma yalnız Peeka'nın girdilerini siler.
+    // Like Rust: `refused` in demo mode; install on a manual click points at this Peeka, remove deletes only Peeka's own entries.
     claude_bridge_install: () => { if (settings.demo) throw "refused"; log.push({ cmd: "claude_bridge_install", args: null }); bridgeState = { ...bridgeState, installed: true, healthy: true }; return { ...bridgeState }; },
     claude_bridge_remove: () => { if (settings.demo) throw "refused"; log.push({ cmd: "claude_bridge_remove", args: null }); bridgeState = { ...bridgeState, installed: false, healthy: false }; return { ...bridgeState }; },
     permission_history: (): PermissionEvent[] => {
       const now = Date.now();
       return [
-        { at: now - 2 * 60_000, plugin: "Pusula", scope: "approvals.prompt", granted: true },
-        { at: now - 3 * 3600_000, plugin: "Pusula", scope: "windows.read", granted: true },
-        { at: now - 26 * 3600_000, plugin: "Pusula", scope: "clipboard.read", granted: false },
+        { at: now - 2 * 60_000, plugin: "Compass", scope: "approvals.prompt", granted: true },
+        { at: now - 3 * 3600_000, plugin: "Compass", scope: "windows.read", granted: true },
+        { at: now - 26 * 3600_000, plugin: "Compass", scope: "clipboard.read", granted: false },
       ];
     },
     first_connect_get: () => firstConnect,
     first_connect_ack: () => { firstConnect = false; },
-    shelf_suggest: ({ id }) => (shelf.find((f) => f.id === id)?.kind === "pdf" ? { id, text: "Bu bir sunum taslağı. Özetleyip Notlara not olarak ekleyeyim mi?" } : null),
+    shelf_suggest: ({ id }) => (shelf.find((f) => f.id === id)?.kind === "pdf" ? { id, text: "This looks like a presentation draft. Want me to summarize it into Notes?" } : null),
     shelf_memory: (a) => { log.push({ cmd: "shelf_memory", args: a }); },
     assistant_start: () => { log.push({ cmd: "assistant_start", args: null }); },
-    // `window_image` Rust'ta `not_yet`: sunulmaz.
+    // `window_image` is `not_yet` in Rust: not offered.
     composer_kinds: () => ["screen_image", "file", "clipboard_link", "shelf"],
-    composer_scan: () => { if (scanDenied) throw "denied"; return { kind: "screen_image", label: "Ekran görüntüsü" }; },
+    composer_scan: () => { if (scanDenied) throw "denied"; return { kind: "screen_image", label: "Screenshot" }; },
     open_task_manager: () => { log.push({ cmd: "open_task_manager", args: undefined }); },
     focus_strip: (a) => { log.push({ cmd: "focus_strip", args: a }); },
     focus_island: () => { log.push({ cmd: "focus_island", args: undefined }); },
     typing_focus: (a) => { log.push({ cmd: "typing_focus", args: a }); },
-    cc_focus_terminal: (a) => { if (settings.demo) throw "unsupported"; if (a.sessionId === "yok") throw "unknown"; if (!plugins.some((x) => x.main && x.connected)) throw "not_connected"; log.push({ cmd: "cc_focus_terminal", args: a }); },
-    composer_attach_file: () => ({ kind: "file", label: "rapor-q3.xlsx" }),
+    cc_focus_terminal: (a) => { if (settings.demo) throw "unsupported"; if (a.sessionId === "none") throw "unknown"; if (!plugins.some((x) => x.main && x.connected)) throw "not_connected"; log.push({ cmd: "cc_focus_terminal", args: a }); },
+    composer_attach_file: () => ({ kind: "file", label: "q3-report.xlsx" }),
   };
 
   const fake = {
@@ -402,19 +402,19 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     },
     now: () => fixed ?? new Date(),
     reset: () => { reset(); filesIndex = true; scanDenied = false; surfaces = EMPTY_SURFACES; consent = null; shelf = []; timer = null; privacy = { mic: [], camera: [] }; previewDelay = 0; mirror = { devMode: true, registered: true, access: "allowed", enabled: false, on: false, blocker: null }; notices = []; quiet = false; plugins = structuredClone(PLUGINS); modules = structuredClone(MODULES); log.length = 0; turn = 0; },
-    /** Test ve önizleme kancaları: Rust'ın yapacağı şeyleri el ile tetikler. */
+    /** Test and preview hooks: trigger by hand what Rust would do. */
     emit,
-    /** Sadakat 3: ana asistanın köprü durumu ve "ilk bağlantı" kartı. */
+    /** Fidelity 3: the main assistant's bridge state and the "first connection" card. */
     setBridge: (s: BridgeState) => { bridgeState = s; },
     setCalendar: (c: CalendarNext) => { calendar = c; },
     setFirstConnect: (v: boolean) => { firstConnect = v; },
     setSurfaces,
-    /** Onay penceresi isteği koy (`expiresAt` verilmezse şimdi + 112 sn). */
+    /** Set a consent window request (`expiresAt` defaults to now + 112 s). */
     setConsent: (c: ConsentRequest | null) => { consent = c && { ...c, expiresAt: c.expiresAt || Date.now() + 112_000 }; emit("consent_changed", null); },
-    /** Sahibin yaptığı tıklamalar (eklentiye giden cevaplar). */
+    /** The owner's clicks (answers sent to the plugin). */
     log,
     pluginsNow: () => structuredClone(plugins),
-    /** Önizleme/test: pencere listesi (çok pencere, uzun başlık ölçümleri). */
+    /** Preview/test: window list (many windows, long title measurements). */
     setWindows: (list: WindowInfo[]) => { windows = structuredClone(list); for (const m of new Set(windows.map((w) => w.monitor))) emit("windows_changed", { monitor: m }); },
     setMedia: (m: Media | null) => { media = m; emit("media_changed", mediaNow()); },
     pushAlert: (a: Partial<Alert> & { id: string; title: string }) => {
@@ -424,33 +424,33 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     volumeOsd: (v: VolumeOsd) => emit("volume_osd", v),
     get sysmonRuns() { return sysmonRuns; },
     get sysmonOn() { return sysmonTimer !== null; },
-    /** Sahtenin karşıladığı komutlar (test: Rust listesiyle aynı mı). */
+    /** Commands the fake handles (test: same as the Rust list?). */
     commands: Object.keys({ ...handlers, ...plug, ...clip, ...w5, ...w7, ...w8 }) as string[],
-    /** Önizleme ve testler: Rust'ın pano, kilit ve dizin olaylarını el ile tetikler. */
+    /** Preview and tests: trigger Rust's clipboard, lock and index events by hand. */
     setLocked: (locked: boolean, reason: LockState["reason"] = locked ? "windows" : null) => { lock = { locked, reason: locked ? reason : null }; emit("lock_changed", { ...lock }); },
     setFilesIndex: (on: boolean) => { filesIndex = on; },
-    /** Hassas pencere: `composer_scan` `denied` döner. */
+    /** Sensitive window: `composer_scan` returns `denied`. */
     setScanDenied: (on: boolean) => { scanDenied = on; },
     setPlugins: (list: PluginInfo[]) => { plugins = structuredClone(list); emit("plugins_changed", null); },
-    /** Dalga 5 kancaları: Rust'ın zamanlayıcı, raf ve gizlilik olaylarını el ile tetikler; `previewDelay` önizleme yüklenme süresini taklit eder. */
-    /** Sadakat kancası: durum alanlarını (sessiz, bitiş saati) el ile değiştirir. */
+    /** Wave 5 hooks: trigger Rust's timer, shelf and privacy events by hand; `previewDelay` mimics preview load time. */
+    /** Fidelity hook: change status fields (quiet, end time) by hand. */
     setStatus: (p: Partial<Status>) => { status = { ...status, ...p }; emit("status_changed", { ...status }); },
     setBattery: (b: Status["battery"]) => { status = { ...status, battery: b }; emit("status_changed", { ...status }); },
     setTimer: (t: Omit<TimerState, "at"> | null) => { timer = t && { ...t, at: Date.now() }; emit("timer_changed", timer ? { ...timer } : null); },
     setShelf: (list: ShelfItem[]) => { shelf = structuredClone(list); emit("shelf_changed", null); },
     setPrivacy: (p: PrivacyState) => { privacy = p; emit("privacy_changed", { mic: [...p.mic], camera: [...p.camera] }); },
-    /** Dalga 6 kancaları: bildirim aynası durumu (engeller `devMode`/`registered`/`access`ten türer), kartlar ve sessiz kip. */
+    /** Wave 6 hooks: notification mirror state (blockers derive from `devMode`/`registered`/`access`), cards and quiet mode. */
     setMirror: (p: Partial<MirrorState>) => { mirrorSet(p); },
-    pushNotice: (n: Partial<Notice> & { id: string; app: string; title: string }) => { notices = [...notices.filter((x) => x.id !== n.id), { body: null, tile: "", tileMono: true, ripple: false, openLabel: "Uygulamayı aç", canOpen: true, at: nowMs(), hasCode: false, ...n }]; mirrorEmit(); },
-    /** Önizleme/test: bir indirme bitti (`download_done`). */
+    pushNotice: (n: Partial<Notice> & { id: string; app: string; title: string }) => { notices = [...notices.filter((x) => x.id !== n.id), { body: null, tile: "", tileMono: true, ripple: false, openLabel: "Open app", canOpen: true, at: nowMs(), hasCode: false, ...n }]; mirrorEmit(); },
+    /** Preview/test: a download finished (`download_done`). */
     pushDownload: (d: { id: string; name: string; size: number }) => { downloads.set(d.id, d.name); emit("download_done", d); },
     setMirrorQuiet: (q: boolean) => { quiet = q; mirrorEmit(); },
     setPreviewDelay: (ms: number) => { previewDelay = ms; },
     addClip: (c: ClipItem) => { clips = [c, ...clips]; clipEmit({ reason: "added", item: c }); },
-    /** Ham liste (parola dahil): test, listenin düz metin taşımadığını bunun üstünden doğrular. */
+    /** Raw list (passwords included): tests use it to check the list carries no plain text. */
     rawClips: () => structuredClone(clips),
   };
-  // Tarayıcıda Ctrl+K, Rust'ın göndereceği kısayol olayıyla aynı yoldan geçer.
+  // In the browser, Ctrl+K takes the same path as the shortcut event Rust would send.
   if (typeof window !== "undefined") {
     window.addEventListener("keydown", (e) => {
       if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "k") { e.preventDefault(); emit("shortcut", { name: "search", monitor: "m1" }); }
@@ -461,6 +461,6 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   return fake;
 }
 
-// Önizleme adresi ?saat=2026-10-16T14:32 ile saati dondurur (maket karelerinde aynı dakika).
-const frozen = typeof location !== "undefined" ? new URLSearchParams(location.search).get("saat") : null;
+// The preview URL ?time=2026-10-16T14:32 freezes the clock (same minute in every mockup frame).
+const frozen = typeof location !== "undefined" ? new URLSearchParams(location.search).get("time") : null;
 export const fakeBridge = createFakeBridge({ now: frozen ? new Date(frozen) : undefined });

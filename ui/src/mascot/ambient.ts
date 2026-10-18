@@ -5,17 +5,17 @@ export const BATTERY_TIRED = 20;
 export const BATTERY_DOZE = 10;
 
 export interface AmbientIn {
-  /** Temel hal; ortam halleri yalnız sakin "idle" üstüne biner (onay, iş, uyarı hiçbir zaman örtülmez). */
+  /** Base mood; ambient moods only ride on a calm "idle" (approvals, jobs and alerts are never covered). */
   base: Mood;
   batteryPercent: number | null;
-  /** Prizde ya da şarj oluyor: düşük pil halleri kalkar. */
+  /** Plugged in or charging: low-battery moods go away. */
   powered: boolean;
-  /** Prize yeni takıldı (kısa neşe). */
+  /** Just plugged in (a short burst of joy). */
   justPlugged: boolean;
   idleMs: number;
 }
 
-/** CouCou ortam halleri (analiz §4.2). Veri kaynağı olmayan CPU teri bilerek yok: sysmon yalnız Modüller açıkken çalışır. */
+/** Ambient moods. CPU sweat is left out on purpose for lack of a data source: sysmon only runs while Modules is open. */
 export function ambientMood(i: AmbientIn): Mood {
   if (i.base !== "idle") return i.base;
   if (i.justPlugged) return "done";

@@ -1,21 +1,21 @@
-// Ses kartları (maket d1, d3): şeritte faz yazısı + renkli dalga, çıkıntıda "Sen" / asistan döküm kartı ve "Sürekli dinleme açık" ipucu.
-// Veri, eklentinin `transcript.streamId` akışından gelir (`plugin_stream`, `speaker` = "Sen" ya da eklenti adı); metinler düz metin.
+// Voice cards (mockup d1, d3): phase text + colored wave on the strip; in the peek, the "You" / assistant transcript card and the "Always listening" hint.
+// Data comes from the plugin's `transcript.streamId` stream (`plugin_stream`, `speaker` = "You" or the plugin name); all text is plain text.
 import { useEffect, useState } from "react";
 import { Mic } from "lucide-react";
 import { bridge } from "../bridge";
 import { plain } from "../lib/plugin";
 
-/** Peeka'nın faz tablosu (maket FAZ): yazı ve dalga/çizgi rengi. Eklenti bunu değiştiremez. */
+/** Peeka's phase table (mockup FAZ): label and wave/line color. Plugins can't change it. */
 const PHASES = {
-  dinliyor: { label: "Dinliyorum", color: "var(--mint)", mod: "dinle" },
-  dusunuyor: { label: "Düşünüyorum", color: "var(--turuncu)", mod: "bekle" },
-  konusuyor: { label: "Konuşuyorum", color: "var(--kizil)", mod: "konus" },
+  listening: { label: "Listening", color: "var(--mint)", mod: "listen" },
+  thinking: { label: "Thinking", color: "var(--orange)", mod: "wait" },
+  speaking: { label: "Speaking", color: "var(--crimson)", mod: "speak" },
 } as const;
 export type Phase = (typeof PHASES)[keyof typeof PHASES];
-export const phaseOf = (hal: unknown): Phase | null => (typeof hal === "string" && Object.hasOwn(PHASES, hal) ? PHASES[hal as keyof typeof PHASES] : null);
+export const phaseOf = (state: unknown): Phase | null => (typeof state === "string" && Object.hasOwn(PHASES, state) ? PHASES[state as keyof typeof PHASES] : null);
 
-/** Akıştaki her konuşanın son metni (konuşan başına bir satır, geliş sırasıyla); akış değişince sıfırlanır. */
-export function useTranscript(streamId: string | undefined, fallback = "Asistan"): { who: string; text: string }[] {
+/** Each speaker's latest text in the stream (one row per speaker, in arrival order); resets when the stream changes. */
+export function useTranscript(streamId: string | undefined, fallback = "Assistant"): { who: string; text: string }[] {
   const [rows, setRows] = useState<{ who: string; text: string }[]>([]);
   useEffect(() => {
     if (!streamId) return;
@@ -29,15 +29,15 @@ export function useTranscript(streamId: string | undefined, fallback = "Asistan"
   return rows;
 }
 
-/** Çıkıntı: iki satırlı canlı döküm ("Sen" gri, eklenti kırmızı) ve ipucu. Boş satır çizilmez. */
+/** Peek: two-line live transcript ("You" gray, plugin red) and a hint. Empty rows are not drawn. */
 export function Transcript({ streamId, name }: { streamId: string; name?: string }) {
   const rows = useTranscript(streamId, name ? plain(name, 24) : undefined);
   return (
-    <div className="dokum" aria-live="polite" aria-label="Canlı döküm">
+    <div className="transcript" aria-live="polite" aria-label="Live transcript">
       {rows.map((r) => (
-        <div key={r.who} className={"tr" + (r.who === "Sen" ? "" : " asistan")}><span className="kim">{r.who}</span><span className="metin">{plain(r.text, 400)}</span></div>
+        <div key={r.who} className={"tr" + (r.who === "You" ? "" : " assistant")}><span className="who">{r.who}</span><span className="text">{plain(r.text, 400)}</span></div>
       ))}
-      <div className="ipucu"><Mic />Sürekli dinleme açık. “Dur” dersen keser.</div>
+      <div className="hint"><Mic />Always listening. Say “Stop” to end.</div>
     </div>
   );
 }

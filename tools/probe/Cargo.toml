@@ -2,7 +2,7 @@
 name = "notch-probe"
 version = "0.1.0"
 edition = "2021"
-description = "Peeka Dalga 0 deneme aracı"
+description = "Peeka Wave 0 trial tool"
 publish = false
 
 # Standalone: not a member of the root workspace.

@@ -511,11 +511,11 @@ mod tests {
     }
 
     #[test]
-    fn turkish_paths_are_utf16_little_endian() {
-        let out = drop_files(&[r"G:\Çalışma\şifre.txt".to_string()]);
+    fn non_ascii_paths_are_utf16_little_endian() {
+        let out = drop_files(&[r"G:\Éa\naïve.txt".to_string()]);
         assert_eq!(&out[DROPFILES_SIZE..DROPFILES_SIZE + 2], &[b'G', 0]);
-        let c = DROPFILES_SIZE + 3 * 2; // "G:\" then Ç
-        assert_eq!(&out[c..c + 2], &[0xC7, 0x00]);
+        let c = DROPFILES_SIZE + 3 * 2; // "G:\" then É
+        assert_eq!(&out[c..c + 2], &[0xC9, 0x00]);
     }
 
     #[test]
@@ -530,7 +530,7 @@ mod tests {
     #[test]
     fn utf16_text_stops_at_nul_and_ignores_a_stray_byte() {
         assert_eq!(utf16_text(&utf16le("ab\0cd")), "ab");
-        assert_eq!(utf16_text(&utf16le("şifre")), "şifre");
+        assert_eq!(utf16_text(&utf16le("naïve")), "naïve");
         let mut odd = utf16le("xy");
         odd.push(0x41);
         assert_eq!(utf16_text(&odd), "xy");
@@ -539,9 +539,9 @@ mod tests {
 
     #[test]
     fn utf16_bytes_round_trips_and_terminates() {
-        let out = utf16_bytes("Çay ☕".as_bytes());
+        let out = utf16_bytes("Café ☕".as_bytes());
         assert_eq!(&out[out.len() - 2..], &[0, 0]);
-        assert_eq!(utf16_text(&out), "Çay ☕");
+        assert_eq!(utf16_text(&out), "Café ☕");
         assert_eq!(utf16_text(&utf16_bytes(&[0x61, 0xFF])), "a\u{FFFD}");
     }
 

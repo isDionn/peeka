@@ -7,18 +7,18 @@ import { sendX } from "../lib/xwin";
 import { AppIcon, HoldButton, Kbd, NO_INDENT, radioKeys, Row, Switch } from "./common";
 import { Modules, Plugins } from "./PluginSettings";
 import { PluginExtras } from "./PluginExtras";
-import "../fidelity-ayar.css";
+import "../fidelity-settings.css";
 
-export type SettingsPage = "ayg" | "ayk" | "aye" | "aym" | "ayp" | "ays";
-const NAV: [SettingsPage, string, typeof Keyboard][] = [["ayg", "Görünüm", LayoutPanelTop], ["ayk", "Kısayollar", Keyboard], ["aye", "Eklentiler", Puzzle], ["aym", "Modüller", LayoutGrid], ["ayp", "Pano", Clipboard], ["ays", "Maskot", Ghost]];
+export type SettingsPage = "appearance" | "shortcuts" | "plugins" | "modules" | "clipboard" | "mascot";
+const NAV: [SettingsPage, string, typeof Keyboard][] = [["appearance", "Appearance", LayoutPanelTop], ["shortcuts", "Shortcuts", Keyboard], ["plugins", "Plugins", Puzzle], ["modules", "Modules", LayoutGrid], ["clipboard", "Clipboard", Clipboard], ["mascot", "Mascot", Ghost]];
 
-const TASKBAR_MODES: [Settings["taskbarHide"], string][] = [["full", "Tamamen gizle"], ["auto", "Otomatik gizle"], ["off", "Windows görev çubuğu kalsın"]];
-/** Windows görev çubuğu kipi: Rust'tan okunur (`taskbarHide`), `taskbar_set_mode` ile yazılır; değişim olayı gelene dek seçim yerelde de tutulur. */
+const TASKBAR_MODES: [Settings["taskbarHide"], string][] = [["full", "Always hide"], ["auto", "Auto-hide"], ["off", "Keep Windows taskbar"]];
+/** Windows taskbar mode: read from Rust (`taskbarHide`), written with `taskbar_set_mode`; the choice is also kept locally until the change event arrives. */
 function TaskbarMode({ value }: { value: Settings["taskbarHide"] }) {
   const [mode, setMode] = useState(value);
   useEffect(() => setMode(value), [value]);
   return (
-    <div className="seg cam segKucuk" role="radiogroup" aria-label="Windows görev çubuğu" onKeyDown={radioKeys}>
+    <div className="seg glass segSmall" role="radiogroup" aria-label="Windows taskbar" onKeyDown={radioKeys}>
       {TASKBAR_MODES.map(([m, title]) => (
         <button key={m} className={"segb" + (mode === m ? " on" : "")} role="radio" aria-checked={mode === m} tabIndex={mode === m ? 0 : -1} onClick={() => { setMode(m); bridge.call("taskbar_set_mode", { mode: m }).catch(() => setMode(value)); }}>{title}</button>
       ))}
@@ -26,14 +26,14 @@ function TaskbarMode({ value }: { value: Settings["taskbarHide"] }) {
   );
 }
 
-/** Engel nedeni: satır, Windows ayarı (yalnız Rust'ın izin listesindeki adres açılır) ve o açılamazsa elle yol. */
+/** Blocker reason: the row, the Windows setting (only addresses on Rust's allowlist open) and a manual path if that fails. */
 const BLOCKERS: Record<MirrorBlocker, { text: string; uri: string | null; link: string; manual: string }> = {
-  dev_mode_off: { text: "Geliştirici Modu kapalı", uri: "ms-settings:developers", link: "Geliştirici ayarlarını aç", manual: "Windows Ayarları › Sistem › Geliştiriciler için" },
-  not_registered: { text: "register.ps1 çalıştırılıp Peeka yeniden başlatılmalı", uri: null, link: "", manual: "" },
-  access_denied: { text: "Windows izin vermedi", uri: "ms-settings:privacy-notifications", link: "Bildirim iznini aç", manual: "Windows Ayarları › Gizlilik › Bildirimler" },
+  dev_mode_off: { text: "Developer Mode is off", uri: "ms-settings:developers", link: "Open developer settings", manual: "Windows Settings › System › For developers" },
+  not_registered: { text: "Run register.ps1, then restart Peeka", uri: null, link: "", manual: "" },
+  access_denied: { text: "Windows didn't allow it", uri: "ms-settings:privacy-notifications", link: "Open notification permissions", manual: "Windows Settings › Privacy & security › Notifications" },
 };
 
-/** Ayarlar › Görünüm › Windows bildirimleri (isteğe bağlı, varsayılan kapalı). Anahtar `mirror_enable` / `mirror_disable`; engel varsa nedeni altında. */
+/** Settings › Appearance › Windows notifications (optional, off by default). The switch calls `mirror_enable` / `mirror_disable`; any blocker shows below it. */
 function MirrorSetting() {
   const [st, setSt] = useState<MirrorState | null>(null);
   const [hint, setHint] = useState<string | null>(null);
@@ -43,61 +43,61 @@ function MirrorSetting() {
   const open = (uri: string, manual: string) => bridge.call("open_windows_settings", { uri }).then(() => setHint(null)).catch(() => setHint(manual));
   return (
     <>
-      <Row title="Windows bildirimleri" sub="Sağ üstteki Bildirimler listesinde kart olur; şeritte dalga yok">
-        <Switch on={!!st?.enabled} label="Windows bildirimleri" onChange={toggle} />
+      <Row title="Windows notifications" sub="Shown as cards in the Notifications list at top right. No wave on the strip">
+        <Switch on={!!st?.enabled} label="Windows notifications" onChange={toggle} />
       </Row>
       {b && (
-        <div className="sat mUyari" role="status" data-blocker={st!.blocker}>
+        <div className="row mWarning" role="status" data-blocker={st!.blocker}>
           <div className="t12 l2">{b.text}</div>
-          {b.uri && <button className="btn kk cam" style={{ alignSelf: "flex-start" }} onClick={() => open(b.uri!, b.manual)}>{b.link}</button>}
-          {hint && <div className="t12 l3">Ayarlar açılamadı: {hint}</div>}
+          {b.uri && <button className="btn kk glass" style={{ alignSelf: "flex-start" }} onClick={() => open(b.uri!, b.manual)}>{b.link}</button>}
+          {hint && <div className="t12 l3">Couldn't open settings. Go to: {hint}</div>}
         </div>
       )}
     </>
   );
 }
 
-/** Ayarlar › Görünüm (maket ayg): iki kart. Maketin dışındaki ayarlar (ses tuşları, betik adresi, Windows bildirimleri, otomatik başlatma, görev çubuğu kipi) sahip kararlarının tek arayüzü; "Diğer ayarlar" altında durur. */
+/** Settings › Appearance (mockup ayg): two cards. Settings outside the mockup (volume keys, script endpoint, Windows notifications, autostart, taskbar mode) are the only UI for owner decisions; they live under "More settings". */
 function Appearance({ settings }: { settings: Settings }) {
   const [more, setMore] = useState(false);
   const mode = settings.taskbarHide;
   return (
     <>
-      <div className="t17 b6">Görünüm</div>
-      <div className="liste cam" style={NO_INDENT}>
-        <Row title="Şerit" sub="Hep görünür, tam ekranda gizlenir; ekranın üst 30 px'i ayrılır"><span className="t12 l2">Her zaman</span></Row>
-        <Row title="Adayı geçici gizle" sub="1 saat ya da yeniden basana kadar; onaylar yine gelir"><Kbd keys={settings.shortcuts.hide_island} /></Row>
-        <Row title="Renkli uygulama simgeleri" sub="Üstüne gelince gerçek renkli simge">
-          <Switch on={settings.colorIcons} label="Renkli uygulama simgeleri" onChange={(v) => bridge.call("set_settings", { patch: { colorIcons: v } })} />
+      <div className="t17 b6">Appearance</div>
+      <div className="list glass" style={NO_INDENT}>
+        <Row title="Strip" sub="Always visible, hidden in full screen. Reserves the top 30 px of the screen"><span className="t12 l2">Always</span></Row>
+        <Row title="Hide island for now" sub="For 1 hour or until you press it again. Approvals still come through"><Kbd keys={settings.shortcuts.hide_island} /></Row>
+        <Row title="Color app icons" sub="Show the real color icon on hover">
+          <Switch on={settings.colorIcons} label="Color app icons" onChange={(v) => bridge.call("set_settings", { patch: { colorIcons: v } })} />
         </Row>
-        <Row title="İkinci ekranlarda şerit" sub="Başlat, Ara, pencereler ve saat">
-          <Switch on={settings.secondaryStrips} label="İkinci ekranlarda şerit" onChange={(v) => bridge.call("set_settings", { patch: { secondaryStrips: v } })} />
-        </Row>
-      </div>
-      <div className="liste cam" style={NO_INDENT}>
-        <Row title="Windows görev çubuğu" sub={`${mode === "off" ? "Windows'un kendi çubuğu açık" : mode === "auto" ? "Otomatik gizleniyor" : "Gizli"}. Acil kısayol ${settings.shortcuts.emergency}`}>
-          <button className="btn kk cam" onClick={() => bridge.call("restore_taskbar")}>Görev çubuğunu geri getir</button>
-        </Row>
-        <Row title="Peeka'yı kilitle" sub="Pano ve eklenti kartları gizlenir">
-          <button className="btn kk cam" onClick={() => bridge.call("lock_now").catch(() => undefined)}><Lock />Kilitle</button>
+        <Row title="Strip on other displays" sub="Start, Search, windows and clock">
+          <Switch on={settings.secondaryStrips} label="Strip on other displays" onChange={(v) => bridge.call("set_settings", { patch: { secondaryStrips: v } })} />
         </Row>
       </div>
-      <button className="btn kk cam digerAyar" aria-expanded={more} onClick={() => setMore(!more)}><ChevronRight />Diğer ayarlar</button>
+      <div className="list glass" style={NO_INDENT}>
+        <Row title="Windows taskbar" sub={`${mode === "off" ? "Windows taskbar is on" : mode === "auto" ? "Auto-hiding" : "Hidden"}. Emergency shortcut: ${settings.shortcuts.emergency}`}>
+          <button className="btn kk glass" onClick={() => bridge.call("restore_taskbar")}>Restore taskbar</button>
+        </Row>
+        <Row title="Lock Peeka" sub="Hides Clipboard and plugin cards">
+          <button className="btn kk glass" onClick={() => bridge.call("lock_now").catch(() => undefined)}><Lock />Lock</button>
+        </Row>
+      </div>
+      <button className="btn kk glass otherSettings" aria-expanded={more} onClick={() => setMore(!more)}><ChevronRight />More settings</button>
       {more && (
-        <div className="liste cam" style={NO_INDENT}>
-          <Row title="Görev çubuğu kipi" sub="Tamamen, otomatik ya da Windows'unki"><TaskbarMode value={mode} /></Row>
-          <Row title="Ses tuşlarını yakala" sub="Windows'un göstergesi yerine yalnız Peeka'nın göstergesi çıkar">
-            <Switch on={settings.captureVolumeKeys} label="Ses tuşlarını yakala" onChange={(v) => bridge.call("set_settings", { patch: { captureVolumeKeys: v } })} />
+        <div className="list glass" style={NO_INDENT}>
+          <Row title="Taskbar mode" sub="Always hide, auto-hide, or keep Windows'"><TaskbarMode value={mode} /></Row>
+          <Row title="Handle volume keys" sub="Show Peeka's volume indicator instead of Windows'">
+            <Switch on={settings.captureVolumeKeys} label="Handle volume keys" onChange={(v) => bridge.call("set_settings", { patch: { captureVolumeKeys: v } })} />
           </Row>
-          <Row title="Betikler için uyarı adresi" sub="127.0.0.1 üzerinde basit uyarı HTTP'si; anahtar Peeka klasöründe">
-            <Switch on={settings.alertsApi} label="Betikler için uyarı adresi" onChange={(v) => bridge.call("set_settings", { patch: { alertsApi: v } })} />
+          <Row title="Alert endpoint for scripts" sub="Simple alert HTTP on 127.0.0.1. The key is in the Peeka folder">
+            <Switch on={settings.alertsApi} label="Alert endpoint for scripts" onChange={(v) => bridge.call("set_settings", { patch: { alertsApi: v } })} />
           </Row>
           <MirrorSetting />
-          <Row title="İndirme bitti bildirimi" sub="İndirilenler klasörü izlenir; yalnız ad ve boyut okunur, içerik okunmaz">
-            <Switch on={settings.watchDownloads} label="İndirme bitti bildirimi" onChange={(v) => bridge.call("set_settings", { patch: { watchDownloads: v } })} />
+          <Row title="Download complete alert" sub="Watches the Downloads folder. Reads only name and size, never contents">
+            <Switch on={settings.watchDownloads} label="Download complete alert" onChange={(v) => bridge.call("set_settings", { patch: { watchDownloads: v } })} />
           </Row>
-          <Row title="Windows ile başlat" sub="Oturum açılınca Peeka kendiliğinden başlar">
-            <Switch on={settings.autostart} label="Windows ile başlat" onChange={(v) => bridge.call("set_settings", { patch: { autostart: v } })} />
+          <Row title="Start with Windows" sub="Peeka starts when you sign in">
+            <Switch on={settings.autostart} label="Start with Windows" onChange={(v) => bridge.call("set_settings", { patch: { autostart: v } })} />
           </Row>
         </div>
       )}
@@ -105,51 +105,51 @@ function Appearance({ settings }: { settings: Settings }) {
   );
 }
 
-/** Ayarlar › Maskot (maket ays): muziplik ve kutlama aç/kapa, ilk açılışı tekrar göster. */
+/** Settings › Mascot (mockup ays): pranks and celebration on/off, show the first-run intro again. */
 function MascotSettings({ settings }: { settings: Settings }) {
   return (
     <>
-      <div className="t17 b6">Maskot</div>
-      <div className="liste cam" style={NO_INDENT}>
-        <Row title="Maskot muziplikleri" sub="45–90 dk'da bir, günde en çok 6; tam ekranda, rahatsız etmede ve toplantıda yok">
-          <Switch on={settings.mascotPranks} label="Maskot muziplikleri" onChange={(v) => bridge.call("set_settings", { patch: { mascotPranks: v } })} />
+      <div className="t17 b6">Mascot</div>
+      <div className="list glass" style={NO_INDENT}>
+        <Row title="Mascot pranks" sub="Every 45–90 min, up to 6 a day. Never in full screen, Do not disturb or meetings">
+          <Switch on={settings.mascotPranks} label="Mascot pranks" onChange={(v) => bridge.call("set_settings", { patch: { mascotPranks: v } })} />
         </Row>
-        <Row title="İş bitince kutlama" sub="Saatte en çok 3">
-          <Switch on={settings.celebrate} label="İş bitince kutlama" onChange={(v) => bridge.call("set_settings", { patch: { celebrate: v } })} />
+        <Row title="Celebrate finished tasks" sub="Up to 3 an hour">
+          <Switch on={settings.celebrate} label="Celebrate finished tasks" onChange={(v) => bridge.call("set_settings", { patch: { celebrate: v } })} />
         </Row>
-        <Row title="İlk açılışı tekrar göster" sub="Peeka ve ana asistan tanıtımı">
-          <button className="btn kk cam" onClick={() => { resetFirstRun(); sendX({ t: "firstrun" }); }}>Göster</button>
+        <Row title="Show intro again" sub="Introduces Peeka and the main assistant">
+          <button className="btn kk glass" onClick={() => { resetFirstRun(); sendX({ t: "firstrun" }); }}>Show</button>
         </Row>
       </div>
-      <div className="t12 l3 b4">Maskot Peeka'nın kendi karakteridir; ana asistan bağlı değilken uyur, hiç yokken görünmez.</div>
+      <div className="t12 l3 b4">The mascot is Peeka's own character. It sleeps while the main assistant is disconnected and hides when there isn't one.</div>
     </>
   );
 }
 
 const LIFETIMES = [5, 15, 30, 60] as const;
-/** Ayarlar › Pano (maket ayp, ADR-0063 §3): parola ömrü yalnız kısaltılabilir (en çok 60 dk), "Hepsini sil" basılı tutunca. */
+/** Settings › Clipboard (mockup ayp, ADR-0063 §3): password lifetime can only be shortened (60 min max); "Delete all" on press and hold. */
 function ClipboardSettings({ settings }: { settings: Settings }) {
   const set = (patch: Partial<Settings>) => bridge.call("set_settings", { patch });
   return (
     <>
-      <div className="t17 b6">Pano</div>
-      <div className="liste cam" style={NO_INDENT}>
-        <Row title="Pano geçmişi" sub="Son 24 saat, en çok 50 öğe, yalnız bu bilgisayarda"><Switch on={settings.clipHistory} label="Pano geçmişi" onChange={(v) => set({ clipHistory: v })} /></Row>
-        <Row title="Görsel ve dosya da tut" sub="Dosyanın yeri tutulur, kendisi kopyalanmaz"><Switch on={settings.clipMedia} label="Görsel ve dosya da tut" onChange={(v) => set({ clipMedia: v })} /></Row>
-        <Row title="Parola ömrü" sub="Şifreli (DPAPI) saklanır, sonra silinir">
-          <div className="seg cam segKucuk segEsit" role="radiogroup" aria-label="Parola ömrü" onKeyDown={radioKeys}>
-            {LIFETIMES.map((m) => <button key={m} className={"segb" + (settings.clipPasswordMin === m ? " on" : "")} role="radio" aria-checked={settings.clipPasswordMin === m} tabIndex={settings.clipPasswordMin === m ? 0 : -1} onClick={() => set({ clipPasswordMin: m })}>{m} dk</button>)}
+      <div className="t17 b6">Clipboard</div>
+      <div className="list glass" style={NO_INDENT}>
+        <Row title="Clipboard history" sub="Last 24 hours, up to 50 items, on this PC only"><Switch on={settings.clipHistory} label="Clipboard history" onChange={(v) => set({ clipHistory: v })} /></Row>
+        <Row title="Keep images and files" sub="Stores the file's location, not a copy"><Switch on={settings.clipMedia} label="Keep images and files" onChange={(v) => set({ clipMedia: v })} /></Row>
+        <Row title="Password lifetime" sub="Stored encrypted (DPAPI), then deleted">
+          <div className="seg glass segSmall segEqual" role="radiogroup" aria-label="Password lifetime" onKeyDown={radioKeys}>
+            {LIFETIMES.map((m) => <button key={m} className={"segb" + (settings.clipPasswordMin === m ? " on" : "")} role="radio" aria-checked={settings.clipPasswordMin === m} tabIndex={settings.clipPasswordMin === m ? 0 : -1} onClick={() => set({ clipPasswordMin: m })}>{m} min</button>)}
           </div>
         </Row>
-        <Row title="Hepsini sil" sub="Geri alınamaz"><HoldButton label="Hepsini sil" icon={<Trash2 />} danger onDone={() => { bridge.call("clip_clear", {}).catch(() => undefined); }} /></Row>
+        <Row title="Delete all" sub="Can't be undone"><HoldButton label="Delete all" icon={<Trash2 />} danger onDone={() => { bridge.call("clip_clear", {}).catch(() => undefined); }} /></Row>
       </div>
     </>
   );
 }
 
-const SHORTCUT_ROWS: [ShortcutId, string][] = [["search", "Ara"], ["ask", "Asistana sor"], ["focus_island", "Onaya git"], ["hide_island", "Adayı geçici gizle"], ["emergency", "Görev çubuğunu geri getir (acil)"]];
+const SHORTCUT_ROWS: [ShortcutId, string][] = [["search", "Search"], ["ask", "Ask the assistant"], ["focus_island", "Go to approval"], ["hide_island", "Hide island for now"], ["emergency", "Restore taskbar (emergency)"]];
 
-/** Kısayol satırı: "Değiştir" sonraki tuş birleşimini yakalar (Esc vazgeçer); çakışmayı arka uç reddeder ve nedeni burada gösterilir. */
+/** Shortcut row: "Change" records the next key combo (Esc cancels); the backend rejects conflicts and the reason shows here. */
 function ShortcutRow({ id, title, keys }: { id: ShortcutId; title: string; keys: string }) {
   const [rec, setRec] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -162,29 +162,29 @@ function ShortcutRow({ id, title, keys }: { id: ShortcutId; title: string; keys:
       if (!combo) return;
       setRec(false);
       const r = await bridge.call("set_settings", { patch: { shortcuts: { [id]: combo } as Settings["shortcuts"] } });
-      setErr(r.ok ? null : r.error ?? "Bu kısayol kullanılamıyor.");
+      setErr(r.ok ? null : r.error ?? "This shortcut can't be used.");
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [rec, id]);
   return (
-    <div className="sat">
-      <span className="metin">{title}{err && <span className="eoUyari" role="alert">{err}</span>}</span>
-      {rec ? <span className="t12 l2">Tuşlara bas… (Esc: vazgeç)</span> : <Kbd keys={keys} />}
-      <button className="btn kk cam" aria-label={`${title} kısayolunu değiştir`} onClick={() => { setErr(null); setRec(true); }}>Değiştir</button>
+    <div className="row">
+      <span className="text">{title}{err && <span className="consentWarning" role="alert">{err}</span>}</span>
+      {rec ? <span className="t12 l2">Press keys… (Esc to cancel)</span> : <Kbd keys={keys} />}
+      <button className="btn kk glass" aria-label={`Change ${title} shortcut`} onClick={() => { setErr(null); setRec(true); }}>Change</button>
     </div>
   );
 }
 
 const HEAD = 3;
-/** İstisna satırı: uygulama simgesi, ad, kısayol ("Ctrl+K, Ctrl+Space" gibi uygulamaya özel dizi olabilir); kaldırma düğmesi üstüne gelince çıkar. */
+/** Exception row: app icon, name, shortcut (can be an app-specific list like "Ctrl+K, Ctrl+Space"); the remove button appears on hover. */
 function ExceptionRow({ e, onRemove }: { e: Settings["shortcutExceptions"][number]; onRemove: () => void }) {
   return (
-    <div className="sat">
-      <span className="uyg"><AppIcon src={e.icon} size={13} /></span>
-      <span className="metin">{e.name}</span>
+    <div className="row">
+      <span className="app"><AppIcon src={e.icon} size={13} /></span>
+      <span className="text">{e.name}</span>
       <span className="t12 l3">{e.keys}</span>
-      <button className="mini" aria-label={`${e.name} istisnasını kaldır`} onClick={onRemove}><X /></button>
+      <button className="mini" aria-label={`Remove ${e.name} exception`} onClick={onRemove}><X /></button>
     </div>
   );
 }
@@ -193,40 +193,40 @@ function Shortcuts({ settings }: { settings: Settings }) {
   const [adding, setAdding] = useState(false);
   const [apps, setApps] = useState<AppRef[]>([]);
   useEffect(() => { if (adding) bridge.call("list_apps").then(setApps); }, [adding]);
-  // kural: varsayılandan farklı kısayollu uygulamalar önce (tek tek görünür), varsayılanı kullananlar sonda tek satırda toplanır
+  // rule: apps with a non-default shortcut come first (one per row); those using the default are grouped into one row at the end
   const def = settings.shortcuts.search;
   const ex = [...settings.shortcutExceptions].sort((a, b) => +(b.keys !== def) - +(a.keys !== def));
   const save = (list: Settings["shortcutExceptions"]) => bridge.call("set_settings", { patch: { shortcutExceptions: list } });
   const free = apps.filter((a) => !ex.some((e) => e.appId === a.appId));
-  const [grouped, setGrouped] = useState(true); // ilk üçünün ötesi tek satırda toplanır, tıklayınca tek tek açılır
+  const [grouped, setGrouped] = useState(true); // beyond the first three they're grouped into one row; clicking expands them
   const rest = ex.slice(HEAD);
   return (
     <>
-      <div className="t17 b6">Kısayollar</div>
-      <div className="liste cam" style={NO_INDENT}>
+      <div className="t17 b6">Shortcuts</div>
+      <div className="list glass" style={NO_INDENT}>
         {SHORTCUT_ROWS.map(([id, title]) => <ShortcutRow key={id} id={id} title={title} keys={settings.shortcuts[id]} />)}
       </div>
-      <div className="bolumBas">
-        <span>Bu uygulamalar öndeyken kısayollar uygulamaya gider</span>
-        <button className="btn kk cam" aria-expanded={adding} onClick={() => setAdding(!adding)}><Plus />Ekle</button>
+      <div className="sectionHead">
+        <span>When these apps are in front, shortcuts go to the app</span>
+        <button className="btn kk glass" aria-expanded={adding} onClick={() => setAdding(!adding)}><Plus />Add</button>
       </div>
       {adding && (
-        <div className="liste cam istisnaEkle" role="group" aria-label="Eklenebilecek uygulamalar" style={{ "--girinti": "36px" } as CSSProperties}>
+        <div className="list glass addException" role="group" aria-label="Apps you can add" style={{ "--indent": "36px" } as CSSProperties}>
           {free.map((a) => (
-            <button key={a.appId} className="sat" onClick={() => { save([...ex, { ...a, keys: settings.shortcuts.search }]); setAdding(false); }}>
-              <AppIcon src={a.icon} /><span className="metin" style={{ textAlign: "left" }}>{a.name}</span>
+            <button key={a.appId} className="row" onClick={() => { save([...ex, { ...a, keys: settings.shortcuts.search }]); setAdding(false); }}>
+              <AppIcon src={a.icon} /><span className="text" style={{ textAlign: "left" }}>{a.name}</span>
             </button>
           ))}
-          {!free.length && <div className="bosSonuc">Eklenecek uygulama kalmadı.</div>}
+          {!free.length && <div className="noResults">No more apps to add.</div>}
         </div>
       )}
-      <div className="liste cam istisnalar" style={{ "--girinti": "36px" } as CSSProperties}>
+      <div className="list glass exceptions" style={{ "--indent": "36px" } as CSSProperties}>
         {ex.slice(0, HEAD).map((e) => <ExceptionRow key={e.appId} e={e} onRemove={() => save(ex.filter((x) => x.appId !== e.appId))} />)}
         {rest.length > 0 && !grouped && rest.map((e) => <ExceptionRow key={e.appId} e={e} onRemove={() => save(ex.filter((x) => x.appId !== e.appId))} />)}
         {rest.length > 0 && grouped && (
-          <button className="sat istisnaGrup" aria-expanded={false} aria-label={`${rest.length} uygulama daha: ${rest.map((e) => e.name).join(", ")}. Tek tek göster`} onClick={() => setGrouped(false)}>
-            <span className="uyg"><FileText /></span><span className="metin" title={rest.map((e) => e.name).join(", ")}>{rest.map((e) => e.name).join(", ")}</span>
-            <span className="t12 l3">{rest.every((e) => e.keys === rest[0].keys) ? rest[0].keys : "çeşitli"}</span>
+          <button className="row exceptionGroup" aria-expanded={false} aria-label={`${rest.length} more apps: ${rest.map((e) => e.name).join(", ")}. Show each`} onClick={() => setGrouped(false)}>
+            <span className="app"><FileText /></span><span className="text" title={rest.map((e) => e.name).join(", ")}>{rest.map((e) => e.name).join(", ")}</span>
+            <span className="t12 l3">{rest.every((e) => e.keys === rest[0].keys) ? rest[0].keys : "various"}</span>
           </button>
         )}
       </div>
@@ -237,28 +237,29 @@ function Shortcuts({ settings }: { settings: Settings }) {
 function About({ settings, onQuit }: { settings: Settings; onQuit?: () => void }) {
   return (
     <>
-      <div className="t17 b6">Hakkında</div>
-      <div className="liste cam" style={NO_INDENT}>
-        <Row title="Peeka" sub="Windows görev çubuğunun yerini alan şerit ve ada. Asistan ona eklenti olarak bağlanır." />
-        <Row title="Acil kısayol" sub="Görev çubuğunu geri getirir"><Kbd keys={settings.shortcuts.emergency} /></Row>
-        {onQuit && <Row title="Peeka'dan çık" sub="Windows görev çubuğu geri gelir; önce onay sorulur"><button className="btn kk cam yikici" onClick={onQuit}>Çık</button></Row>}
+      <div className="t17 b6">About</div>
+      <div className="list glass" style={NO_INDENT}>
+        <Row title="Peeka" sub="A strip and island that replace the Windows taskbar. Assistants connect to it as plugins." />
+        <Row title="Updates" sub="Opens the latest release on GitHub. Peeka never checks on its own"><button className="btn kk glass" onClick={() => bridge.call("open_windows_settings", { uri: "https://github.com/isDionn/peeka/releases/latest" }).catch(() => undefined)}>Check for updates</button></Row>
+        <Row title="Emergency shortcut" sub="Restores the taskbar"><Kbd keys={settings.shortcuts.emergency} /></Row>
+        {onQuit && <Row title="Quit Peeka" sub="The Windows taskbar comes back. You'll be asked to confirm first"><button className="btn kk glass destructive" onClick={onQuit}>Quit</button></Row>}
       </div>
     </>
   );
 }
 
 export function SettingsPanel({ page, onPage, settings, onQuit }: { page: SettingsPage; onPage: (p: SettingsPage) => void; settings: Settings; onQuit?: () => void }) {
-  const [about, setAbout] = useState(false); // Hakkında sayfa kimliği taşımaz (maket: id boş); yerel durumla açılır
+  const [about, setAbout] = useState(false); // About has no page id (mockup: empty id); it opens via local state
   return (
-    <div className="govde">
-      <div className="ayar">
-        <nav className="ayarNav" aria-label="Ayarlar bölümleri">
+    <div className="body">
+      <div className="settings">
+        <nav className="settingsNav" aria-label="Settings sections">
           {NAV.map(([id, title, Icon]) => (
-            <button key={id} className={"ayarB" + (!about && id === page ? " on" : "")} aria-current={!about && id === page ? "page" : undefined} data-autofocus={id === page ? "" : undefined} onClick={() => { setAbout(false); onPage(id); }}><Icon />{title}</button>
+            <button key={id} className={"settingsItem" + (!about && id === page ? " on" : "")} aria-current={!about && id === page ? "page" : undefined} data-autofocus={id === page ? "" : undefined} onClick={() => { setAbout(false); onPage(id); }}><Icon />{title}</button>
           ))}
-          <button className={"ayarB" + (about ? " on" : "")} aria-current={about ? "page" : undefined} onClick={() => setAbout(true)}><Info />Hakkında</button>
+          <button className={"settingsItem" + (about ? " on" : "")} aria-current={about ? "page" : undefined} onClick={() => setAbout(true)}><Info />About</button>
         </nav>
-        <div className="ayarIc">{about ? <About settings={settings} onQuit={onQuit} /> : page === "ayg" ? <Appearance settings={settings} /> : page === "ayk" ? <Shortcuts settings={settings} /> : page === "aye" ? <><Plugins /><PluginExtras /></> : page === "ayp" ? <ClipboardSettings settings={settings} /> : page === "ays" ? <MascotSettings settings={settings} /> : <Modules />}</div>
+        <div className="settingsInner">{about ? <About settings={settings} onQuit={onQuit} /> : page === "appearance" ? <Appearance settings={settings} /> : page === "shortcuts" ? <Shortcuts settings={settings} /> : page === "plugins" ? <><Plugins /><PluginExtras /></> : page === "clipboard" ? <ClipboardSettings settings={settings} /> : page === "mascot" ? <MascotSettings settings={settings} /> : <Modules />}</div>
       </div>
     </div>
   );

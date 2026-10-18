@@ -18,7 +18,7 @@ pub enum HideMode {
     Full,
     /// Windows's own auto-hide only ("otomatik").
     Auto,
-    /// The Windows taskbar is left alone ("Windows görev çubuğu kalsın"): a permanent mode, not a fallback. The
+    /// The Windows taskbar is left alone ("Leave the Windows taskbar alone"): a permanent mode, not a fallback. The
     /// strips and their AppBars stay; only the Windows bar is never hidden.
     Off,
 }
@@ -47,7 +47,7 @@ pub struct Settings {
     /// Start with Windows (the per-user Run key; owner decision 2026-10-16). An old file gets it on.
     #[serde(default = "yes")]
     pub autostart: bool,
-    /// Settings › Pano (Wave 4): the history on, images and files too, the password lifetime (minutes).
+    /// Settings › Clipboard (Wave 4): the history on, images and files too, the password lifetime (minutes).
     #[serde(default = "yes")]
     pub clip_history: bool,
     #[serde(default = "yes")]
@@ -63,10 +63,10 @@ pub struct Settings {
     /// (Developer Mode + the registered package + Windows's yes). Only this switch is saved, never a notification.
     #[serde(default)]
     pub mirror: bool,
-    /// Sadakat 3: the mascot celebrates a finished job (`job_done`; the page allows at most 3 an hour). On by default.
+    /// Fidelity 3: the mascot celebrates a finished job (`job_done`; the page allows at most 3 an hour). On by default.
     #[serde(default = "yes")]
     pub celebrate: bool,
-    /// Peeka Faz C (scenario 29): the Downloads folder is listed for "İndirme bitti" (names and sizes only, see
+    /// Peeka Phase C (scenario 29): the Downloads folder is listed for "Download finished" (names and sizes only, see
     /// `downloads`). On by default because it reads no content; the owner can switch it off.
     #[serde(default = "yes")]
     pub watch_downloads: bool,
@@ -210,7 +210,7 @@ pub fn to_ui(s: &Settings, name_icon: impl Fn(&str) -> Option<(String, String)>)
     }
 }
 
-/// Applies a patch, or says in Turkish why not (the page shows it). `check_keys` = why a key combination cannot be a
+/// Applies a patch, or says why not (the page shows it). `check_keys` = why a key combination cannot be a
 /// shortcut (the parser refuses it, or it types an AltGr character: `shortcuts::altgr_reason`), None = fine;
 /// `exe_of(app_id)` = the exe file name of an app the page got from Notch (None = not Notch's, or not an exe).
 pub fn apply_patch(
@@ -253,7 +253,7 @@ pub fn apply_patch(
     if let Some(v) = patch.clip_password_min {
         // Shorter only, never past an hour.
         if !crate::clip::PASSWORD_MINUTES.contains(&v) {
-            return Err("Parola ömrü 5, 15, 30 ya da 60 dakika olabilir.".into());
+            return Err("Password lifetime can be 5, 15, 30 or 60 minutes.".into());
         }
         next.clip_password_min = v;
     }
@@ -268,12 +268,12 @@ pub fn apply_patch(
         }
         let mut seen = std::collections::BTreeSet::new();
         if !next.shortcuts.iter().all(|k| seen.insert(shortcuts::normalize(&k.keys))) {
-            return Err("Bu kısayol başka bir işleve atanmış.".into());
+            return Err("This shortcut is assigned to another function.".into());
         }
     }
     if let Some(list) = patch.shortcut_exceptions {
         if list.len() > MAX_EXCEPTIONS {
-            return Err("İstisna listesi çok uzun.".into());
+            return Err("The exception list is too long.".into());
         }
         let mut exes: Vec<String> = Vec::with_capacity(list.len());
         for e in &list {
@@ -283,7 +283,7 @@ pub fn apply_patch(
                 .map(crate::apps::exe_name)
                 .or_else(|| exe_of(&e.app_id))
                 .filter(|x| shortcuts::valid_exe(x))
-                .ok_or("Bu uygulama için istisna eklenemiyor (çalıştırılabilir dosyası bulunamadı).")?;
+                .ok_or("Cannot add an exception for this app (its executable was not found).")?;
             if !exes.contains(&exe) {
                 exes.push(exe);
             }
@@ -367,7 +367,7 @@ mod tests {
         let ok = |_: &str| None;
         let none = |_: &str| None;
         let p: UiPatch = serde_json::from_str(r#"{"shortcuts":{"search":"Ctrl+Shift+A"}}"#).unwrap();
-        assert_eq!(apply_patch(&s, p, ok, none).unwrap_err(), "Bu kısayol başka bir işleve atanmış.");
+        assert_eq!(apply_patch(&s, p, ok, none).unwrap_err(), "This shortcut is assigned to another function.");
         let p: UiPatch = serde_json::from_str(r#"{"shortcuts":{"ask":"Ctrl+J"},"secondaryStrips":false}"#).unwrap();
         let n = apply_patch(&s, p, ok, none).unwrap();
         assert_eq!((n.shortcuts[1].keys.as_str(), n.secondary_strips), ("Ctrl+J", false));
@@ -378,8 +378,8 @@ mod tests {
         let n = apply_patch(&s, p, ok, none).unwrap();
         assert_eq!((n.autostart, n.taskbar_hide), (false, HideMode::Full), "the mode is not patched here");
         let p: UiPatch = serde_json::from_str(r#"{"shortcuts":{"ask":"nope"}}"#).unwrap();
-        let why = |k: &str| (k == "nope").then(|| "olmaz".to_string());
-        assert_eq!(apply_patch(&s, p, why, none).unwrap_err(), "olmaz");
+        let why = |k: &str| (k == "nope").then(|| "not allowed".to_string());
+        assert_eq!(apply_patch(&s, p, why, none).unwrap_err(), "not allowed");
         let p: UiPatch = serde_json::from_str(r#"{"shortcuts":{"ask":"Ctrl+Alt+Q"}}"#).unwrap();
         let altgr = |k: &str| shortcuts::altgr_reason(k, |vk, _| (vk == u16::from(b'Q')).then(|| "@".to_string()));
         assert!(apply_patch(&s, p, altgr, none).unwrap_err().contains("\"@\""), "Turkish Q: AltGr+Q is @");

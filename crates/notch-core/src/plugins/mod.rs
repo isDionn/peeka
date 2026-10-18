@@ -1,6 +1,6 @@
-//! The plugin API (wire contract `notch/docs/eklenti-api.md`): everything that can be decided without
+//! The plugin API (wire contract `docs/plugin-api.md`): everything that can be decided without
 //! Windows. The named pipe, the SID, `GetNamedPipeClientProcessId` and `WinVerifyTrust` live in
-//! `src-tauri/src/plugins.rs`, which only moves bytes between the pipe and [`host::Host`] and runs its [`host::Out`]s.
+//! `crates/notch-app/src/plugins.rs`, which only moves bytes between the pipe and [`host::Host`] and runs its [`host::Out`]s.
 //!
 //! Trust model: every program of this user can open the pipe, so the identity is the token the owner
 //! approved, nothing else. The exe path and its signature are shown in the consent window as information only.
@@ -28,7 +28,7 @@ pub const MAX_SUBMIT: usize = 512 * 1024;
 /// Notch -> UI decisions within this long after display are ignored (consent, approvals, plugin buttons).
 pub const GUARD_MS: u64 = 300;
 
-/// JSON-RPC error codes (eklenti-api.md §11).
+/// JSON-RPC error codes (docs/plugin-api.md §11).
 pub mod code {
     pub const PARSE: i64 = -32700;
     pub const INVALID_REQUEST: i64 = -32600;
@@ -41,7 +41,7 @@ pub mod code {
     pub const TOO_LARGE: i64 = -32004;
     /// Rate limit; `data.retry_after` in seconds.
     pub const RATE: i64 = -32005;
-    /// The owner said no (or the consent timed out, or "bir daha sorma").
+    /// The owner said no (or the consent timed out, or "never ask again").
     pub const DENIED: i64 = -32006;
     /// Another consent window is open; `data.retry_after`.
     pub const BUSY: i64 = -32007;
@@ -139,25 +139,25 @@ impl Scope {
         }
     }
 
-    /// The consent window's plain-Turkish line (what it can see / do).
+    /// The consent window's plain-English line (what it can see / do).
     pub fn text(self) -> &'static str {
         match self {
-            Scope::IslandProtrusion => "Adanın ortasında kısa bir satır gösterebilir",
-            Scope::CardModule => "Modüller kartına en çok 3 sekme ve Genel sayfasına kısa satırlar ekleyebilir",
-            Scope::AlertsPost => "Kısa uyarı ve süren iş gösterebilir",
-            Scope::NotificationsPost => "Bildirimler listesine kayıt ekleyebilir",
-            Scope::SearchProvider => "Ctrl+K'ye sonuç ekleyebilir; aramaya yazdığını görür",
-            Scope::ComposerHandler => "Ctrl+Space kutusuna yazdığını ve eklediğin ekleri alır, cevap yazar",
-            Scope::VoiceLine => "Şeridin altındaki ses çizgisini ve canlı dökümü gösterebilir",
+            Scope::IslandProtrusion => "Can show a short line in the middle of the island",
+            Scope::CardModule => "Can add up to 3 tabs to the Modules card and short rows to the General page",
+            Scope::AlertsPost => "Can show short alerts and a running job",
+            Scope::NotificationsPost => "Can add entries to the Notifications list",
+            Scope::SearchProvider => "Can add results to Ctrl+K; sees what you type in the search",
+            Scope::ComposerHandler => "Receives what you type in the Ctrl+Space box and the attachments you add, and writes the reply",
+            Scope::VoiceLine => "Can show the voice line below the strip and the live transcript",
             Scope::ApprovalsPrompt => {
-                "Senden onay isteyebilir; riskin düzeyini eklenti söyler, Peeka bunu doğrulayamaz"
+                "Can ask for your approval; the plugin states the risk level and Peeka cannot verify it"
             }
-            Scope::FilesDrop => "Adaya bıraktığın dosyaların yollarını, yalnız bıraktığın anda alır",
-            Scope::LockSignal => "Peeka'yı kilitleyebilir (kilidi yalnız sen açarsın)",
-            Scope::MediaRead => "Çalan parçanın adını ve sanatçısını görür",
-            Scope::WindowsRead => "Açık pencerelerin başlıklarını görür",
-            Scope::ClipboardRead => "Pano geçmişini görür (parolalar asla)",
-            Scope::NotificationsRead => "Windows bildirimlerini görür",
+            Scope::FilesDrop => "Receives the paths of files you drop on the island, only at the moment you drop them",
+            Scope::LockSignal => "Can lock Peeka (only you can unlock it)",
+            Scope::MediaRead => "Sees the title and artist of the playing track",
+            Scope::WindowsRead => "Sees the titles of open windows",
+            Scope::ClipboardRead => "Sees the clipboard history (never passwords)",
+            Scope::NotificationsRead => "Sees Windows notifications",
         }
     }
 }

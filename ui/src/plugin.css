@@ -1,39 +1,39 @@
-/* Eklenti çizimi (Dalga 3): maketteki sınıflara ek olarak yalnız gerçek sayfa için gerekenler. */
-.basHarf.k { width: 20px; height: 20px; border-radius: 6px; font-size: 11px; }
-/* maskot yeri: çizimi Dalga 5'te gelir; o zamana dek hafif hayalet siluet */
-.leadMk { display: inline-flex; flex: none; }
+/* Plugin rendering (Wave 3): only what the real page needs on top of the mockup classes. */
+.initials.k { width: 20px; height: 20px; border-radius: 6px; font-size: 11px; }
+/* mascot slot: its drawing arrives in Wave 5; until then a faint ghost silhouette */
+.leadMascot { display: inline-flex; flex: none; }
 .mk { display: inline-block; flex: none; border-radius: 46% 46% 30% 30% / 40% 40% 36% 36%; background: color-mix(in srgb, var(--l1) 14%, transparent); }
-.onEk { white-space: nowrap; }
+.prefix { white-space: nowrap; }
 .pst { color: var(--l2); }
-[data-state=attention] .pst, .ms[data-state=attention] .pst { color: var(--turuncu); }
-[data-state=danger] .pst { color: var(--kirmiziYazi); }
-[data-state=done] .pst { color: var(--yesil); }
-.canliYazi .kim { color: var(--l1); font-weight: 600; margin-right: 6px; }
-.canliYazi { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.blokKutu { display: flex; flex-direction: column; gap: 8px; }
-.blokKutu .sat { min-height: 40px; }
-.blokGorsel { max-width: 100%; border-radius: var(--rIc, 10px); }
-.sohbet { display: flex; flex-direction: column; gap: 12px; max-height: 280px; overflow: auto; }
-.tur { display: flex; flex-direction: column; gap: 8px; }
-.cip.oneriCip { border: 1px dashed var(--l3); color: var(--l1); background: transparent; cursor: pointer; }
-.cip.eklendi { cursor: pointer; color: var(--l1); }
-/* tam ekranda inen onay şeridinin kalan süre çizgisi */
-.sureCizgi { position: absolute; left: 8px; right: 8px; bottom: -4px; height: 2px; border-radius: 2px; background: var(--l3); transform-origin: 0 50%; animation: sure var(--sure, 4s) linear forwards; }
-@keyframes sure { from { transform: scaleX(1); } to { transform: scaleX(0); } }
-/* sekme çubuğu: seçili sekme dolgusu (maketteki kayan hap yerine) */
+[data-state=attention] .pst, .ms[data-state=attention] .pst { color: var(--orange); }
+[data-state=danger] .pst { color: var(--redText); }
+[data-state=done] .pst { color: var(--green); }
+.liveText .who { color: var(--l1); font-weight: 600; margin-right: 6px; }
+.liveText { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.blockBox { display: flex; flex-direction: column; gap: 8px; }
+.blockBox .row { min-height: 40px; }
+.blockImage { max-width: 100%; border-radius: var(--rInner, 10px); }
+.chat { display: flex; flex-direction: column; gap: 12px; max-height: 280px; overflow: auto; }
+.kind { display: flex; flex-direction: column; gap: 8px; }
+.chip.suggestionChip { border: 1px dashed var(--l3); color: var(--l1); background: transparent; cursor: pointer; }
+.chip.added { cursor: pointer; color: var(--l1); }
+/* time-left line of the approval strip that drops down in fullscreen */
+.timeLine { position: absolute; left: 8px; right: 8px; bottom: -4px; height: 2px; border-radius: 2px; background: var(--l3); transform-origin: 0 50%; animation: countdown var(--dur, 4s) linear forwards; }
+@keyframes countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+/* tab bar: selected tab fill (instead of the mockup's sliding pill) */
 .seg .segb.on { background: rgba(255,255,255,.13); border-radius: 12px; box-shadow: inset 0 .5px 0 rgba(255,255,255,.16); }
 .seg { flex-wrap: nowrap; }
-/* onay penceresi */
-.eoGovde { max-height: 80vh; overflow: auto; }
-.eoSat { cursor: pointer; text-align: left; width: 100%; }
-.eoSat .kutucuk { cursor: pointer; }
-.eoSayac { font-variant-numeric: tabular-nums; }
-/* sahip kararı 2026-10-16: maskot büyütüldü (b). Şerit 24x32 kutu: şerit 30 px, bu yüzden dikey 3 px taşar (kutunun üstü/altı saydam) ve ortalı kalır. */
-.ms > .leadMk, .ms > .mascot, .ms > .soluk { margin-block: -3px; }
-.ms .soluk { display: inline-flex; }
-/* kartlarda sol maskot sütunu: 56 px (75 yüksek) solda, başlık ve alt başlık sağda */
-.mkBas:has(.mascot) { gap: 14px; }
-.mkBas .leadMk { align-self: center; }
-.mkBas > .yazKol { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
-.basHarf.b { width: 56px; height: 56px; border-radius: 14px; font-size: 24px; }
-.kutu h4:has(.mascot) { display: flex; align-items: center; gap: 12px; }
+/* consent window */
+.consentBody { max-height: 80vh; overflow: auto; }
+.consentRow { cursor: pointer; text-align: left; width: 100%; }
+.consentRow .checkbox { cursor: pointer; }
+.consentCountdown { font-variant-numeric: tabular-nums; }
+/* owner decision 2026-10-16: mascot enlarged (b). Strip box 24x32: the strip is 30 px, so it overflows 3 px vertically (box top/bottom transparent) and stays centered. */
+.ms > .leadMascot, .ms > .mascot, .ms > .dim { margin-block: -3px; }
+.ms .dim { display: inline-flex; }
+/* left mascot column on cards: 56 px (75 high) on the left, title and subtitle on the right */
+.mkHead:has(.mascot) { gap: 14px; }
+.mkHead .leadMascot { align-self: center; }
+.mkHead > .textCol { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.initials.b { width: 56px; height: 56px; border-radius: 14px; font-size: 24px; }
+.box h4:has(.mascot) { display: flex; align-items: center; gap: 12px; }

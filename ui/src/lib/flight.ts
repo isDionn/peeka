@@ -1,16 +1,16 @@
-import { advance, Spring, YAY } from "../motion/spring";
+import { advance, Spring, SPRINGS } from "../motion/spring";
 
 /**
- * Paylaşılan öğe uçuşu (§0i madde 9): `data-paylas` anahtarlı öğe eski yerinden yenisine kartla aynı yayla (0,44 / 0,78) gelir.
- * Yarıda yeni uçuş başlarsa öğe o anki yerinden devam etmez, baştan başlar (basit sürüm).
- * motion: motion/ altına ortak FLIP yardımcısı gelince bu dosya onunla değişir.
+ * Shared element flight (§0i item 9): an element keyed by `data-share` travels from its old spot to the new one on the card's spring (0.44 / 0.78).
+ * If a new flight starts midway, the element restarts from the beginning instead of its current spot (simple version).
+ * motion: when a shared FLIP helper lands under motion/, this file switches to it.
  */
 export function fly(el: HTMLElement, from: DOMRect) {
   const to = el.getBoundingClientRect();
   if (!to.height || (Math.abs(from.left - to.left) < 1 && Math.abs(from.top - to.top) < 1)) return;
   const dx = from.left - to.left, dy = from.top - to.top, s = from.height / to.height;
   el.style.transformOrigin = "0 0";
-  const sp = new Spring(1, YAY.kart);
+  const sp = new Spring(1, SPRINGS.card);
   sp.t = 0;
   let last = performance.now();
   const frame = (now: number) => {

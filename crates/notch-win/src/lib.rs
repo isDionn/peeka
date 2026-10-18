@@ -112,9 +112,9 @@ mod tests {
 
     #[test]
     fn wide_strings_round_trip_and_stop_at_nul() {
-        let w = to_wide("Çar");
+        let w = to_wide("Éa");
         assert_eq!(w.last(), Some(&0));
-        assert_eq!(wide_to_string(&w), "Çar");
+        assert_eq!(wide_to_string(&w), "Éa");
         assert_eq!(wide_to_string(&[0x41, 0, 0x42]), "A");
         assert_eq!(wide_to_string(&[0x41, 0x42]), "AB");
     }

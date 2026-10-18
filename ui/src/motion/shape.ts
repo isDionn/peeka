@@ -2,58 +2,58 @@ import { Spring, SpringGroup, SPRINGS, type SpringParams } from "./spring";
 
 export interface Rect { x: number; y: number; w: number; h: number }
 
-/** Her karede katmanlara (omuz, gölge, hale) verilen anlık şekil. Koordinatlar host kutusuna göredir. */
+/** The current shape handed to the layers (shoulder, shadow, halo) each frame. Coordinates are relative to the host box. */
 export interface ShapeState {
   w: number; h: number; tw: number; th: number;
-  /** gövdenin host içindeki sol kenarı */
+  /** the body's left edge inside the host */
   offsetX: number;
-  /** alt köşe yarıçapı (şu an / hedefte) */
+  /** bottom corner radius (current / target) */
   r: number;
   rt: number;
-  /** sıvı omuz boyu */
+  /** liquid shoulder size */
   f: number;
-  /** gölge gücü 0..1 (h/80) */
+  /** shadow strength 0..1 (h/80) */
   go: number;
-  /** şerit renginden kart rengine geçiş 1..0 (1 - h/70) */
+  /** strip color to card color blend 1..0 (1 - h/70) */
   kt: number;
   hidden: boolean;
 }
 export type ShapeLayer = (s: ShapeState) => void;
 
 export interface ShapeOptions {
-  /** sabit pencere: gövde bu kutunun içinde kırpılır, hiç yeniden boyutlanmaz */
+  /** fixed window: the body is clipped inside this box and never resized */
   maxW: number;
   maxH: number;
   anchor?: "center" | "left" | "right";
-  /** alt köşe yarıçapı; varsayılan çıkıntı → kart (min(h·0,6, 34, 15 + max(0,h−40)·0,3)) */
+  /** bottom corner radius; default peek → card (min(h·0.6, 34, 15 + max(0,h−40)·0.3)) */
   radius?: (h: number) => number;
-  /** çıkıntı kapalıyken açılırken başlangıç genişliği (şeridin ortasındaki içerik) */
+  /** starting width when opening from a closed peek (the content in the middle of the strip) */
   restW?: number;
   layers?: ShapeLayer[];
-  /** tıklanabilir dikdörtgen her değiştiğinde (CSS px, görünüm penceresine göre, yuvarlanmış) */
+  /** whenever the clickable rectangle changes (CSS px, relative to the viewport, rounded) */
   onRect?: (r: Rect) => void;
 }
 
 export const notchRadius = (h: number) => Math.min(h * 0.6, 34, 15 + Math.max(0, h - 40) * 0.3);
-/** sağ üst kart */
+/** top-right card */
 export const sideRadius = (h: number) => Math.min(h * 0.6, 28, 15 + h * 0.1);
 
 export interface Shape {
-  /** yeni hedef boyut; o anki boyut ve hızdan yayla devam eder */
+  /** new target size; springs on from the current size and velocity */
   to(w: number, h: number, preset?: SpringParams): void;
-  /** yaysız anında */
+  /** instantly, without the spring */
   snap(w: number, h: number): void;
-  /** şu anki tıklanabilir dikdörtgen (boşsa w ya da h = 0) */
+  /** the current clickable rectangle (w or h = 0 if empty) */
   rect(): Rect;
-  /** rAF'siz bir kare ilerlet (test) */
+  /** advance one frame without rAF (tests) */
   advance(dt: number): boolean;
   readonly moving: boolean;
   destroy(): void;
 }
 
 /**
- * Sabit boyutlu `host` içindeki `body` öğesini clip-path ile büyütüp küçültür (pencere hiç boyut değiştirmez).
- * Yalnız clip-path yazar; layout yok. Her karede `onRect` ile güncel tıklama alanını bildirir.
+ * Grows and shrinks the `body` element inside a fixed-size `host` with clip-path (the window never resizes).
+ * Writes only clip-path; no layout. Reports the current click area through `onRect` every frame.
  */
 export function createShape(host: HTMLElement, body: HTMLElement, o: ShapeOptions): Shape {
   const { maxW, maxH, anchor = "center", radius = notchRadius, restW = 120, layers = [] } = o;
@@ -99,7 +99,7 @@ export function createShape(host: HTMLElement, body: HTMLElement, o: ShapeOption
 
   return {
     to(w, h, preset = SPRINGS.card) {
-      if (hs.x < 1) ws.snap(restW); // kapalıyken genişlik hedefe uçmaz, ortadaki içerikten başlar
+      if (hs.x < 1) ws.snap(restW); // when closed the width doesn't fly to the target, it starts from the middle content
       ws.retarget(Math.min(maxW, w), preset);
       hs.retarget(Math.min(maxH, h), preset);
       group.kick();

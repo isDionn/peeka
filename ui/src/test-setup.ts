@@ -1,17 +1,17 @@
 import '@testing-library/react';
 
-// jsdom'da ResizeObserver yok; bileşenler yalnız ölçü değişince tepki verir, testte ölçü zaten 0.
+// jsdom has no ResizeObserver; components only react to size changes, and in tests the size is 0 anyway.
 if (typeof globalThis.ResizeObserver === "undefined") {
   globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
 }
 
-// jsdom'da Web Animations yok; maskot (göz kırpma) ve diğer bileşenler `element.animate` çağırır.
+// jsdom has no Web Animations; the mascot (blinking) and other components call `element.animate`.
 if (typeof Element.prototype.animate !== "function") {
   Element.prototype.animate = function () { return { cancel() {}, finish() {}, onfinish: null, finished: Promise.resolve() } as unknown as Animation; };
 }
 
-// jsdom'un requestAnimationFrame zaman damgası kendi saatinde (pencere açılışından), performance.now() ise sürecin saatinde: fark saniyelerce eksi
-// çıkıyor, yay motoru eksi dt ile patlıyordu (cok-monitor'da -1,3e13 px). Aynı saatte, setTimeout üstünde: sahte zamanlayıcıyla da tutarlı.
+// jsdom's requestAnimationFrame timestamp uses its own clock (from window open) while performance.now() uses the process clock: the difference came out
+// seconds negative and the spring engine blew up with a negative dt (-1.3e13 px in cok-monitor). Same clock, on top of setTimeout: consistent with fake timers too.
 const rafTimers = new Map<number, ReturnType<typeof setTimeout>>();
 let rafId = 0;
 globalThis.requestAnimationFrame = (cb) => { const id = ++rafId; rafTimers.set(id, setTimeout(() => { rafTimers.delete(id); cb(performance.now()); }, 16)); return id; };

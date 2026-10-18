@@ -1,12 +1,12 @@
 //! The Win32 side of `notch_core::taskbar`: the real `Shell`,
 //! the guard process (`peeka.exe --guard <pid>`) and the launch-time check. The worker thread and the emergency key
-//! are in `src-tauri` (they need the Tauri app).
+//! are in `crates/notch-app` (they need the Tauri app).
 
 use notch_core::taskbar::{self, Shell};
 
 pub const GUARD_ARG: &str = "--guard";
 
-/// The real taskbar. Built only by the callers in `src-tauri` / the guard: tests never construct it.
+/// The real taskbar. Built only by the callers in `crates/notch-app` / the guard: tests never construct it.
 #[cfg(windows)]
 pub struct Win32Shell;
 

@@ -9,7 +9,6 @@
 //!   speaker the keys pass through to Windows. `unhook` is safe to call from anywhere, any number of times (exit,
 //!   panic hook, the setting turned off). Windows also drops the hook when the process dies.
 //!
-//! Inspired by HeyyCzer/windows-dynamic-island (ideas only; no code copied).
 
 #[cfg(windows)]
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, Ordering};

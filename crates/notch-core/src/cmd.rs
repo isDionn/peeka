@@ -1,4 +1,4 @@
-//! The decisions inside `src-tauri/src/commands.rs`, pulled out so `cargo test --lib` covers them (the bin crate is
+//! The decisions inside `crates/notch-app/src/commands.rs`, pulled out so `cargo test --lib` covers them (the bin crate is
 //! never tested). Each command stays a thin wrapper: it reads Notch's state, calls one of these, then calls Windows.
 //! `CmdError` is bridge.ts `CmdError`; the `From`s are the one place each domain error becomes a page error.
 
@@ -24,7 +24,7 @@ pub enum CmdError {
     NotYet,
     /// Within ~300 ms of the prompt appearing: the click was ignored, the prompt stays.
     Ignored,
-    /// No main assistant connected (the UI says "Asistan bağlı değil").
+    /// No main assistant connected (the UI says "Assistant not connected").
     NotConnected,
 }
 
@@ -55,7 +55,7 @@ impl From<ClipErr> for CmdError {
     fn from(e: ClipErr) -> Self {
         match e {
             ClipErr::Unknown => Self::Unknown,
-            // Locked, or not for a password item: the page says "kilitli" / hides the button.
+            // Locked, or not for a password item: the page says "locked" / hides the button.
             ClipErr::Locked | ClipErr::Password | ClipErr::Risky => Self::Denied,
             ClipErr::Missing => Self::Missing,
             ClipErr::Kind => Self::Invalid,
@@ -85,7 +85,7 @@ pub fn unlocked(locked: bool) -> Result<(), CmdError> {
     }
 }
 
-/// The commands in `src-tauri/src/commands.rs` that must start with `cmd::unlocked`.
+/// The commands in `crates/notch-app/src/commands.rs` that must start with `cmd::unlocked`.
 pub const SENDS_OWNER_CONTENT: [&str; 16] = [
     "composer_scan",
     "composer_attach_file",
@@ -128,7 +128,7 @@ pub fn pins_order(current: &[Pin], items: &[AppItem], ids: &[String]) -> Result<
 
 /// `composer_scan`'s window: the topmost app window that is not minimised and not Notch's own (`own_exe`, compared
 /// case-insensitively). `denied` when that window is a sensitive app (password manager, bank, Windows security: the
-/// pano's `clip::secret` lists); the next window down is never taken instead, the owner meant this one.
+/// clipboard's `clip::secret` lists); the next window down is never taken instead, the owner meant this one.
 pub fn scan_target(windows: &[crate::apps::RawWindow], own_exe: &str) -> Result<isize, CmdError> {
     use crate::clip::secret::{sensitive_exe, sensitive_title};
     let own = |w: &crate::apps::RawWindow| !own_exe.is_empty() && w.exe_path.eq_ignore_ascii_case(own_exe);
@@ -224,7 +224,7 @@ mod tests {
     #[test]
     fn notchs_own_files_are_found_whatever_the_casing() {
         let data = Path::new(r"C:\Users\Ali\AppData\Local\notch");
-        assert!(inside_dir(r"c:\users\ali\appdata\local\NOTCH\pano\img\a.png", data));
+        assert!(inside_dir(r"c:\users\ali\appdata\local\NOTCH\clipboard\img\a.png", data));
         assert!(inside_dir("C:/Users/Ali/AppData/Local/notch/plugins.json", data));
         assert!(!inside_dir(r"C:\Users\Ali\AppData\Local\notchy\a.txt", data), "a whole component only");
         assert!(!inside_dir(r"C:\Users\Ali\Belgeler\notch.txt", data));
@@ -250,7 +250,7 @@ mod tests {
             Err(CmdError::Denied),
             "not the next one"
         );
-        let bank = w(4, r"C:\Program Files\Google\Chrome\chrome.exe", "Ziraat İnternet Şubesi - Chrome");
+        let bank = w(4, r"C:\Program Files\Google\Chrome\chrome.exe", "Ziraat Bank Online - Chrome");
         assert_eq!(scan_target(&[bank, editor.clone()], own), Err(CmdError::Denied), "a bank by its title");
         let small = crate::apps::RawWindow { minimized: true, ..editor.clone() };
         assert_eq!(scan_target(&[notch, small], own), Err(CmdError::Missing));
@@ -279,7 +279,7 @@ mod tests {
     #[test]
     fn every_command_that_sends_owner_content_checks_the_lock_first() {
         // shortcut: reads the bin crate's source (never compiled under `--lib`); a renamed command fails here.
-        let src = include_str!("../../../src-tauri/src/commands.rs");
+        let src = include_str!("../../../crates/notch-app/src/commands.rs");
         for name in SENDS_OWNER_CONTENT {
             let at = [format!("pub fn {name}("), format!("pub async fn {name}(")]
                 .iter()
@@ -358,7 +358,7 @@ mod tests {
         for name in ["kasa.kdbx", "id_rsa", ".env"] {
             assert_eq!(attach_ext(1, name), Err(CmdError::Denied), "{name}");
         }
-        assert_eq!(attach_bytes(b"merhaba"), Ok(()));
+        assert_eq!(attach_bytes(b"hello"), Ok(()));
         let key = concat!("anahtar: sk-ant-api03-abcdefghijklmnop", "qrstuvwxyz012345").as_bytes(); // allow-secret
         assert_eq!(attach_bytes(key), Err(CmdError::Denied), "a secret inside a text file");
         assert_eq!(attach_bytes(&[0xff, 0x00, 0x9c]), Ok(()), "binary is not judged");

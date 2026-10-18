@@ -3,8 +3,9 @@
 //! raises the consent window's orange warning.
 
 /// Names no plugin may take; the main assistant's name is checked on top of these.
-pub const RESERVED: [&str; 5] = ["Notch", crate::PRODUCT_NAME, "Windows", "Sistem", "Microsoft"];
+pub const RESERVED: [&str; 5] = ["Notch", crate::PRODUCT_NAME, "Windows", "System", "Microsoft"];
 
+// Turkish letters (ç, ğ, ı, ş) are kept on purpose: plugin names may be written in Turkish.
 fn base(c: char) -> char {
     match c {
         'á' | 'à' | 'â' | 'ä' | 'ã' | 'å' | 'ā' => 'a',
@@ -22,7 +23,7 @@ fn base(c: char) -> char {
     }
 }
 
-/// Case-, accent- and spacing-insensitive form: "Pusula", "PUSULA", "Pusulâ" and " pu sula " are one name.
+/// Case-, accent- and spacing-insensitive form: "Compass", "COMPASS", "Compâss" and " com pass " are one name.
 pub fn fold(name: &str) -> String {
     name.replace('İ', "i")
         .to_lowercase()
@@ -99,7 +100,7 @@ pub fn looks_like(name: &str, other: &str) -> bool {
 }
 
 /// Refused at `hello`: the same as a reserved name or the main assistant's, or STARTING with Notch's or the main
-/// assistant's name ("Pusula Asistanı", "Notch Güvenlik", "Pusula - Claude Code"): Notch draws "<name> › <title>", so
+/// assistant's name ("Compass Assistant", "Notch Security", "Compass - Claude Code"): Notch draws "<name> › <title>", so
 /// such a prefix reads as Notch's or the assistant's own card. Lookalikes stay the warning path (`looks_like`).
 pub fn reserved(name: &str, main_name: Option<&str>) -> bool {
     let folded = fold(name);
@@ -117,38 +118,39 @@ mod tests {
 
     #[test]
     fn same_ignores_case_accents_and_spacing() {
-        assert!(same("Pusula", "PUSULA"));
-        assert!(same("Pusulâ", " pu sula "));
-        assert!(same("İzmir Asistanı", "izmir asistani"));
-        assert!(!same("Pusula", "Pusula Pro"));
+        assert!(same("Compass", "COMPASS"));
+        assert!(same("Compâss", " com pass "));
+        // Turkish dotted I on purpose: plugin names may be written in Turkish.
+        assert!(same("İzmir Assistant", "izmir assistant"));
+        assert!(!same("Compass", "Compass Pro"));
         assert!(!same("", ""), "an empty name is never 'the same'");
     }
 
     #[test]
     fn lookalikes_by_confusables_and_by_edit_distance() {
-        assert!(looks_like("Рusulа", "Pusula"), "Cyrillic Р and а");
-        assert!(looks_like("Pusu1a", "Pusula"), "digit one for l");
-        assert!(looks_like("Pusulla", "Pusula"), "one typo");
+        assert!(looks_like("Cоmpаss", "Compass"), "Cyrillic о and а");
+        assert!(looks_like("C0mpass", "Compass"), "digit one for l");
+        assert!(looks_like("Compas", "Compass"), "one typo");
         assert!(looks_like("Notch", "N0tch"));
         assert!(looks_like("Claude Code", "Claud Cod"), "two typos in a long name");
-        assert!(!looks_like("Spotify Helper", "Pusula"));
-        assert!(!looks_like("Pusula", "Kalem"));
+        assert!(!looks_like("Spotify Helper", "Compass"));
+        assert!(!looks_like("Compass", "Pencil"));
     }
 
     #[test]
     fn reserved_names_and_the_main_assistant() {
         assert!(reserved("notch", None));
         assert!(reserved("Windows", None));
-        assert!(reserved("SİSTEM", None));
-        assert!(reserved("Pusula", Some("Pusula")));
-        assert!(!reserved("Pusula", None));
-        assert!(reserved("Pusula Asistanı", Some("Pusula")), "starts with the main assistant's name");
-        assert!(reserved("Pusula - Claude Code", Some("Pusula")));
-        assert!(reserved("Notch Güvenlik", None) && reserved("NOTCH-Uyarı", None));
+        assert!(reserved("SYSTEM", None));
+        assert!(reserved("Compass", Some("Compass")));
+        assert!(!reserved("Compass", None));
+        assert!(reserved("Compass Assistant", Some("Compass")), "starts with the main assistant's name");
+        assert!(reserved("Compass - Claude Code", Some("Compass")));
+        assert!(reserved("Notch Security", None) && reserved("NOTCH-Alert", None));
         assert!(reserved("Peeka Pro", None) && reserved("Notch Pro", None));
         assert!(!reserved("Spotify Notch", None), "only a leading name counts");
-        assert!(!reserved("Pusula Asistanı", None), "Pusula is reserved only as the main assistant");
-        assert!(!reserved("Windows Yardımcısı", None), "Windows/Sistem/Microsoft: whole name only");
+        assert!(!reserved("Compass Assistant", None), "Compass is reserved only as the main assistant");
+        assert!(!reserved("Windows Helper", None), "Windows/System/Microsoft: whole name only");
         assert_eq!(distance("kitten", "sitting"), 3);
     }
 }

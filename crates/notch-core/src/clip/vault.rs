@@ -1,4 +1,4 @@
-//! The password store: `<data>/pano/gizli.bin`, apart from the plain history. A header with this
+//! The password store: `<data>/clipboard/vault.bin`, apart from the plain history. A header with this
 //! install's random DPAPI entropy, then `SLOTS` fixed-size slots, each one item's metadata and its DPAPI blob. A
 //! deleted or expired slot is overwritten with zeros in place and the file is synced. Expired slots are wiped when
 //! the file is opened, before anything is decrypted (Notch was closed when they ran out).
@@ -82,7 +82,7 @@ pub struct Vault {
 }
 
 pub fn path(data_dir: &Path) -> PathBuf {
-    data_dir.join("pano").join("gizli.bin")
+    data_dir.join("clipboard").join("vault.bin")
 }
 
 fn parse_slot(b: &[u8]) -> Option<(Meta, Vec<u8>)> {
@@ -251,7 +251,7 @@ impl Vault {
         }
     }
 
-    /// "Hepsini sil" / history off: every slot zeroed, then the file deleted.
+    /// "Delete all" / history off: every slot zeroed, then the file deleted.
     pub fn destroy(&mut self) -> std::io::Result<()> {
         if self.path.exists() {
             for i in 0..SLOTS {
@@ -377,7 +377,7 @@ mod tests {
     #[test]
     fn a_foreign_file_is_not_trusted() {
         let tmp = Tmp::new();
-        tmp.write("pano/gizli.bin", b"not a vault");
+        tmp.write("clipboard/vault.bin", b"not a vault");
         let v = Vault::load(path(tmp.path()), 0);
         assert_eq!(v.list().count(), 0);
         assert!(!path(tmp.path()).exists());

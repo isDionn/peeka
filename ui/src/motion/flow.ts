@@ -3,15 +3,15 @@ import { Spring, SpringGroup, SPRINGS } from "./spring";
 const EASE = "cubic-bezier(.23,1,.32,1)";
 
 export interface Pill {
-  /** seçim kapsülünü hedefe kaydır (yay 0,34 / 0,82); `streak` ışığı 620 ms geçirir */
+  /** slide the selection capsule to the target (spring 0.34 / 0.82); `streak` runs the light across for 620 ms */
   to(target: HTMLElement | { x: number; w: number }, o?: { streak?: boolean; instant?: boolean }): void;
   destroy(): void;
 }
 
 /**
- * Akan vurgu: `pill` (tek elemanlı, `track` içinde inset:0, arka planı senin CSS'in) clip-path ile
- * kapsül biçiminde kırpılır; yay x ve genişliği sürer, içindeki ışık şeridi 620 ms soldan sağa geçer.
- * `radius`: sekme kapsülü 9, modül seçimi 12.
+ * Flowing highlight: `pill` (a single element, inset:0 inside `track`, background from your CSS) is clipped
+ * to a capsule with clip-path; a spring drives x and width, and a light streak inside crosses left to right in 620 ms.
+ * `radius`: tab capsule 9, module selection 12.
  */
 export function createPill(track: HTMLElement, pill: HTMLElement, radius = 9): Pill {
   pill.style.cssText += ";position:absolute;inset:0;pointer-events:none;overflow:hidden";
@@ -38,8 +38,8 @@ export function createPill(track: HTMLElement, pill: HTMLElement, radius = 9): P
 }
 
 /**
- * Üstüne gelme niyet gecikmesi (§0i): imleç `target` üstünde ~120 ms durunca `onOpen`, ayrılınca ~200 ms sonra `onClose`.
- * `keep` öğelerinin (açılan ada) üstündeyken kapanma iptal olur. Dönen işlev dinleyicileri söker.
+ * Hover intent delay (§0i): `onOpen` once the cursor rests on `target` ~120 ms, `onClose` ~200 ms after it leaves.
+ * Closing is cancelled while over the `keep` elements (the opened island). The returned function removes the listeners.
  */
 export function hoverIntent(
   target: Element,
@@ -68,8 +68,8 @@ export function hoverIntent(
 }
 
 /**
- * Üstüne gelme (yay 0,30 / 1): içerik büyümez, yalnız 0,5 px iner ve parlaklığı %28 artar (maket yon-3d-son.html).
- * Parlaklık tek küçük öğede `filter`; geri kalan her şey transform. `onProgress` çıkıntıyı 14 px "göz atırmak" için 0..1 verir.
+ * Hover (spring 0.30 / 1): content doesn't grow, it only drops 0.5 px and gets 28% brighter (mockup yon-3d-son.html).
+ * Brightness is a `filter` on one small element; everything else is transform. `onProgress` gives 0..1 to let the peek "peek out" 14 px.
  */
 export function hoverLift(el: HTMLElement, onProgress?: (p: number) => void) {
   const s = new Spring(0, SPRINGS.press);
@@ -85,7 +85,7 @@ export function hoverLift(el: HTMLElement, onProgress?: (p: number) => void) {
   return () => { g.stop(); el.removeEventListener("pointerenter", on); el.removeEventListener("pointerleave", off); };
 }
 
-/** Basma geri bildirimi: yazılı düğme 0,96, yalnız simgeli 0,92; basınca anında, 160 ms. */
+/** Press feedback: text button 0.96, icon-only 0.92; instant on press, 160 ms. */
 export function press(el: HTMLElement, kind: "label" | "icon" = "label") {
   el.style.transition = `transform 160ms ${EASE}`;
   const down = () => (el.style.transform = `scale(${kind === "icon" ? 0.92 : 0.96})`);

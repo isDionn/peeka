@@ -2,7 +2,7 @@
 # The only host<->guest channel is the mapped C:\out folder: the host drops cmd\NNN.ps1,
 # this loop runs it and writes res\NNN.json. No network, no Python in the guest.
 $ErrorActionPreference = 'Continue'
-trap { $_ | Out-String | Set-Content 'C:\outgent-error.txt' -Encoding UTF8; exit 1 }
+trap { $_ | Out-String | Set-Content 'C:\out\agent-error.txt' -Encoding UTF8; exit 1 }
 $out = 'C:\out'
 New-Item -ItemType Directory -Force "$out\cmd", "$out\res", "$out\shots" | Out-Null
 

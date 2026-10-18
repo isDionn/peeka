@@ -1,7 +1,6 @@
 //! Notch's own alert list (its field rules) and the attention budget
 //! (owner decision 16) that decides which one alert may open the island by itself.
 //!
-//! Inspired by HeyyCzer/windows-dynamic-island (ideas only; no code copied).
 //!
 //! An alert WITH an expiry goes away by itself; an activity without one stays until removed. The same id replaces
 //! the item. Text is plain text (the page draws it as text); a link is only ever an http(s) URL; nothing here runs
@@ -86,7 +85,7 @@ pub enum Kind {
 pub enum Action {
     /// A checked http(s) link (`web_link`).
     Link(String),
-    /// `Taskmgr.exe` by its full path; the button says "Görev Yöneticisi'nde aç".
+    /// `Taskmgr.exe` by its full path; the button says "Open in Task Manager".
     TaskManager,
 }
 
@@ -99,7 +98,7 @@ impl Serialize for Action {
     }
 }
 
-pub const TASK_MANAGER_LABEL: &str = "Görev Yöneticisi'nde aç";
+pub const TASK_MANAGER_LABEL: &str = "Open in Task Manager";
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -115,7 +114,7 @@ pub struct Alert {
     pub priority: u8,
     /// Opened only after the owner's click.
     pub action: Option<Action>,
-    /// The button's text (bridge.ts `actionLabel`); Notch's own words only, None = "Aç".
+    /// The button's text (bridge.ts `actionLabel`); Notch's own words only, None = "Open".
     pub action_label: Option<String>,
     pub style: Style,
     /// May open the island by itself when it arrives (the attention budget still decides).
@@ -199,7 +198,7 @@ pub fn web_link(v: &Value) -> Option<String> {
 /// Body of `POST /notify` (`notify`) or `/activity` -> (alert, names of the optional fields that were dropped).
 /// Bad VALUES of optional fields are dropped and named; a body with neither title nor progress is `Invalid`.
 pub fn parse(body: &Value, notify: bool, now: u64, fallback_id: String) -> Result<(Alert, Vec<&'static str>), Invalid> {
-    let obj = body.as_object().ok_or(Invalid("JSON nesnesi bekleniyor"))?;
+    let obj = body.as_object().ok_or(Invalid("expected a JSON object"))?;
     let null = Value::Null;
     let get = |k: &str| obj.get(k).unwrap_or(&null);
     let mut dropped = vec![];
@@ -226,7 +225,7 @@ pub fn parse(body: &Value, notify: bool, now: u64, fallback_id: String) -> Resul
     let progress = progress.map(|p| p.clamp(0.0, 1.0));
     let title = text(get("title"), MAX_TITLE);
     if title.is_none() && progress.is_none() {
-        return Err(Invalid("en az 'title' ya da 'progress' gönder"));
+        return Err(Invalid("send at least 'title' or 'progress'"));
     }
     let ms = duration.map(|d| ((d * 1000.0) as u64).min(MAX_DURATION_MS)).or(notify.then_some(NOTIFY_MS));
     let alert = Alert {
@@ -496,7 +495,7 @@ mod tests {
             assert!(l.put(alert(json!({"id": format!("s{i}"), "title": "x", "duration": 100}), false), 1));
         }
         assert!(!l.put(alert(json!({"id": "one-more", "title": "x"}), false), 1));
-        l.put_system(Alert::system("system.volume", "volume", "Ses %30".into(), 100, 1, 1600), 1);
+        l.put_system(Alert::system("system.volume", "volume", "Volume 30%".into(), 100, 1, 1600), 1);
         let rows = l.sorted();
         assert_eq!((rows.len(), rows[0].id.as_str()), (MAX_ITEMS, "system.volume"));
         assert!(l.clear(Some("api")) && l.sorted().len() == 1);

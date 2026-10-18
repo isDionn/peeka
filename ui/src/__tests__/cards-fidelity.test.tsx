@@ -1,15 +1,15 @@
-// Sadakat denetimi 2 (kartlar): saf kurallar, onay/kompoz/modül kartları, yeni kartlar ve Pusula çizgisi.
+// Fidelity check 2 (cards): pure rules, approval/composer/module cards, new cards and the Compass line.
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeBridge } from "../bridge.fake";
-import { SURFACES_J, VOICE_ASISTAN, VOICE_SEN, VOICE_SPEAKING, VOICE_THINKING, withRecommended } from "../plugin.fixtures";
+import { SURFACES_J, VOICE_ASSISTANT, VOICE_YOU, VOICE_SPEAKING, VOICE_THINKING, withRecommended } from "../plugin.fixtures";
 import { EmptyBoard, ErrorCard, FirstConnectCard, LoadingCard, makeErrorBudget } from "../components/CardsExtra";
 import { Island } from "../components/Island";
 import { FirstRunCard, modulesKw } from "../components/IslandCards";
 import { ApprovalCard, ApprovalCenter, ComposerCard, ProtrusionBump, ProtrusionCenter } from "../components/Plugin";
-import { accusative, dative, shortApprovalTitle } from "../lib/cardsText";
+import { shortApprovalTitle } from "../lib/cardsText";
 import { resetMascotRegistry } from "../mascot/useSingleMascot";
-import { APPROVAL_CHOICE, APPROVAL_HIGH, APPROVAL_LOW, PUSULA, OTHER } from "../plugin.fixtures";
+import { APPROVAL_CHOICE, APPROVAL_HIGH, APPROVAL_LOW, COMPASS, OTHER } from "../plugin.fixtures";
 
 const proto = HTMLElement.prototype;
 const saved = { h: Object.getOwnPropertyDescriptor(proto, "offsetHeight"), w: Object.getOwnPropertyDescriptor(proto, "offsetWidth") };
@@ -26,274 +26,265 @@ afterEach(() => {
 const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 80)); });
 const advance = (ms: number) => act(() => { vi.advanceTimersByTime(ms); });
 
-describe("saf kurallar", () => {
-  it("belirtme eki ünlü uyumuna uyar", () => {
-    expect([accusative("Pusula"), accusative("Ece"), accusative("Kuzu"), accusative("Göl"), accusative("Örnek Asistan")]).toEqual(["Pusula'yı", "Ece'yi", "Kuzu'yu", "Göl'ü", "Örnek Asistan'ı"]);
+describe("pure rules", () => {
+  it("peek title: a repeated risky phrase is shortened on high risk, shortTitle wins, the separator is flattened", () => {
+    expect(shortApprovalTitle(APPROVAL_HIGH)).toBe("api-server needs approval");
+    expect(shortApprovalTitle(APPROVAL_LOW)).toBe("api-server needs approval");
+    expect(shortApprovalTitle({ ...APPROVAL_HIGH, shortTitle: "Short › Title" })).toBe("Short - Title");
   });
-  it("yönelme eki ünlü uyumuna uyar", () => {
-    expect(dative("Pusula")).toBe("Pusula'ya");
-    expect(dative("Örnek Asistan")).toBe("Örnek Asistan'a");
-    expect(dative("Ece")).toBe("Ece'ye");
-    expect(dative("")).toBe("Eklenti'ye");
-  });
-  it("çıkıntı başlığı: yüksek riskte tekrar eden riskli ifade kısalır, shortTitle önceliklidir, ayraç düzleşir", () => {
-    expect(shortApprovalTitle(APPROVAL_HIGH)).toBe("api-sunucu izin istiyor");
-    expect(shortApprovalTitle(APPROVAL_LOW)).toBe("api-sunucu izin istiyor");
-    expect(shortApprovalTitle({ ...APPROVAL_HIGH, shortTitle: "Kısa › Başlık" })).toBe("Kısa - Başlık");
-  });
-  it("aynı hata 10 dk içinde ikinci kez tepki vermez", () => {
+  it("the same error does not react a second time within 10 min", () => {
     let t = 0;
     const ok = makeErrorBudget(() => t);
     expect(ok("claude")).toBe(true);
     t += 5 * 60_000; expect(ok("claude")).toBe(false);
-    expect(ok("başka")).toBe(true);
+    expect(ok("other")).toBe(true);
     t += 6 * 60_000; expect(ok("claude")).toBe(true);
   });
 });
 
-describe("onay kartı", () => {
-  it("c1: kaynak adı soluk (yazı 3), yüksek riskte kısa başlık", () => {
+describe("approval card", () => {
+  it("c1: source name is faded (text 3), short title on high risk", () => {
     const { container, unmount } = render(<ApprovalCenter a={APPROVAL_LOW} />);
-    expect(container.querySelector(".onEk .l3:last-child")?.textContent).toBe("Claude Code");
+    expect(container.querySelector(".prefix .l3:last-child")?.textContent).toBe("Claude Code");
     unmount();
     render(<ApprovalCenter a={APPROVAL_HIGH} />);
-    expect(screen.getByText("api-sunucu izin istiyor")).toBeTruthy();
-    expect(screen.getByText("yüksek risk")).toBeTruthy();
+    expect(screen.getByText("api-server needs approval")).toBeTruthy();
+    expect(screen.getByText("high risk")).toBeTruthy();
   });
-  it("c3: önerilen seçenek önceden seçili ve etiketli; Planı onayla hemen açık; 'Başka cevap yaz' düğmesi kutuyu açar", () => {
+  it("c3: the recommended option is preselected and labelled; Approve plan is enabled right away; the 'Write another answer' button opens the box", () => {
     vi.useFakeTimers();
     render(<ApprovalCard a={withRecommended(APPROVAL_CHOICE)} />);
-    expect(screen.getByRole("radio", { name: /Var olan/ }).getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByText("önerilen")).toBeTruthy();
-    expect(screen.queryByLabelText("Başka cevap yaz")).toBeNull();
+    expect(screen.getByRole("radio", { name: /existing component/ }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByText("recommended")).toBeTruthy();
+    expect(screen.queryByLabelText("Write another answer")).toBeNull();
     advance(600);
-    fireEvent.click(screen.getByRole("button", { name: "Planı onayla" }));
-    expect(fakeBridge.log.at(-1)?.args).toMatchObject({ decision: "choice", choiceId: "genislet" });
-    fireEvent.click(screen.getByRole("button", { name: "Başka cevap yaz" }));
-    expect(screen.getByLabelText("Başka cevap yaz")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Approve plan" }));
+    expect(fakeBridge.log.at(-1)?.args).toMatchObject({ decision: "choice", choiceId: "extend" });
+    fireEvent.click(screen.getByRole("button", { name: "Write another answer" }));
+    expect(screen.getByLabelText("Write another answer")).toBeTruthy();
   });
-  it("öneri yoksa hiçbir seçenek önceden seçili değildir; 300 ms koruması ve yüksek riskte 'Her zaman' yokluğu korunur", () => {
+  it("with no recommendation no option is preselected; the 300 ms guard and the absence of 'Always' on high risk are kept", () => {
     vi.useFakeTimers();
     const { unmount } = render(<ApprovalCard a={APPROVAL_CHOICE} />);
     expect(screen.getAllByRole("radio").every((r) => r.getAttribute("aria-checked") === "false")).toBe(true);
-    expect(screen.queryByText("önerilen")).toBeNull();
+    expect(screen.queryByText("recommended")).toBeNull();
     unmount();
     render(<ApprovalCard a={APPROVAL_HIGH} />);
-    expect(screen.queryByText("Her zaman izin ver")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "İzin ver: basılı tut" }));
-    expect(fakeBridge.log.filter((l) => l.cmd === "approval_answer")).toHaveLength(0); // basılı tutmadan izin yok
+    expect(screen.queryByText("Always allow")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Allow: press and hold" }));
+    expect(fakeBridge.log.filter((l) => l.cmd === "approval_answer")).toHaveLength(0); // no allow without press and hold
   });
 });
 
-describe("ses kartları", () => {
-  it("şerit: faz yazısı Peeka'nın tablosundan ve faz rengiyle dalga; dikte kendi başlığını korur", () => {
+describe("voice cards", () => {
+  it("strip: the phase text comes from Peeka's table and the wave uses the phase color; dictation keeps its own title", () => {
     const { container, unmount } = render(<ProtrusionCenter item={VOICE_THINKING} />);
-    expect(screen.getByText("Düşünüyorum")).toBeTruthy();
-    expect((container.querySelector(".dalga") as HTMLElement).style.getPropertyValue("--faz")).toBe("var(--turuncu)");
+    expect(screen.getByText("Thinking")).toBeTruthy();
+    expect((container.querySelector(".wave") as HTMLElement).style.getPropertyValue("--phase")).toBe("var(--orange)");
     unmount();
     render(<ProtrusionCenter item={{ ...VOICE_SPEAKING, title: "uydurma metin" }} />);
-    expect(screen.getByText("Konuşuyorum")).toBeTruthy();
+    expect(screen.getByText("Speaking")).toBeTruthy();
     expect(screen.queryByText("uydurma metin")).toBeNull();
     cleanup();
-    render(<ProtrusionCenter item={{ plugin: PUSULA, title: "Dikte", state: "info", mascot: "dinliyor" }} />);
-    expect(screen.getByText("Dikte")).toBeTruthy();
+    render(<ProtrusionCenter item={{ plugin: COMPASS, title: "Dictation", state: "info", mascot: "listening" }} />);
+    expect(screen.getByText("Dictation")).toBeTruthy();
   });
-  it("faz tablosu yalnız ana asistana ve prototip anahtarlara kapalıdır", () => {
+  it("the phase table is closed to everything except the main assistant and prototype keys", () => {
     const first = render(<ProtrusionCenter item={{ ...VOICE_THINKING, plugin: OTHER }} />);
-    expect(first.container.querySelector(".dalga")).toBeNull(); // başka eklentide faz görünümü yok
+    expect(first.container.querySelector(".wave")).toBeNull(); // no phase view on another plugin
     first.unmount();
-    const { container } = render(<ProtrusionCenter item={{ plugin: PUSULA, title: "x", state: "info", mascot: "constructor" }} />);
-    expect(container.querySelector(".dalga")).toBeNull();
+    const { container } = render(<ProtrusionCenter item={{ plugin: COMPASS, title: "x", state: "info", mascot: "constructor" }} />);
+    expect(container.querySelector(".wave")).toBeNull();
   });
-  it("çıkıntı: 'Sen' ve eklenti satırları, sürekli dinleme ipucu", async () => {
+  it("peek: 'You' and plugin rows, always-listening hint", async () => {
     render(<ProtrusionBump item={VOICE_SPEAKING} />);
-    await act(async () => { fakeBridge.emit("plugin_stream", { streamId: "ses", text: VOICE_SEN, speaker: "Sen" }); });
-    expect(screen.getByText("Sen")).toBeTruthy();
-    expect(screen.queryByText("Pusula")).toBeNull();
-    await act(async () => { fakeBridge.emit("plugin_stream", { streamId: "ses", text: VOICE_ASISTAN, speaker: "Pusula" }); });
-    expect(screen.getByText("Pusula")).toBeTruthy();
-    expect(screen.getByText(VOICE_ASISTAN)).toBeTruthy();
-    expect(screen.getByText(/Sürekli dinleme açık/)).toBeTruthy();
+    await act(async () => { fakeBridge.emit("plugin_stream", { streamId: "voice", text: VOICE_YOU, speaker: "You" }); });
+    expect(screen.getByText("You")).toBeTruthy();
+    expect(screen.queryByText("Compass")).toBeNull();
+    await act(async () => { fakeBridge.emit("plugin_stream", { streamId: "voice", text: VOICE_ASSISTANT, speaker: "Compass" }); });
+    expect(screen.getByText("Compass")).toBeTruthy();
+    expect(screen.getByText(VOICE_ASSISTANT)).toBeTruthy();
+    expect(screen.getByText(/Always listening/)).toBeTruthy();
   });
 });
 
-describe("Ctrl+Space kutusu", () => {
-  const owner = { ...PUSULA, voice: true };
-  it("yer tutucu 'Pusula'ya sor: …', tarama + ataş + vurgulu mikrofon, çipler ve ek", async () => {
+describe("Ctrl+Space box", () => {
+  const owner = { ...COMPASS, voice: true };
+  it("placeholder 'Ask Compass anything: ...', scan + paperclip + highlighted microphone, chips and attachment", async () => {
     fakeBridge.setShelf([{ id: "a", name: "a.pdf", sub: "", kind: "pdf" }, { id: "b", name: "b.pdf", sub: "", kind: "pdf" }]);
     fakeBridge.addClip({ id: "k1", createdAt: Date.now(), pinned: false, source: "Chrome", kind: "text", text: "https://example.com/x", hint: "link", sub: null, thumb: null, screenshot: false });
     const send = vi.fn();
-    const { container } = render(<ComposerCard owner={owner} turns={[]} send={send} suggestions={[{ id: "window_image", label: "Bu pencere: Chrome" }]} />);
+    const { container } = render(<ComposerCard owner={owner} turns={[]} send={send} suggestions={[{ id: "window_image", label: "This window: Chrome" }]} />);
     await settle();
-    expect(screen.getByPlaceholderText("Pusula'ya sor: bir soru, bir iş, bir hatırlatma")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Ekran görüntüsü ekle" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Dosya ekle" })).toBeTruthy();
-    expect(container.querySelector(".yuv.vurgu")).toBeTruthy();
-    expect(screen.getByText("Bu pencere: Chrome")).toBeTruthy();
-    expect(screen.getByText("Panodaki bağlantı")).toBeTruthy();
-    expect(screen.getByText("Raftaki 2 dosya")).toBeTruthy();
-    fireEvent.click(screen.getByText("Panodaki bağlantı"));
-    fireEvent.click(screen.getByRole("button", { name: "Ekran görüntüsü ekle" }));
+    expect(screen.getByPlaceholderText("Ask Compass anything: a question, a task, a reminder")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Attach screenshot" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Attach file" })).toBeTruthy();
+    expect(container.querySelector(".slot.accent")).toBeTruthy();
+    expect(screen.getByText("This window: Chrome")).toBeTruthy();
+    expect(screen.getByText("Link on clipboard")).toBeTruthy();
+    expect(screen.getByText("2 files on Shelf")).toBeTruthy();
+    fireEvent.click(screen.getByText("Link on clipboard"));
+    fireEvent.click(screen.getByRole("button", { name: "Attach screenshot" }));
     await settle();
-    fireEvent.change(screen.getByPlaceholderText(/Pusula'ya sor/), { target: { value: "özetle" } });
-    fireEvent.keyDown(screen.getByPlaceholderText(/Pusula'ya sor/), { key: "Enter" });
-    expect(send).toHaveBeenCalledWith("özetle", [{ kind: "clipboard_link" }, { kind: "screen_image" }]);
+    fireEvent.change(screen.getByPlaceholderText(/Ask Compass/), { target: { value: "summarize" } });
+    fireEvent.keyDown(screen.getByPlaceholderText(/Ask Compass/), { key: "Enter" });
+    expect(send).toHaveBeenCalledWith("summarize", [{ kind: "clipboard_link" }, { kind: "screen_image" }]);
   });
-  it("Rust ek türlerini bildirmeyince yalnız pencere çipi vardır (sözleşme dışı tür gönderilmez)", async () => {
+  it("when Rust reports no attachment kinds only the window chip exists (no out-of-contract kind is sent)", async () => {
     { const real = fakeBridge.call.bind(fakeBridge) as (c: string, ...a: unknown[]) => Promise<unknown>; vi.spyOn(fakeBridge, "call").mockImplementation(((c: string, ...a: unknown[]) => (c === "composer_kinds" ? Promise.reject("unknown") : real(c, ...a))) as never); }
     fakeBridge.setShelf([{ id: "a", name: "a.pdf", sub: "", kind: "pdf" }]);
-    render(<ComposerCard owner={owner} turns={[]} send={() => undefined} suggestions={[{ id: "window_image", label: "Bu pencere: Chrome" }]} />);
+    render(<ComposerCard owner={owner} turns={[]} send={() => undefined} suggestions={[{ id: "window_image", label: "This window: Chrome" }]} />);
     await settle();
     expect(screen.queryByText(/Raftaki/)).toBeNull();
-    expect(screen.queryByRole("button", { name: "Dosya ekle" })).toBeNull();
-    expect(screen.getByText("Bu pencere: Chrome")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Attach file" })).toBeNull();
+    expect(screen.getByText("This window: Chrome")).toBeTruthy();
   });
-  it("başka eklentinin adı ön ek olarak kalır", async () => {
+  it("another plugin's name stays as a prefix", async () => {
     render(<ComposerCard owner={{ ...OTHER, voice: false }} turns={[]} send={() => undefined} suggestions={[]} />);
-    expect(screen.getByPlaceholderText("Örnek Asistan'a sor: bir soru, bir iş, bir hatırlatma")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Ask Sample Assistant anything: a question, a task, a reminder")).toBeTruthy();
   });
 });
 
-describe("Modüller (j)", () => {
-  it("11 sekme ve dişli; Genel üç kutu: Pusula, Claude Code, Sistem; kota çubukları, oturum durumları, Durdur", async () => {
+describe("Modules (j)", () => {
+  it("11 tabs and a gear; General has three boxes: Compass, Claude Code, System; quota bars, session states, Stop", async () => {
     fakeBridge.setSurfaces(SURFACES_J);
     const { container } = render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
-    const tabs = within(screen.getByRole("tablist", { name: "Modüller" })).getAllByRole("tab").map((t) => t.getAttribute("aria-label") ?? t.textContent);
-    expect(tabs).toEqual(["Genel", "Müzik", "Pano", "Raf", "Takvim", "Zamanlayıcı", "Sistem", "Bildirimler", "Pusula", "Pusula › Claude Code", "Pusula › Ekip"]);
-    expect(screen.getByRole("button", { name: "Modül ayarları" })).toBeTruthy();
-    expect(container.querySelectorAll(".izgara.genel3 > .kutu")).toHaveLength(3);
-    expect(container.querySelectorAll(".kota .olc")).toHaveLength(2);
-    expect(container.querySelector(".kota .esik")).toBeTruthy();
-    expect(screen.getByText("2 sa 14 dk sonra sıfırlanır")).toBeTruthy();
-    expect(container.querySelector(".oturumlar .nab")).toBeTruthy();
-    expect(container.querySelector(".oturumlar .halka")).toBeTruthy();
-    expect(container.querySelector(".oturumlar .tikYesil")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Durdur" })).toBeTruthy();
-    expect(screen.getByText("3 not önerisi")).toBeTruthy();
-    expect(container.querySelector(".kutu h4 .mascot")?.getAttribute("data-size")).toBe("24");
+    const tabs = within(screen.getByRole("tablist", { name: "Modules" })).getAllByRole("tab").map((t) => t.getAttribute("aria-label") ?? t.textContent);
+    expect(tabs).toEqual(["General", "Music", "Clipboard", "Shelf", "Calendar", "Timer", "System", "Notifications", "Compass", "Compass › Claude Code", "Compass › Team"]);
+    expect(screen.getByRole("button", { name: "Module settings" })).toBeTruthy();
+    expect(container.querySelectorAll(".grid.general3 > .box")).toHaveLength(3);
+    expect(container.querySelectorAll(".quota .meter")).toHaveLength(2);
+    expect(container.querySelector(".quota .threshold")).toBeTruthy();
+    expect(screen.getByText("Resets in 2h 14m")).toBeTruthy();
+    expect(container.querySelector(".sessions .pulse")).toBeTruthy();
+    expect(container.querySelector(".sessions .ring")).toBeTruthy();
+    expect(container.querySelector(".sessions .tickGreen")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Stop" })).toBeTruthy();
+    expect(screen.getByText("3 note suggestions")).toBeTruthy();
+    expect(container.querySelector(".box h4 .mascot")?.getAttribute("data-size")).toBe("24");
   });
-  it("Müzik ve Zamanlayıcı kendi sekmelerinde", async () => {
+  it("Music and Timer on their own tabs", async () => {
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
-    expect(screen.queryByLabelText("Dakika")).toBeNull();
-    fireEvent.click(screen.getByRole("tab", { name: "Zamanlayıcı" }));
-    expect(screen.getByLabelText("Dakika")).toBeTruthy();
-    fireEvent.click(screen.getByRole("tab", { name: "Müzik" }));
-    expect(screen.getByRole("button", { name: "Önceki parça" })).toBeTruthy();
+    expect(screen.queryByLabelText("Minutes")).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Timer" }));
+    expect(screen.getByLabelText("Minutes")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Music" }));
+    expect(screen.getByRole("button", { name: "Previous track" })).toBeTruthy();
   });
 });
 
-describe("Modüller kart genişliği sekmeye uyar", () => {
-  it("Genel geniş, diğerleri kendi kartı kadar dar", () => {
+describe("Modules card width follows the tab", () => {
+  it("General is wide, the others as narrow as their own card", () => {
     const w = (p: string) => modulesKw(p, 1920);
-    expect(w("genel")).toBe(1056);
-    const dar = ["müzik", "pano", "raf", "takvim", "zamanlayıcı", "sistem", "bildirimler", "eklenti"].map(w);
-    expect(new Set(dar)).toEqual(new Set([620])); // Genel dışında her sekme aynı genişlikte
-    expect(modulesKw("genel", 1366)).toBe(751);
+    expect(w("general")).toBe(1056);
+    const narrow = ["music", "clipboard", "shelf", "calendar", "timer", "system", "notifications", "plugin"].map(w);
+    expect(new Set(narrow)).toEqual(new Set([620])); // every tab except General has the same width
+    expect(modulesKw("general", 1366)).toBe(751);
   });
-  it("sekme değişince kart genişliği değişir; dar kartta etkin olmayan sekme yalnız simge", async () => {
-    fakeBridge.setSurfaces(SURFACES_J); // eklenti kutuları varken Genel geniş (3 sütun); kutusuz Genel 620
+  it("the card width changes with the tab; on a narrow card an inactive tab is icon-only", async () => {
+    fakeBridge.setSurfaces(SURFACES_J); // with plugin boxes General is wide (3 columns); without boxes General is 620
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
-    const kart = () => (document.querySelector(".adaIc.mkart, .adaIc") as HTMLElement).style.width;
+    const kart = () => (document.querySelector(".islandInner.mockCard, .islandInner") as HTMLElement).style.width;
     const genel = kart();
-    fireEvent.click(screen.getByRole("tab", { name: "Takvim" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
     expect(kart()).toBe("620px");
     expect(kart()).not.toBe(genel);
-    expect(screen.getByRole("tab", { name: "Pano" }).textContent).toBe("");
-    expect(screen.getByRole("tab", { name: "Takvim" }).textContent).toBe("");
+    expect(screen.getByRole("tab", { name: "Clipboard" }).textContent).toBe("");
+    expect(screen.getByRole("tab", { name: "Calendar" }).textContent).toBe("");
   });
-  it("sekmeler hep yalnız simge; tıklayınca sıra, sayı ve boyut sınıfı değişmez, ad 400 ms sonra ipucunda", async () => {
+  it("tabs are always icon-only; clicking does not change order, count or size class, the name shows in a tooltip after 400 ms", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     fakeBridge.setSurfaces(SURFACES_J);
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
-    const snap = () => within(screen.getByRole("tablist", { name: "Modüller" })).getAllByRole("tab").map((t) => [t.getAttribute("aria-label"), t.textContent, t.offsetLeft]);
-    const once = snap();
-    expect(once.every(([, text]) => text === "")).toBe(true);
-    fireEvent.click(screen.getByRole("tab", { name: "Zamanlayıcı" }));
-    expect(snap()).toEqual(once); // offsetLeft: jsdom'da 0; gerçek konum Playwright karesinde ölçüldü
-    fireEvent.mouseEnter(screen.getByRole("tab", { name: "Pusula › Claude Code" }));
+    const snap = () => within(screen.getByRole("tablist", { name: "Modules" })).getAllByRole("tab").map((t) => [t.getAttribute("aria-label"), t.textContent, t.offsetLeft]);
+    const before = snap();
+    expect(before.every(([, text]) => text === "")).toBe(true);
+    fireEvent.click(screen.getByRole("tab", { name: "Timer" }));
+    expect(snap()).toEqual(before); // offsetLeft is 0 in jsdom; the real position was measured in a Playwright frame
+    fireEvent.mouseEnter(screen.getByRole("tab", { name: "Compass › Claude Code" }));
     expect(screen.queryByRole("tooltip")).toBeNull();
     await act(async () => { vi.advanceTimersByTime(450); });
-    expect(screen.getByRole("tooltip").textContent).toBe("Pusula › Claude Code");
+    expect(screen.getByRole("tooltip").textContent).toBe("Compass › Claude Code");
     vi.useRealTimers();
   });
 });
 
-describe("yeni kartlar", () => {
-  it("ilk2: metin, Geç ve Tamam aynı işi yapar", async () => {
+describe("new cards", () => {
+  it("firstconnect: the text, Skip and OK do the same job", async () => {
     const done = vi.fn();
     render(<FirstConnectCard onDone={done} />);
-    expect(await screen.findByText("Merhaba, ben Pusula")).toBeTruthy();
-    expect(screen.getByText(/Ctrl\+Space ile bana sor/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Geç" }));
-    fireEvent.click(screen.getByRole("button", { name: "Tamam" }));
+    expect(await screen.findByText("Hi, I'm Compass")).toBeTruthy();
+    expect(screen.getByText(/Press Ctrl\+Space to ask me/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
     expect(done).toHaveBeenCalledTimes(2);
   });
-  it("ky: 800 ms'den kısa yüklemede iskelet hiç görünmez, uzunsa görünür", () => {
+  it("ky: the skeleton never shows for a load under 800 ms, shows when longer", () => {
     vi.useFakeTimers();
     const { container } = render(<LoadingCard />);
-    advance(799); expect(container.querySelector(".iskelet")).toBeNull();
-    advance(2); expect(container.querySelectorAll(".iskelet")).toHaveLength(3);
-    expect(screen.getByText("Pano okunuyor")).toBeTruthy();
+    advance(799); expect(container.querySelector(".skeleton")).toBeNull();
+    advance(2); expect(container.querySelectorAll(".skeleton")).toHaveLength(3);
+    expect(screen.getByText("Reading clipboard")).toBeTruthy();
   });
-  it("kh: Yeniden dene çağırır, Neden? teknik metni açar", () => {
+  it("kh: Try again calls retry, Why? opens the technical text", () => {
     const retry = vi.fn();
-    render(<ErrorCard title="Claude Code'a ulaşamıyorum" detail="hook köprüsü yanıt vermiyor" onRetry={retry} />);
-    expect(screen.queryByText("hook köprüsü yanıt vermiyor")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Neden?" }));
-    expect(screen.getByText("hook köprüsü yanıt vermiyor")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Yeniden dene" }));
+    render(<ErrorCard title="Can't reach Claude Code" detail="hook bridge is not responding" onRetry={retry} />);
+    expect(screen.queryByText("hook bridge is not responding")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Why?" }));
+    expect(screen.getByText("hook bridge is not responding")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(retry).toHaveBeenCalledOnce();
   });
-  it("kb: uyuyan maskot 96 ve boş Pano metni", () => {
+  it("kb: sleeping mascot 96 and the empty Clipboard text", () => {
     const { container } = render(<EmptyBoard />);
-    expect(screen.getByText("Pano boş")).toBeTruthy();
+    expect(screen.getByText("Clipboard is empty")).toBeTruthy();
     expect(container.querySelector(".mascot")?.getAttribute("data-size")).toBe("96");
     expect(container.querySelector(".mascot")?.getAttribute("data-mood")).toBe("drowsy");
   });
 });
 
-describe("ilk açılış (ilk)", () => {
-  it("üç sayfa: ilk ikisinde Geç, son sayfada maketin tam metni ve dönüş yolu; Pusula bağlıyken el sallayan 96 px maskot", () => {
+describe("first run (welcome)", () => {
+  it("three pages: Skip on the first two, the mockup's full text and the way back on the last; a 96 px waving mascot while Compass is connected", () => {
     const done = vi.fn();
     const { container } = render(<FirstRunCard onDone={done} mascot />);
     expect(container.querySelector(".mascot")?.getAttribute("data-size")).toBe("96");
-    fireEvent.click(screen.getByRole("button", { name: "İleri" }));
-    fireEvent.click(screen.getByRole("button", { name: "İleri" }));
-    expect(screen.getByText(/Ctrl\+K ile uygulama, pencere, dosya ve ayar ara\./)).toBeTruthy();
-    expect(screen.getByText(/Görev çubuğunu geri getir/)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Geç" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Başla" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByText(/Press Ctrl\+K to search apps, windows, files and settings\./)).toBeTruthy();
+    expect(screen.getByText(/Restore taskbar/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Skip" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
     expect(done).toHaveBeenCalledOnce();
   });
-  it("Geç ilk sayfadan bitirir; Pusula yokken nötr simge", () => {
+  it("Skip finishes from the first page; neutral icon without Compass", () => {
     const done = vi.fn();
     const { container } = render(<FirstRunCard onDone={done} />);
     expect(container.querySelector(".mascot")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Geç" }));
+    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
     expect(done).toHaveBeenCalledOnce();
   });
 });
 
-describe("dikte, ticket ve sayaç (şerit)", () => {
-  it("dikte: tırnaklı canlı satır ve 'Esc iptal'; ticket: 'taslak hazır' notu; Pusula'nın maskotsuz çıkıntısında 'A' karosu yok, ad ön eki kalır", async () => {
-    const dik = { plugin: PUSULA, title: "Dikte", state: "info" as const, mascot: "dinliyor", liveText: { streamId: "d9" }, actions: [{ id: "bitir", label: "Bitir" }] };
-    const { container, unmount } = render(<ProtrusionBump item={dik} />);
+describe("dictation, ticket and counter (strip)", () => {
+  it("dictation: quoted live row and 'Esc cancel'; ticket: 'draft ready' note; Compass's mascot-less peek has no 'A' tile, the name prefix stays", async () => {
+    const dict = { plugin: COMPASS, title: "Dictation", state: "info" as const, mascot: "listening", liveText: { streamId: "d9" }, actions: [{ id: "finish", label: "Stop" }] };
+    const { container, unmount } = render(<ProtrusionBump item={dict} />);
     await settle();
-    act(() => fakeBridge.emit("plugin_stream", { streamId: "d9", text: "yarın sabah dokuzda" }));
-    expect(container.querySelector(".canliYazi")!.textContent).toBe("“yarın sabah dokuzda”");
-    expect(screen.getByText("iptal")).toBeTruthy();
+    act(() => fakeBridge.emit("plugin_stream", { streamId: "d9", text: "tomorrow morning at nine" }));
+    expect(container.querySelector(".liveText")!.textContent).toBe("“tomorrow morning at nine”");
+    expect(screen.getByText("cancel")).toBeTruthy();
     unmount();
-    const tik = { plugin: PUSULA, title: "Yeni ticket", icon: "ticket", state: "attention" as const };
-    const c = render(<ProtrusionCenter item={tik} />);
-    expect(screen.getByText("taslak hazır")).toBeTruthy();
-    expect(c.container.querySelector(".basHarf")).toBeNull();
-    expect(c.container.textContent).toContain("Pusula ›");
+    const ticket = { plugin: COMPASS, title: "New ticket", icon: "ticket", state: "attention" as const };
+    const c = render(<ProtrusionCenter item={ticket} />);
+    expect(screen.getByText("draft ready")).toBeTruthy();
+    expect(c.container.querySelector(".initials")).toBeNull();
+    expect(c.container.textContent).toContain("Compass ›");
   });
-  it("sayaç iki haneli dakika", async () => {
+  it("the counter has two-digit minutes", async () => {
     const { elapsed } = await import("../lib/plugin");
     expect(elapsed("2026-10-16T14:00:00Z", Date.parse("2026-10-16T14:02:14Z"))).toBe("02:14");
     expect(elapsed("2026-10-16T14:00:00Z", Date.parse("2026-10-16T15:02:03Z"))).toBe("1:02:03");

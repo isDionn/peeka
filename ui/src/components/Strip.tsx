@@ -10,7 +10,7 @@ import { installKbModality } from "../lib/kbModality";
 import { listenLine } from "../lib/lineChan";
 import { WindowPreview } from "./WindowPreview";
 import { useCenterClock } from "../lib/centerClock";
-import { YAY } from "../motion/spring";
+import { SPRINGS } from "../motion/spring";
 import { useSpring } from "../motion/useSpring";
 import { AppIcon, WinLogo } from "./common";
 import "./strip-items.css";
@@ -19,14 +19,14 @@ import { IslandHiddenGlyph } from "./IslandHidden";
 import { useIslandHidden } from "../hooks.fidelity";
 import { cap99 } from "../lib/plugin";
 
-export type PanelKind = "setup" | "start" | "status" | "search" | "ayg" | "ayk" | "aye" | "aym" | "ayp" | "ays" | "quit" | "notif" | "mt" | "tray";
+export type PanelKind = "setup" | "start" | "status" | "search" | "appearance" | "shortcuts" | "plugins" | "modules" | "clipboard" | "mascot" | "quit" | "notif" | "cleanup" | "tray";
 export type MenuState = { kind: "app"; appId: string; x: number } | { kind: "strip"; x: number };
 
 const GAP = 2;
 const batteryIcon = (b: NonNullable<Status["battery"]>) =>
   b.charging ? <BatteryCharging /> : b.percent === null ? <Battery /> : b.percent <= 15 ? <BatteryLow /> : b.percent <= 40 ? <Battery /> : b.percent >= 90 ? <BatteryFull /> : <BatteryMedium />;
 
-/** Pencere önceliği: etkin pencere varsa o, yoksa ilk pencere; uygulama etkinse sıradaki pencereye geç. */
+/** Window choice: the active window if any, else the first; if the app is already active, move to its next window. */
 export function pickWindow(item: StripItem): WindowInfo | null {
   if (!item.windows.length) return null;
   const i = item.windows.findIndex((w) => w.active);
@@ -38,21 +38,21 @@ function activate(item: StripItem) {
   if (w) bridge.call("activate_window", { hwnd: w.hwnd }); else bridge.call("launch_app", { appId: item.appId });
 }
 
-/** Sabit ve sekme aynı biçim: simge + ad, sabit genişlikli yuva (strip-items.css); uzun ad kısaltılır, tamamı title/aria-label'da. */
+/** Pins and tabs share one look: icon + name in a fixed-width slot (strip-items.css); long names are truncated, the full name is in title/aria-label. */
 function ItemLabel({ item }: { item: StripItem }) {
   return (
     <>
       <span className="ikK">
         <AppIcon src={item.icon} color={item.colorIcon} />
-        {item.windows.length > 1 && <span className="say num">{cap99(item.windows.length)}</span>}
+        {item.windows.length > 1 && <span className="count num">{cap99(item.windows.length)}</span>}
       </span>
-      <span className="sabitAd">{item.name}</span>
+      <span className="pinName">{item.name}</span>
     </>
   );
 }
 
-/** Önizleme niyeti: öğe + öğenin kutusu (aç), `undefined` = çekildi (gecikmeyle kapat), `null` = hemen kapat. */
-/** F-05: çok pencereli öğede Enter/Boşluk/Aşağı ok pencere seçiciyi açar (seçici Strip'te kb ile tutulur). */
+/** Preview intent: item + its box (open), `undefined` = pointer left (close after a delay), `null` = close now. */
+/** F-05: on a multi-window item, Enter/Space/Down arrow opens the window picker (Strip keeps the picker with kb). */
 type OpenPick = (item: StripItem, el: HTMLElement) => void;
 const pickKeys = (e: React.KeyboardEvent, item: StripItem, el: HTMLElement, open: OpenPick) => {
   if (item.windows.length < 2 || !["Enter", " ", "ArrowDown"].includes(e.key)) return;
@@ -61,9 +61,9 @@ const pickKeys = (e: React.KeyboardEvent, item: StripItem, el: HTMLElement, open
 };
 type HoverFn = (item: StripItem | null | undefined, el?: HTMLElement) => void;
 const ariaOf = (item: StripItem) =>
-  item.windows.length ? `${item.name}${item.windows.length > 1 ? `, ${item.windows.length} pencere` : ""}` : `${item.name}, sabit, kapalı`;
+  item.windows.length ? `${item.name}${item.windows.length > 1 ? `, ${item.windows.length} windows` : ""}` : `${item.name}, pinned, not running`;
 
-/** Sabitler: sürükleyerek sıralanır (3 px eşik), hepsi sabit genişlikli yuvada. */
+/** Pins: reorder by dragging (3 px threshold), all in fixed-width slots. */
 function Pins({ items, pins, onMenu, onReorder, onHover, onPick }: { items: StripItem[]; pins: PinnedApp[]; onMenu: (appId: string, x: number) => void; onReorder: (ids: string[]) => void; onHover: HoverFn; onPick: OpenPick }) {
   const box = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ from: number; dx: number; shifts: number[]; to: number } | null>(null);
@@ -100,7 +100,7 @@ function Pins({ items, pins, onMenu, onReorder, onHover, onPick }: { items: Stri
   };
 
   return (
-    <div className="sabitler" ref={box} role="tablist" aria-label="Sabitlenmiş uygulamalar ve açık pencereleri">
+    <div className="pins" ref={box} role="tablist" aria-label="Pinned apps and their open windows">
       {items.map((item, i) => {
         const open = item.windows.length > 0;
         const style: CSSProperties | undefined = drag
@@ -109,8 +109,8 @@ function Pins({ items, pins, onMenu, onReorder, onHover, onPick }: { items: Stri
             : { transform: `translateX(${drag.shifts[i]}px)`, transition: "transform .38s cubic-bezier(.34,1.36,.64,1)" }
           : undefined;
         return (
-          <button key={item.appId} role="tab" aria-selected={item.active} aria-label={ariaOf(item)} title={item.name + (open ? "" : " (sabit, kapalı)")}
-            className={"sabit" + (open ? " acikSabit" : "") + (item.active ? " aktif" : "") + (drag?.from === i ? " tutuyor" : "")}
+          <button key={item.appId} role="tab" aria-selected={item.active} aria-label={ariaOf(item)} title={item.name + (open ? "" : " (pinned, not running)")}
+            className={"pin" + (open ? " openPinned" : "") + (item.active ? " active" : "") + (drag?.from === i ? " grabbing" : "")}
             data-app={item.appId} style={style}
             onPointerDown={(e) => { onHover(null); down(e, i); }} onPointerEnter={(e) => onHover(item, e.currentTarget)} onPointerLeave={() => onHover(undefined)}
             onKeyDown={(e) => pickKeys(e, item, e.currentTarget, onPick)} onKeyUp={(e) => { if (e.key === " " && item.windows.length > 1) e.preventDefault(); }}
@@ -124,28 +124,28 @@ function Pins({ items, pins, onMenu, onReorder, onHover, onPick }: { items: Stri
   );
 }
 
-/** Seçim kapsülü: etkin öğenin arkasında yayla kayar, değişince üstünden ışık geçer (akan vurgu). */
+/** Selection pill: springs along behind the active item; a light sweeps over it on change (flowing highlight). */
 function SelectionPill({ host, watch }: { host: React.RefObject<HTMLElement | null>; watch: string }) {
   const [box, setBox] = useState({ x: 0, w: 0, on: false });
   const measure = useCallback(() => {
     const el = host.current;
-    const a = el?.querySelector<HTMLElement>(".sabit.aktif, .sekmeA.aktif");
+    const a = el?.querySelector<HTMLElement>(".pin.active, .tabA.active");
     if (!el || !a) return setBox((b) => (b.on ? { ...b, on: false } : b));
     const x = a.getBoundingClientRect().left - el.getBoundingClientRect().left, w = a.getBoundingClientRect().width;
     setBox((b) => (b.on && b.x === x && b.w === w ? b : { x, w, on: true }));
   }, [host]);
-  // watch değişince (etkin öğe, pencere sayısı) yeniden ölç; ref'ler bağlandıktan sonra çalışsın diye passive effect
+  // re-measure when `watch` changes (active item, window count); a passive effect so it runs after refs attach
   useEffect(measure, [measure, watch]);
   useEffect(() => {
     const ro = new ResizeObserver(measure);
     if (host.current) ro.observe(host.current);
     return () => ro.disconnect();
   }, [host, measure]);
-  const x = useSpring(box.x, YAY.sekme);
-  const w = useSpring(box.w, YAY.sekme);
+  const x = useSpring(box.x, SPRINGS.pill);
+  const w = useSpring(box.w, SPRINGS.pill);
   return (
-    <span className="sekmePil" aria-hidden="true" style={{ transform: `translateX(${x}px)`, width: Math.max(0, w), opacity: box.on ? 1 : 0, transition: "opacity .2s" }}>
-      <i key={watch} style={{ animation: "isik .62s var(--ease) both" }} />
+    <span className="tabPill" aria-hidden="true" style={{ transform: `translateX(${x}px)`, width: Math.max(0, w), opacity: box.on ? 1 : 0, transition: "opacity .2s" }}>
+      <i key={watch} style={{ animation: "glow .62s var(--ease) both" }} />
     </span>
   );
 }
@@ -159,22 +159,22 @@ export interface StripProps {
   onPanel: (k: PanelKind) => void;
   onMenu: (m: MenuState) => void;
   onReorder: (ids: string[]) => void;
-  /** Ortadaki boşluğa konan içerik (yalnız önizleme: ada sayfası ayrı pencere, orada DOM sırası Tab sırasını kurar). */
+  /** Content placed in the center gap (preview only: the island page is a separate window; there DOM order sets Tab order). */
   center?: React.ReactNode;
 }
 
-/** Ada penceresinin yarı genişliği + boşluk (c1: sol kenar orta çizgiden 169 px). */
-const ADA_YARI = 176;
+/** Half the island window's width + gap (c1: left edge 169 px from the midline). */
+const ISLAND_HALF = 176;
 
 export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMenu, onReorder, center }: StripProps) {
   const now = useNow();
-  const centerClock = useCenterClock() && monitor.primary; // ada ortada saati gösteriyorsa sağdaki saat yalnız tarihi yazar
+  const centerClock = useCenterClock() && monitor.primary; // if the island shows the clock in the center, the right-hand clock shows only the date
   const { date, time, label } = clockParts(now);
-  // ikinci ekranda sabitler yok (referans k karesi): o ekrandaki pencereler yalnız sekme olur
+  // no pins on secondary displays (reference frame k): windows there are tabs only
   const { pinned, tabs } = useMemo(() => mergePins(monitor.primary ? pins : [], windows), [pins, windows, monitor.primary]);
   const left = useRef<HTMLDivElement>(null);
   const activeKey = [...pinned, ...tabs].filter((i) => i.active).map((i) => i.appId).join() + "|" + pinned.map((p) => p.appId + p.windows.length).join() + tabs.map((t) => t.appId + t.windows.length).join();
-  // pencere önizlemesi: ~250 ms durunca açılır, çekilince ~200 ms sonra kapanır (ada üstüne gelme niyetiyle aynı yöntem)
+  // window preview: opens after ~250 ms of hover, closes ~200 ms after leaving (same approach as island hover intent)
   const [pv, setPv] = useState<{ item: StripItem; x: number; from?: HTMLElement } | null>(null);
   const pvTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const hover: HoverFn = useCallback((item, el) => {
@@ -189,15 +189,15 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
     clearTimeout(pvTimer.current);
     const r = el.getBoundingClientRect();
     setPv({ item, x: r.left + r.width / 2, from: el });
-    requestAnimationFrame(() => document.querySelector<HTMLElement>(".onizleme .kucuk.on, .onizleme .kucuk")?.focus());
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(".preview .small.on, .preview .small")?.focus());
   }, []);
   useEffect(() => () => clearTimeout(pvTimer.current), []);
-  // klavyeyle açılan seçici: sol/sağ ok gezer, Esc kapatır ve odağı öğeye geri verir
+  // keyboard-opened picker: left/right arrows move, Esc closes and returns focus to the item
   const from = pv?.from;
   useEffect(() => {
     if (!from) return;
     const key = (e: KeyboardEvent) => {
-      const k = [...document.querySelectorAll<HTMLElement>(".onizleme .kucuk")];
+      const k = [...document.querySelectorAll<HTMLElement>(".preview .small")];
       const i = k.indexOf(document.activeElement as HTMLElement);
       if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setPv(null); from.focus(); }
       else if (e.key === "ArrowRight" || e.key === "ArrowLeft") { e.preventDefault(); k[(i + (e.key === "ArrowRight" ? 1 : -1) + k.length) % k.length]?.focus(); }
@@ -206,15 +206,15 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
     addEventListener("keydown", key, true);
     return () => removeEventListener("keydown", key, true);
   }, [from]);
-  const live = pv ? [...pinned, ...tabs].find((i) => i.appId === pv.item.appId) : null; // pencere kapanınca/yenilenince önizleme tazelenir
+  const live = pv ? [...pinned, ...tabs].find((i) => i.appId === pv.item.appId) : null; // the preview refreshes when a window closes or updates
   const privacy = usePrivacy();
-  const priv = [privacy.mic.length ? `Mikrofon: ${privacy.mic.join(", ")}` : "", privacy.camera.length ? `Kamera: ${privacy.camera.join(", ")}` : ""].filter(Boolean).join(". ");
-  // tam ekran: şerit yukarı kaçar (t1), imleç üst kenara (4 px) değince gelir, 140 px altına inince ~500 ms sonra gider (t2); onay inerken (t3) görünür kalır
+  const priv = [privacy.mic.length ? `Microphone: ${privacy.mic.join(", ")}` : "", privacy.camera.length ? `Camera: ${privacy.camera.join(", ")}` : ""].filter(Boolean).join(". ");
+  // full screen: the strip slides up (t1), returns when the pointer touches the top edge (4 px), leaves ~500 ms after it drops below 140 px (t2); stays visible while an approval drops in (t3)
   const surf = useSurfaces();
   const [fs, setFs] = useState(false);
   const [edge, setEdge] = useState(false);
-  useEffect(() => { installKbModality(); const off = bridge.on("fullscreen_screens", (s) => setFs(s.strips.includes(monitor.id))); return () => { off.then((f) => f()); }; }, [monitor.id]); // yalnız bu ekranın şeridi gizlenir (ikinci ekrandaki video ötekini gizlemez)
-  // onay beklerken fare başka monitörün şeridindeyse o şeritte küçük rozet (mutlak konumlu: şeritte hiçbir şey kaymaz); null gelince kalkar
+  useEffect(() => { installKbModality(); const off = bridge.on("fullscreen_screens", (s) => setFs(s.strips.includes(monitor.id))); return () => { off.then((f) => f()); }; }, [monitor.id]); // only this display's strip hides (a video on the second display doesn't hide the other)
+  // while an approval waits and the pointer is on another monitor's strip, show a small badge there (absolutely placed: nothing shifts); cleared on null
   const [badge, setBadge] = useState(0);
   useEffect(() => { const off = bridge.on("approval_badge", (b) => setBadge(b && b.monitor === monitor.id ? b.count : 0)); return () => { off.then((f) => f()); }; }, [monitor.id]);
   useEffect(() => {
@@ -225,12 +225,12 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
     return () => { removeEventListener("mousemove", move); clearTimeout(t); };
   }, [fs]);
   const dropping = surf.dropStripMs !== null && surf.approvals.length > 0;
-  const shift = useSpring(fs && !edge && !dropping && !openPanel ? -(30 + 60) : 0, YAY.serit); // panel açıkken şerit yerinde kalır (O18)
+  const shift = useSpring(fs && !edge && !dropping && !openPanel ? -(30 + 60) : 0, SPRINGS.bar); // the strip stays put while a panel is open (O18)
   const slide = Math.abs(shift) > 0.05 ? `translateY(${shift}px)` : undefined;
-  // ada sayfası "Bildirimleri aç" derse (iş bitti şeridine tıklama) saat paneli açılır
+  // when the island page says "open notifications" (a click on the task-done strip), the clock panel opens
   useEffect(() => listenLine((m) => { if (m.k === "notif" && openPanel !== "notif") onPanel("notif"); }), [openPanel, onPanel]);
   const islandHidden = useIslandHidden();
-  // Tab sırası pencereler arası: son sol denetimden Tab adaya, sağ grubun ilkinden Shift+Tab adanın sonuna; ada geri verince buraya düşer
+  // Tab order across windows: Tab from the last left control goes to the island, Shift+Tab from the first right control to the island's end; focus lands here when the island hands it back
   const bar = useRef<HTMLElement>(null);
   const crossTab = monitor.primary && !center && !islandHidden;
   useEffect(() => onX((m) => {
@@ -244,12 +244,12 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
     if (tabLeaves(e, left, document.activeElement) && !e.shiftKey) { e.preventDefault(); bridge.call("focus_island").then(() => sendX({ t: "to-island" }), () => undefined); }
     else if (tabLeaves(e, right, document.activeElement) && e.shiftKey) { e.preventDefault(); bridge.call("focus_island").then(() => sendX({ t: "to-island", end: true }), () => undefined); }
   };
-  // hit alanı: sekmeler adanın (yarım genişlik ~170) soluna sığar; sığmazsa flex ile birlikte daralırlar (adanın üstüne 10-36 px binme)
+  // hit area: tabs fit left of the island (half width ~170); if they don't, they shrink together via flex (instead of overlapping the island by 10-36 px)
   const tabsBox = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
-    const el = tabsBox.current, bar = document.querySelector("header.cubuk");
+    const el = tabsBox.current, bar = document.querySelector("header.bar");
     if (!el || !bar) return;
-    const fit = () => { el.style.maxWidth = Math.max(40, window.innerWidth / 2 - ADA_YARI - el.getBoundingClientRect().left) + "px"; };
+    const fit = () => { el.style.maxWidth = Math.max(40, window.innerWidth / 2 - ISLAND_HALF - el.getBoundingClientRect().left) + "px"; };
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(bar);
@@ -259,19 +259,19 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
 
   return (
     <>
-    <header ref={bar} className="cubuk" data-hit aria-label="Peeka şeridi" onKeyDown={crossKey} style={slide ? { transform: slide } : undefined}
-      onContextMenu={(e) => { if (e.target === e.currentTarget || (e.target as HTMLElement).closest(".bos")) { e.preventDefault(); onMenu({ kind: "strip", x: e.clientX }); } }}>
-      {!monitor.primary && badge > 0 && <span className="onayRozet" role="status" aria-label={`${badge} onay bekliyor`}>{badge > 9 ? "9+" : badge} onay</span>}
-      <div className="taraf" ref={left}>
+    <header ref={bar} className="bar" data-hit aria-label="Peeka strip" onKeyDown={crossKey} style={slide ? { transform: slide } : undefined}
+      onContextMenu={(e) => { if (e.target === e.currentTarget || (e.target as HTMLElement).closest(".empty")) { e.preventDefault(); onMenu({ kind: "strip", x: e.clientX }); } }}>
+      {!monitor.primary && badge > 0 && <span className="approvalBadge" role="status" aria-label={`${badge} awaiting approval`}>{badge > 9 ? "9+" : badge} {badge === 1 ? "approval" : "approvals"}</span>}
+      <div className="side" ref={left}>
         <SelectionPill host={left} watch={activeKey} />
-        {monitor.primary && priv && <span className="gizlilikNokta" role="img" aria-label={priv} title={priv} data-yalniz={privacy.mic.length ? undefined : "kamera"} />}
-        <button className={"tus tusIk" + (openPanel === "start" ? " acik" : "")} title="Başlat" aria-label="Başlat" aria-haspopup="dialog" {...trigger("start")}><WinLogo /></button>
-        <button className={"tus tusIk" + (openPanel === "search" ? " acik" : "")} title="Ara (Ctrl+K)" aria-label="Ara" aria-haspopup="dialog" {...trigger("search")}><Search /></button>
+        {monitor.primary && priv && <span className="privacyDot" role="img" aria-label={priv} title={priv} data-only={privacy.mic.length ? undefined : "camera"} />}
+        <button className={"key keyIcon" + (openPanel === "start" ? " shown" : "")} title="Start" aria-label="Start" aria-haspopup="dialog" {...trigger("start")}><WinLogo /></button>
+        <button className={"key keyIcon" + (openPanel === "search" ? " shown" : "")} title="Search (Ctrl+K)" aria-label="Search" aria-haspopup="dialog" {...trigger("search")}><Search /></button>
         {monitor.primary && <Pins items={pinned} pins={pins} onReorder={onReorder} onHover={hover} onPick={pickByKey} onMenu={(appId, x) => onMenu({ kind: "app", appId, x })} />}
-        {tabs.length > 0 && <span className="ayrac" />}
-        <div className="sekmeler" ref={tabsBox} role="tablist" aria-label="Bu ekrandaki pencereler">
+        {tabs.length > 0 && <span className="divider" />}
+        <div className="tabs" ref={tabsBox} role="tablist" aria-label="Windows on this display">
           {tabs.map((t) => (
-            <button key={t.appId} className={"sekmeA" + (t.active ? " aktif" : "")} title={t.name} role="tab" aria-selected={t.active} aria-label={ariaOf(t)} data-app={t.appId}
+            <button key={t.appId} className={"tabA" + (t.active ? " active" : "")} title={t.name} role="tab" aria-selected={t.active} aria-label={ariaOf(t)} data-app={t.appId}
               onPointerEnter={(e) => hover(t, e.currentTarget)} onPointerLeave={() => hover(undefined)} onPointerDown={() => hover(null)}
               onKeyDown={(e) => pickKeys(e, t, e.currentTarget, pickByKey)} onKeyUp={(e) => { if (e.key === " " && t.windows.length > 1) e.preventDefault(); }}
               onClick={() => activate(t)} onContextMenu={(e) => { e.preventDefault(); onMenu({ kind: "app", appId: t.appId, x: e.currentTarget.getBoundingClientRect().left }); }}>
@@ -280,17 +280,17 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
           ))}
         </div>
       </div>
-      {/* ortadaki boşluk: ada penceresi */}
-      <div className="bos" style={{ flex: 1, alignSelf: "stretch" }}>
-        {/* ada sayfası ayrı pencere: orada gizliyken göz simgesini şerit sayfası çizer; önizlemede `center` (ada) kendi göz simgesini çizer */}
+      {/* center gap: the island window */}
+      <div className="empty" style={{ flex: 1, alignSelf: "stretch" }}>
+        {/* the island page is a separate window: when it's hidden the strip page draws the eye icon; in preview `center` (the island) draws its own */}
         {center ?? (monitor.primary && islandHidden ? <div style={{ display: "grid", placeItems: "center", height: "100%" }}><IslandHiddenGlyph /></div> : null)}
       </div>
-      <div className="taraf">
+      <div className="side">
         {monitor.primary && (
           <>
             <PromotedTray monitor={monitor.id} />
-            <button className={"tus tusIk" + (openPanel === "tray" ? " acik" : "")} title="Gizli simgeler" aria-label="Gizli simgeler" aria-haspopup="dialog" {...trigger("tray")}><ChevronDown /></button>
-            <button className={"tus durumGrup" + (openPanel === "status" ? " acik" : "")} aria-haspopup="dialog" aria-label={statusLabel(status)} title="Ses, ağ, pil ve diğer durumlar" {...trigger("status")}>
+            <button className={"key keyIcon" + (openPanel === "tray" ? " shown" : "")} title="Hidden icons" aria-label="Hidden icons" aria-haspopup="dialog" {...trigger("tray")}><ChevronDown /></button>
+            <button className={"key statusGroup" + (openPanel === "status" ? " shown" : "")} aria-haspopup="dialog" aria-label={statusLabel(status)} title="Volume, network, battery and more" {...trigger("status")}>
               {status?.dnd && <Moon />}
               {status?.muted ? <VolumeX /> : <Volume2 />}
               {status?.network === "none" ? <WifiOff /> : <Wifi />}
@@ -298,7 +298,7 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
             </button>
           </>
         )}
-        <button className={"tus" + (openPanel === "notif" ? " acik" : "")} title="Bildirimler" aria-label={`${label}, Bildirimler`} aria-haspopup="dialog" {...trigger("notif")}>
+        <button className={"key" + (openPanel === "notif" ? " shown" : "")} title="Notifications" aria-label={`${label}, Notifications`} aria-haspopup="dialog" {...trigger("notif")}>
           <span className="l2">{date}</span>{!centerClock && <span className="b6 num">{time}</span>}
         </button>
       </div>
@@ -310,12 +310,12 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
   );
 }
 
-/** Bağlantı düzeyinin sade adı (durum kartı da kullanır). */
-export const NET_LABEL: Record<Status["network"], string> = { internet: "İnternete bağlı", local: "Yalnız yerel ağ", constrained: "Bağlantı kısıtlı", none: "Ağ bağlantısı yok", unknown: "Ağ durumu bilinmiyor" };
+/** Plain name for the connection level (the status card uses it too). */
+export const NET_LABEL: Record<Status["network"], string> = { internet: "Connected to the internet", local: "Local network only", constrained: "Limited connection", none: "No network connection", unknown: "Network status unknown" };
 
 function statusLabel(s: Status | null) {
-  if (!s) return "Durum";
-  const parts = [s.volume === null ? "Ses yok" : `Ses ${s.muted ? "kapalı" : "%" + s.volume}`, NET_LABEL[s.network]];
-  if (s.battery) parts.push(`Pil${s.battery.percent === null ? "" : " %" + s.battery.percent}${s.battery.charging ? ", şarj oluyor" : ""}`);
-  return parts.join(", ") + ". Durum kartını aç";
+  if (!s) return "Status";
+  const parts = [s.volume === null ? "No audio" : `Volume ${s.muted ? "muted" : s.volume + "%"}`, NET_LABEL[s.network]];
+  if (s.battery) parts.push(`Battery${s.battery.percent === null ? "" : " " + s.battery.percent + "%"}${s.battery.charging ? ", charging" : ""}`);
+  return parts.join(", ") + ". Open status card";
 }

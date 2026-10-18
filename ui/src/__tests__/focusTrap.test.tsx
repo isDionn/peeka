@@ -8,29 +8,29 @@ function Card({ onClose }: { onClose: () => void }) {
   useFocusTrap(ref, onClose);
   return (
     <div ref={ref} role="dialog">
-      <button>bir</button><input aria-label="iki" /><button>üç</button>
+      <button>one</button><input aria-label="two" /><button>three</button>
     </div>
   );
 }
 function Host({ onClose }: { onClose: () => void }) {
-  return <><button>açan</button><Card onClose={onClose} /></>;
+  return <><button>opener</button><Card onClose={onClose} /></>;
 }
 
-describe("odak tuzağı", () => {
-  it("açılınca ilk denetime odak verir", () => {
+describe("focus trap", () => {
+  it("focuses the first control on open", () => {
     const { getByText } = render(<Host onClose={() => undefined} />);
-    expect(document.activeElement).toBe(getByText("bir"));
+    expect(document.activeElement).toBe(getByText("one"));
   });
-  it("Tab kartın içinde döner (sondan başa), Shift+Tab baştan sona", () => {
+  it("Tab wraps inside the card (last to first), Shift+Tab first to last", () => {
     const { getByText, getByRole } = render(<Host onClose={() => undefined} />);
     const dlg = getByRole("dialog");
-    getByText("üç").focus();
+    getByText("three").focus();
     fireEvent.keyDown(dlg, { key: "Tab" });
-    expect(document.activeElement).toBe(getByText("bir"));
+    expect(document.activeElement).toBe(getByText("one"));
     fireEvent.keyDown(dlg, { key: "Tab", shiftKey: true });
-    expect(document.activeElement).toBe(getByText("üç"));
+    expect(document.activeElement).toBe(getByText("three"));
   });
-  it("Esc kapatır; kart sökülünce odak açan öğeye döner", () => {
+  it("Esc closes; when the card unmounts focus returns to the opener", () => {
     const onClose = vi.fn();
     const opener = document.createElement("button");
     document.body.append(opener);

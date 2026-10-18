@@ -1,8 +1,8 @@
-//! What only the main assistant can give the island (Sadakat 3; wire: `notch/docs/eklenti-api.md` §11): the
+//! What only the main assistant can give the island (Fidelity 3; wire: `notch/docs/plugin-api.md` §11): the
 //! status card's counts, the meeting card's calendar, the Claude Code bridge's health, the offline mode, a finished
-//! job, the shelf suggestion; the owner's "Aç" / "Notlara ekle" back to it; the first-connect card and the
+//! job, the shelf suggestion; the owner's "Open" / "Add to Notes" back to it; the first-connect card and the
 //! permission log. The main assistant pushes; Notch keeps the last value and the page reads it. Without a ready
-//! main assistant every read is `NoMain` ("Asistan bağlı değil"), before it has sent anything `NotYet`.
+//! main assistant every read is `NoMain` ("Assistant not connected"), before it has sent anything `NotYet`.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -40,7 +40,7 @@ fn cc_word(p: &Value, k: &str) -> Result<Option<String>, RpcErr> {
             .as_str()
             .filter(|s| cc_hooks::word(s))
             .map(|s| Some(s.to_string()))
-            .ok_or_else(|| bad("tool ve reason en çok 64 karakter: harf, rakam, _ . : -")),
+            .ok_or_else(|| bad("tool and reason: 64 characters at most, letters, digits, _ . : -")),
     }
 }
 
@@ -50,10 +50,10 @@ fn cc_event(p: &Value) -> Result<UiEvent, RpcErr> {
         .get("kind")
         .and_then(Value::as_str)
         .filter(|k| cc_hooks::CC_KINDS.contains(k))
-        .ok_or_else(|| bad("kind: bilinen bir Claude Code olayı olmalı"))?;
+        .ok_or_else(|| bad("kind: must be a known Claude Code event"))?;
     let sid = match p.get("sid") {
         None | Some(Value::Null) => None,
-        Some(v) => Some(v.as_str().filter(|s| cc_hooks::is_sid(s)).ok_or_else(|| bad("sid: 8 küçük onaltılık karakter"))?.to_string()),
+        Some(v) => Some(v.as_str().filter(|s| cc_hooks::is_sid(s)).ok_or_else(|| bad("sid: 8 lower-case hex characters"))?.to_string()),
     };
     Ok(UiEvent::CcEvent { kind: kind.into(), tool: cc_word(p, "tool")?, reason: cc_word(p, "reason")?, sid })
 }
@@ -62,9 +62,9 @@ fn cc_event(p: &Value) -> Result<UiEvent, RpcErr> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct AssistantCounts {
     pub jobs: u64,
-    /// The "Notlar" count.
+    /// The "Notes" count.
     pub memory: u64,
-    /// The "Onay bekliyor" count (absent = 0, so an older bridge still works).
+    /// The "Waiting for approval" count (absent = 0, so an older bridge still works).
     pub approvals: u64,
 }
 
@@ -83,7 +83,7 @@ pub struct CalendarEntry {
     /// ISO start with an offset (absent for all-day rows and for an older bridge): the reminder counts down to it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub start: Option<String>,
-    /// "Katıl" target: https on an allowlisted meeting host only (`meeting_link`), absent otherwise.
+    /// "Join" target: https on an allowlisted meeting host only (`meeting_link`), absent otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub link: Option<String>,
 }
@@ -132,7 +132,7 @@ pub(super) struct AssistantState {
     counts: Option<AssistantCounts>,
     calendar: Option<CalendarNext>,
     bridge: Option<(BridgeState, u64)>,
-    /// `cc.sessions.set`: session id -> its process id, the only pids "Terminali aç" ever resolves.
+    /// `cc.sessions.set`: session id -> its process id, the only pids "Open terminal" ever resolves.
     sessions: Vec<(String, u32)>,
     offline: bool,
     /// `meeting.set`: the owner is in a meeting (the attention budget goes quiet).
@@ -152,7 +152,7 @@ fn count(p: &Value, k: &str) -> Result<u64, RpcErr> {
     p.get(k)
         .and_then(Value::as_u64)
         .map(|n| n.min(MAX_COUNT))
-        .ok_or_else(|| bad("jobs, memory ve approvals sayı olmalı"))
+        .ok_or_else(|| bad("jobs, memory and approvals must be numbers"))
 }
 
 impl Host {
@@ -185,7 +185,7 @@ impl Host {
                 for r in rows.iter().take(MAX_CALENDAR) {
                     let f = |k: &str, n: usize| r.get(k).and_then(|v| items::display(v, n));
                     let (Some(time), Some(title)) = (f("time", 16), f("title", 120)) else {
-                        return Err(bad("her satırda time ve title gerekli"));
+                        return Err(bad("every row needs time and title"));
                     };
                     let (start, link) = (r.get("start").and_then(iso_start), r.get("link").and_then(meeting_link));
                     next.push(CalendarEntry { time, title, source: f("source", 40).unwrap_or_default(), start, link });
@@ -194,7 +194,7 @@ impl Host {
                 s.calendar = Some(CalendarNext { detail, next });
             }
             "claude.bridge.set" => {
-                let b = |k: &str| p.get(k).and_then(Value::as_bool).ok_or_else(|| bad("installed ve healthy gerekli"));
+                let b = |k: &str| p.get(k).and_then(Value::as_bool).ok_or_else(|| bad("installed and healthy are required"));
                 let last = p.get("last_event_ago_s").and_then(Value::as_u64);
                 s.bridge = Some((
                     BridgeState { installed: b("installed")?, healthy: b("healthy")?, last_event_ago_s: last },
@@ -205,7 +205,7 @@ impl Host {
                 let rows =
                     p.get("sessions").and_then(Value::as_array).ok_or_else(|| bad("sessions listesi gerekli"))?;
                 if rows.len() > MAX_SESSIONS {
-                    return Err(bad("en çok 32 oturum"));
+                    return Err(bad("at most 32 sessions"));
                 }
                 let mut next = Vec::with_capacity(rows.len());
                 for r in rows {
@@ -213,7 +213,7 @@ impl Host {
                     let pid =
                         r.get("pid").and_then(Value::as_u64).and_then(|n| u32::try_from(n).ok()).filter(|n| *n > 4);
                     let (Some(id), Some(pid)) = (id, pid) else {
-                        return Err(bad("her oturumda id (harf, rakam, - _) ve pid (pozitif tam sayı) gerekli"));
+                        return Err(bad("every session needs id (letters, digits, - _) and pid (positive integer)"));
                     };
                     next.push((id.to_string(), pid));
                 }
@@ -245,7 +245,7 @@ impl Host {
                     Some(v) => Some(
                         v.as_f64()
                             .filter(|f| f.is_finite() && *f >= 0.0)
-                            .ok_or_else(|| bad("seconds: sıfır ya da pozitif sayı"))? as u64,
+                            .ok_or_else(|| bad("seconds: zero or a positive number"))? as u64,
                     ),
                 };
                 out.push(Out::Ui(UiEvent::JobDone { title, took, seconds }));
@@ -256,7 +256,7 @@ impl Host {
                 }
                 s.shelf_answer = Some(p.get("text").and_then(|v| items::display(v, 300)));
             }
-            _ => return Err(fail(code::NO_METHOD, "böyle bir yöntem yok")),
+            _ => return Err(fail(code::NO_METHOD, "no such method")),
         }
         Ok(json!({"ok": true}))
     }
@@ -291,13 +291,13 @@ impl Host {
         Some(if main_live { vec![] } else { vec![Out::Ui(ev)] })
     }
 
-    /// "Terminali aç": the pid the main assistant announced for `session` (Unknown = it never did).
+    /// "Open terminal": the pid the main assistant announced for `session` (Unknown = it never did).
     pub fn cc_session_pid(&self, session: &str) -> Result<u32, OwnerErr> {
         let s = self.assistant_of_main()?;
         s.sessions.iter().find(|(id, _)| id == session).map(|&(_, pid)| pid).ok_or(OwnerErr::Unknown)
     }
 
-    /// The status card's "Aç": `assistant.open {kind}` to the main assistant (it opens its own window).
+    /// The status card's "Open": `assistant.open {kind}` to the main assistant (it opens its own window).
     pub fn assistant_open(&self, kind: OpenKind) -> Result<Vec<Out>, OwnerErr> {
         let (_, conn) = self.main_ready().ok_or(OwnerErr::NoMain)?;
         Ok(vec![Out::Send(conn, notification("assistant.open", json!({ "kind": kind })))])
@@ -335,7 +335,7 @@ impl Host {
         (self.assistant.shelf_req == request).then(|| self.assistant.shelf_answer.clone()).flatten()
     }
 
-    /// "Notlara ekle" on the shelf card: the one file to the main assistant (one-shot, the owner's click).
+    /// "Add to Notes" on the shelf card: the one file to the main assistant (one-shot, the owner's click).
     pub fn shelf_memory(&self, path: &str) -> Result<Vec<Out>, OwnerErr> {
         let (_, conn) = self.main_ready().ok_or(OwnerErr::NoMain)?;
         Ok(vec![Out::Send(conn, notification("shelf.memory", json!({ "path": path })))])
@@ -359,7 +359,7 @@ impl Host {
         }
     }
 
-    /// A plugin became the ready main assistant: the first time ever, the "ilk bağlantı" card.
+    /// A plugin became the ready main assistant: the first time ever, the "first connection" card.
     pub(super) fn main_arrived(&mut self, out: &mut Vec<Out>) {
         if !self.reg.main_seen {
             self.reg.main_seen = true;

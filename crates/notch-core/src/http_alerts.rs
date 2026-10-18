@@ -2,7 +2,6 @@
 //! OFF by default; the owner switches it on in Notch's settings. Inside it is a plugin named "Betikler" with
 //! `alerts.post` only: priority 0-69, it can add, update and remove its OWN items and read them back, nothing else.
 //!
-//! Inspired by HeyyCzer/windows-dynamic-island (ideas only; no code copied).
 //!
 //! Routes and JSON keep the shape of that project's local API so its scripts work with one added header.
 //! The security floor:
@@ -149,7 +148,7 @@ impl Adapter {
     fn deny(&mut self, r: Response, why: &str, now: u64) -> (Response, bool) {
         if self.logged_at.is_none_or(|t| now.saturating_sub(t) > 60_000) {
             self.logged_at = Some(now);
-            eprintln!("[notch] uyarı kapısı bir isteği reddetti: {why}");
+            eprintln!("[notch] alert gate rejected a request: {why}");
         }
         (r, false)
     }
@@ -157,15 +156,15 @@ impl Adapter {
     /// One request -> (response, the list changed). `port` = the port actually bound; `key` = the install's key.
     pub fn handle(&mut self, req: &Request, port: u16, key: &str, list: &mut AlertList, now: u64) -> (Response, bool) {
         if let Some(wait) = self.limited(now) {
-            let r = Response { retry_after: Some(wait), ..Response::error(429, "çok fazla istek") };
-            return self.deny(r, "hız sınırı", now);
+            let r = Response { retry_after: Some(wait), ..Response::error(429, "too many requests") };
+            return self.deny(r, "rate limit", now);
         }
         let host = req.header("host").unwrap_or_default().to_ascii_lowercase();
         if host != format!("127.0.0.1:{port}") && host != format!("localhost:{port}") {
-            return self.deny(Response::error(403, "yalnız 127.0.0.1"), "Host", now);
+            return self.deny(Response::error(403, "127.0.0.1 only"), "Host", now);
         }
         if req.header("origin").is_some() {
-            return self.deny(Response::error(403, "tarayıcıdan istek kabul edilmez"), "Origin", now);
+            return self.deny(Response::error(403, "requests from a browser are not accepted"), "Origin", now);
         }
         let sent = req
             .header("x-notch-key")
@@ -196,24 +195,24 @@ impl Adapter {
                 if list.get(id).is_some_and(|a| a.source == SOURCE) && list.remove(id) {
                     (Response::new(200, json!({ "removed": id })), true)
                 } else {
-                    (Response::error(404, "yok"), false)
+                    (Response::error(404, "not found"), false)
                 }
             }
             ("POST", "/notify" | "/activity") => self.post(req, path == "/notify", list, now),
-            _ => (Response::error(404, "yok"), false),
+            _ => (Response::error(404, "not found"), false),
         }
     }
 
     fn post(&mut self, req: &Request, notify: bool, list: &mut AlertList, now: u64) -> (Response, bool) {
         let ctype = req.header("content-type").unwrap_or_default();
         if !ctype.split(';').next().unwrap_or_default().trim().eq_ignore_ascii_case("application/json") {
-            return (Response::error(415, "yalnız application/json"), false);
+            return (Response::error(415, "application/json only"), false);
         }
         if req.too_large || req.body.len() > MAX_BODY {
-            return (Response::error(413, "gövde en çok 4 KB"), false);
+            return (Response::error(413, "body is 4 KB at most"), false);
         }
         let Ok(body) = serde_json::from_slice::<Value>(&req.body) else {
-            return (Response::error(422, "geçersiz JSON"), false);
+            return (Response::error(422, "invalid JSON"), false);
         };
         let id = list.new_id();
         let (alert, ignored) = match parse(&body, notify, now, id) {
@@ -221,11 +220,11 @@ impl Adapter {
             Err(e) => return (Response::error(422, e.0), false),
         };
         if list.get(&alert.id).is_some_and(|a| a.source != SOURCE) {
-            return (Response::error(409, "bu kimlik Peeka'nın"), false);
+            return (Response::error(409, "this id belongs to Peeka"), false);
         }
         let id = alert.id.clone();
         if !list.put(alert, now) {
-            return (Response::error(409, "liste dolu (en çok 50)"), false);
+            return (Response::error(409, "list full (50 at most)"), false);
         }
         let mut out = json!({ "id": id });
         if !ignored.is_empty() {
@@ -281,8 +280,8 @@ pub fn read_request(stream: &mut impl Read) -> Result<Option<Request>, Response>
                 return Ok(Some(req));
             }
             Ok(httparse::Status::Partial) if buf.len() <= MAX_HEAD => {}
-            Ok(httparse::Status::Partial) => return Err(Response::error(431, "başlık çok büyük")),
-            Err(_) => return Err(Response::error(400, "geçersiz istek")),
+            Ok(httparse::Status::Partial) => return Err(Response::error(431, "header too large")),
+            Err(_) => return Err(Response::error(400, "invalid request")),
         }
     }
 }
@@ -385,7 +384,7 @@ mod tests {
     #[test]
     fn a_script_cannot_touch_or_read_notchs_own_alerts() {
         let (mut a, mut l) = (Adapter::default(), AlertList::default());
-        l.put_system(Alert::system("system.battery", "power", "Pil azaldı".into(), 80, 1_000, 60_000), 1_000);
+        l.put_system(Alert::system("system.battery", "power", "Battery low".into(), 80, 1_000, 60_000), 1_000);
         assert_eq!(run(&mut a, &mut l, &req("DELETE", "/activity/system.battery", "", &[])).0, 404);
         assert_eq!(
             run(&mut a, &mut l, &req("POST", "/activity", r#"{"id":"system.battery","title":"x"}"#, &[])).0,
@@ -393,7 +392,7 @@ mod tests {
         );
         let (_, status) = run(&mut a, &mut l, &req("GET", "/status", "", &[]));
         assert_eq!(status["activities"], json!([]));
-        assert_eq!(l.get("system.battery").unwrap().title, "Pil azaldı");
+        assert_eq!(l.get("system.battery").unwrap().title, "Battery low");
     }
 
     #[test]

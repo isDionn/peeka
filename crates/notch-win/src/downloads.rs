@@ -1,6 +1,6 @@
 // Peeka — original implementation (MIT).
 //! The Downloads folder (scenario 29): where it is (the known-folder API, so a moved or redirected folder works),
-//! a plain listing of its files (name and size only), and "Klasörde göster". What a listing means is
+//! a plain listing of its files (name and size only), and "Show in folder". What a listing means is
 //! `notch_core::downloads` (tested there). Nothing is read from inside a file.
 
 use std::path::{Path, PathBuf};
@@ -98,13 +98,13 @@ mod tests {
     fn a_listing_gives_plain_files_with_sizes_and_skips_folders() {
         let dir = std::env::temp_dir().join(format!("notch-dl-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(dir.join("alt")).unwrap();
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
         std::fs::write(dir.join("a.txt"), b"abc").unwrap();
         let mut got = list(&dir);
         got.sort();
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(got, vec![("a.txt".to_string(), 3)]);
-        assert!(list(&dir.join("yok")).is_empty());
+        assert!(list(&dir.join("missing")).is_empty());
     }
 
     /// Real machine, by hand: `cargo test -p notch-win --lib -- --ignored live_downloads`.

@@ -1,27 +1,27 @@
-// Kapsamların düzeyi ve sade Türkçe açıklaması Peeka'nın kendi tablosudur (eklenti yalnız `why` gönderir). Kaynak: eklenti-api.md §4.
+// Scope levels and plain-language descriptions are Peeka's own table (the plugin only sends `why`). Source: plugin-api.md §4.
 export type Level = "low" | "medium" | "high";
 export interface ScopeInfo { scope: string; level: Level; text: string }
 
 const TABLE: Record<string, [Level, string]> = {
-  "island.protrusion": ["low", "Adada durum ve çıkıntı göstermek"],
-  "card.module": ["low", "Modüller kartında en çok 3 sekme ve özet satırları göstermek"],
-  "alerts.post": ["low", "Kısa uyarı ve sürekli etkinlik göstermek"],
-  "notifications.post": ["low", "Bildirimler listesine kayıt eklemek"],
-  "search.provider": ["medium", "Ctrl+K aramasına sonuç vermek (yazdığın sorguyu görür)"],
-  "composer.handler": ["medium", "Ctrl+Space sorularını almak"],
-  "voice.line": ["medium", "Şeridin altındaki ses çizgisini ve canlı dökümü yönetmek"],
-  "approvals.prompt": ["medium", "Onay sormak"],
-  "files.drop": ["medium", "Adaya bıraktığın dosyaların yollarını almak"],
-  "lock.signal": ["medium", "Peeka'yı kilitlemek"],
-  "media.read": ["medium", "Çalan parçanın adını ve sanatçısını okumak"],
-  "windows.read": ["high", "Açık pencerelerin adlarını görmek"],
-  "clipboard.read": ["high", "Pano geçmişini okumak (parolalar hiçbir koşulda verilmez)"],
-  "notifications.read": ["high", "Windows bildirimlerini okumak"],
+  "island.protrusion": ["low", "Show status and peeks on the island"],
+  "card.module": ["low", "Show up to 3 tabs and summary rows on the Modules card"],
+  "alerts.post": ["low", "Show short alerts and ongoing activity"],
+  "notifications.post": ["low", "Add entries to the Notifications list"],
+  "search.provider": ["medium", "Provide Ctrl+K search results (sees what you type)"],
+  "composer.handler": ["medium", "Receive Ctrl+Space questions"],
+  "voice.line": ["medium", "Control the voice line and live transcript under the strip"],
+  "approvals.prompt": ["medium", "Ask for approval"],
+  "files.drop": ["medium", "Get the paths of files you drop on the island"],
+  "lock.signal": ["medium", "Lock Peeka"],
+  "media.read": ["medium", "Read the title and artist of what's playing"],
+  "windows.read": ["high", "See the names of open windows"],
+  "clipboard.read": ["high", "Read clipboard history (passwords are never shared)"],
+  "notifications.read": ["high", "Read Windows notifications"],
 };
 
-/** Bilinmeyen kapsam yüksek sayılır (işaretsiz gelir); Rust zaten bilinmeyeni reddeder. */
+/** An unknown scope counts as high (arrives unchecked); Rust rejects unknown ones anyway. */
 export const scopeInfo = (scope: string): ScopeInfo => {
-  const [level, text] = TABLE[scope] ?? ["high", "Bilinmeyen izin"];
+  const [level, text] = TABLE[scope] ?? ["high", "Unknown permission"];
   return { scope, level, text };
 };
-export const LEVEL_NAME: Record<Level, string> = { low: "düşük", medium: "orta", high: "yüksek" };
+export const LEVEL_NAME: Record<Level, string> = { low: "low", medium: "medium", high: "high" };

@@ -1,11 +1,11 @@
-//! Peeka'nın görev çubuğu kodundan deneme aracına kopyalandı.
-//! Aynen gelenler: `Shell` trait'i ve sahte uygulaması, `Marker` + `write_marker` / `read_marker`, `enable` / `restore` /
-//! `rehide`, `wait_for_exit` / `no_such_process`, `Win32Shell`, bekçinin `CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB`
-//! bayrakları (win.rs `spawn_guard`). Tek fark: `Win32Shell::tray()` bu sürecin kendi `Shell_TrayWnd` penceresini
-//! (tepsi aynası) atlar. Testler de aynen geldi (ayara bağlı olanlar hariç). Uygulamaya özgü olanlar (ayarlar, Tauri, acil kısayol kaydı, işçi döngüsü, `keep_guard`)
-//! alınmadı: deneme aracı tek atımlıktır, ayarı yoktur, bekçiyi bir kez başlatır.
+//! Copied from Peeka's taskbar code into the trial tool.
+//! Copied as they are: the `Shell` trait and its fake, `Marker` + `write_marker` / `read_marker`, `enable` / `restore` /
+//! `rehide`, `wait_for_exit` / `no_such_process`, `Win32Shell`, the guard's `CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB`
+//! flags (win.rs `spawn_guard`). The only difference: `Win32Shell::tray()` skips this process's own `Shell_TrayWnd` window
+//! (the tray mirror). The tests were copied too (except those that depend on settings). App-specific parts (settings, Tauri, emergency shortcut registration, worker loop, `keep_guard`)
+//! were not taken: the trial tool is one-shot, has no settings and starts the guard once.
 //!
-//! "tamamen" gizleme: auto-hide AND `SW_HIDE` on `Shell_TrayWnd` and every `Shell_SecondaryTrayWnd`. Auto-hide underneath
+//! "Complete" hiding: auto-hide AND `SW_HIDE` on `Shell_TrayWnd` and every `Shell_SecondaryTrayWnd`. Auto-hide underneath
 //! is what frees the work area, so nothing touches `SPI_SETWORKAREA` for this. The marker is written BEFORE the change,
 //! `hidden: true` before any bar is hidden.
 
@@ -36,7 +36,7 @@ pub struct Marker {
 }
 
 pub fn write_marker(marker: &Path, m: &Marker) -> Result<(), String> {
-    let dir = marker.parent().ok_or("İşaret klasörü yok")?;
+    let dir = marker.parent().ok_or("No marker folder")?;
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     std::fs::write(marker, serde_json::to_vec(m).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
@@ -49,7 +49,7 @@ pub fn read_marker(marker: &Path) -> Option<Marker> {
 /// from before the probe, and the current state may be the probe's own auto-hide. `full` marks it `hidden` first.
 /// A marker that vanished meanwhile is written again at the end.
 pub fn enable(shell: &dyn Shell, marker: &Path, full: bool) -> Result<(), String> {
-    let now = shell.state().ok_or("Görev çubuğu bulunamadı")?;
+    let now = shell.state().ok_or("Taskbar not found")?;
     let (m, fresh) = match read_marker(marker) {
         Some(m) if m.hidden || !full => (m, false),
         Some(m) => (Marker { prev: m.prev, hidden: true }, true),
@@ -60,10 +60,10 @@ pub fn enable(shell: &dyn Shell, marker: &Path, full: bool) -> Result<(), String
         write_marker(marker, &m)?;
     }
     if now & ABS_AUTOHIDE == 0 && !shell.set_state(now | ABS_AUTOHIDE) {
-        return Err("Görev çubuğu otomatik gizlenemedi".into());
+        return Err("Could not auto-hide the taskbar".into());
     }
     if full && !shell.show_bars(false) {
-        return Err("Görev çubuğu gizlenemedi".into());
+        return Err("Could not hide the taskbar".into());
     }
     if !marker.exists() {
         write_marker(marker, &m)?;
@@ -94,7 +94,7 @@ pub fn restore(shell: &dyn Shell, marker: &Path) -> bool {
     true
 }
 
-/// "tamamen" check: a bar that came back (Explorer restart, new monitor) is hidden again with auto-hide re-applied.
+/// "complete" check: a bar that came back (Explorer restart, new monitor) is hidden again with auto-hide re-applied.
 pub fn rehide(shell: &dyn Shell, marker: &Path) -> Result<(), String> {
     match shell.bars_visible() {
         Some(visible) if visible || !marker.exists() => enable(shell, marker, true),
@@ -311,7 +311,7 @@ pub(crate) mod tests {
         enable(&shell, &marker, false).unwrap();
         assert_eq!(shell.marker_seen_at_set.get(), Some(true), "crash safety: the marker comes first");
         assert_eq!(shell.state.get(), ON_TOP | ABS_AUTOHIDE);
-        assert!(shell.shown.get(), "otomatik never hides a bar");
+        assert!(shell.shown.get(), "auto mode never hides a bar");
         assert!(restore(&shell, &marker));
         assert_eq!(shell.state.get(), ON_TOP, "the state from before the probe, other bits kept");
         assert!(!marker.exists());
@@ -333,7 +333,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn otomatik_then_tamamen_keeps_the_first_state_and_upgrades_the_marker() {
+    fn auto_then_full_keeps_the_first_state_and_upgrades_the_marker() {
         let tmp = Tmp::new();
         let marker = marker_path(tmp.path());
         let shell = FakeShell::new(ON_TOP, &marker);

@@ -1,8 +1,8 @@
 import type { Rect } from "../bridge";
 
-/** Sayfadaki `[data-hit]` öğelerinin dikdörtgenleri (CSS piksel). Boş ve görünmez olanlar atlanır. */
+/** Rectangles of the page's `[data-hit]` elements (CSS pixels). Empty and invisible ones are skipped. */
 const providers = new Set<() => { x: number; y: number; width: number; height: number } | null>();
-/** Kutusunun dışına taşan öğenin (şerit maskotunun gövdesi) tıklanabilir dikdörtgeni; dönen işlev kaydı siler. */
+/** Clickable rectangle of an element that overflows its box (the strip mascot's body); the returned function unregisters it. */
 export function addHitProvider(f: () => { x: number; y: number; width: number; height: number } | null) { providers.add(f); return () => { providers.delete(f); }; }
 
 export function collectHitRects(root: ParentNode = document): Rect[] {

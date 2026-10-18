@@ -1,5 +1,5 @@
 // Peeka — original implementation (MIT).
-//! Claude Code without a main assistant (`docs/eklenti-api.md` "Claude Code"): Peeka's own hook. `peeka.exe --cc-hook` gets
+//! Claude Code without a main assistant (`docs/plugin-api.md` "Claude Code"): Peeka's own hook. `peeka.exe --cc-hook` gets
 //! the hook's JSON on stdin and passes on only `{kind, tool, reason, sid}` ([`hook_params`]); the receiver checks it again
 //! with the same rules as `cc.event`. [`install`] / [`uninstall`] add or remove exactly Peeka's entries in Claude
 //! Code's `settings.json`; the owner's other hooks stay. Pure apart from the one file it is given.
@@ -132,14 +132,14 @@ fn strip(list: &mut Vec<Value>) -> bool {
 /// `hooks`, checked: an object whose twelve event entries are lists. Anything else is the owner's: refused, not
 /// replaced.
 fn hooks_of(doc: &mut Value) -> Result<&mut Map<String, Value>, String> {
-    let obj = doc.as_object_mut().ok_or("Claude Code ayar dosyası beklenen biçimde değil; dokunmuyorum.")?;
+    let obj = doc.as_object_mut().ok_or("The Claude Code settings file is not in the expected format; leaving it alone.")?;
     let hooks = obj
         .entry("hooks")
         .or_insert_with(|| json!({}))
         .as_object_mut()
-        .ok_or("Claude Code ayar dosyasında \"hooks\" beklenmeyen türde; dokunmuyorum.")?;
+        .ok_or("The Claude Code settings file has \"hooks\" of an unexpected type; leaving it alone.")?;
     if let Some((ev, _)) = EVENTS.iter().find(|(ev, _)| hooks.get(*ev).is_some_and(|v| !v.is_array())) {
-        return Err(format!("Claude Code ayar dosyasında \"hooks.{ev}\" beklenmeyen türde; dokunmuyorum."));
+        return Err(format!("The Claude Code settings file has \"hooks.{ev}\" of an unexpected type; leaving it alone."));
     }
     Ok(hooks)
 }
@@ -195,9 +195,9 @@ fn read(path: &Path) -> Result<Option<Value>, String> {
     match std::fs::read(path) {
         Ok(b) => serde_json::from_slice(&b)
             .map(Some)
-            .map_err(|_| "Claude Code ayar dosyası okunamadı; elle düzeltmeden dokunmuyorum.".into()),
+            .map_err(|_| "The Claude Code settings file could not be read; leaving it alone until you fix it by hand.".into()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(_) => Err("Claude Code ayar dosyası açılamadı; dokunmuyorum.".into()),
+        Err(_) => Err("The Claude Code settings file could not be opened; leaving it alone.".into()),
     }
 }
 
@@ -210,7 +210,7 @@ fn edit(path: &Path, f: impl FnOnce(&mut Value) -> Result<(), String>) -> Result
     if Some(&doc) == old.as_ref() || (!existed && doc == json!({})) {
         return Ok(());
     }
-    let fail = |_| "Claude Code ayar dosyası yazılamadı.".to_string();
+    let fail = |_| "The Claude Code settings file could not be written.".to_string();
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(fail)?;
     }
@@ -218,17 +218,17 @@ fn edit(path: &Path, f: impl FnOnce(&mut Value) -> Result<(), String>) -> Result
         std::fs::copy(path, path.with_extension("json.bak-peeka")).map_err(fail)?;
     }
     let tmp = path.with_extension("json.tmp-peeka");
-    let bytes = serde_json::to_vec_pretty(&doc).map_err(|_| "Claude Code ayar dosyası yazılamadı.".to_string())?;
+    let bytes = serde_json::to_vec_pretty(&doc).map_err(|_| "The Claude Code settings file could not be written.".to_string())?;
     std::fs::write(&tmp, bytes).map_err(fail)?;
     std::fs::rename(&tmp, path).map_err(fail)
 }
 
-/// Settings › "Kur": Peeka's hooks into `path` (Claude Code's `settings.json`), pointing at `exe`.
+/// Settings › "Install": Peeka's hooks into `path` (Claude Code's `settings.json`), pointing at `exe`.
 pub fn install(path: &Path, exe: &str) -> Result<(), String> {
     edit(path, |d| merge(d, exe))
 }
 
-/// "Kaldır".
+/// "Remove".
 pub fn uninstall(path: &Path) -> Result<(), String> {
     edit(path, remove)
 }
@@ -248,17 +248,17 @@ mod tests {
     #[test]
     fn the_sanitizer_passes_only_names() {
         let raw = json!({
-            "hook_event_name": "PreToolUse", "session_id": "raw-session-7f3a", "cwd": r"C:\work\gizli-proje",
+            "hook_event_name": "PreToolUse", "session_id": "raw-session-7f3a", "cwd": r"C:\work\hidden-project",
             "tool_name": "Bash", "tool_input": {"command": "rm -rf C:\\secret", "file_path": "C:\\a\\b.txt"},
-            "prompt": "şifrem hunter22", "tool_response": "çıktı", "transcript_path": "C:\\t.jsonl",
+            "prompt": "my password hunter22", "tool_response": "output", "transcript_path": "C:\\t.jsonl",
         });
         let p = hook_params(&raw, None).unwrap();
         assert_eq!(p, json!({"kind": "pre_tool", "tool": "Bash", "reason": null, "sid": null}), "no salt, no sid");
         let s = p.to_string();
-        for leak in ["rm -rf", "secret", "b.txt", "hunter22", "çıktı", "gizli", "jsonl", "raw-session"] {
+        for leak in ["rm -rf", "secret", "b.txt", "hunter22", "output", "hidden", "jsonl", "raw-session"] {
             assert!(!s.contains(leak), "{leak}");
         }
-        for bad in [r"C:\Windows\cmd.exe", "/usr/bin/bash", "rm -rf /", "Bash; echo x", &"a".repeat(65), "", "şifre"] {
+        for bad in [r"C:\Windows\cmd.exe", "/usr/bin/bash", "rm -rf /", "Bash; echo x", &"a".repeat(65), "", "sécret"] {
             let p = hook_params(&json!({"hook_event_name": "PreToolUse", "tool_name": bad}), None).unwrap();
             assert_eq!(p["tool"], Value::Null, "{bad}");
         }
@@ -306,11 +306,11 @@ mod tests {
 
     #[test]
     fn the_raw_session_id_never_leaves_the_hook() {
-        let raw = json!({"hook_event_name": "Stop", "session_id": "9c1d2e3f-raw-id", "cwd": r"C:\work\gizli"});
+        let raw = json!({"hook_event_name": "Stop", "session_id": "9c1d2e3f-raw-id", "cwd": r"C:\work\hidden"});
         let p = hook_params(&raw, Some(&[7; 32])).unwrap();
         assert_eq!(p["sid"], json!(session_tag(&[7; 32], "9c1d2e3f-raw-id")));
         let s = p.to_string();
-        assert!(!s.contains("9c1d2e3f") && !s.contains("raw-id") && !s.contains("gizli"), "{s}");
+        assert!(!s.contains("9c1d2e3f") && !s.contains("raw-id") && !s.contains("hidden"), "{s}");
         for bad in [json!(5), json!(""), json!("x".repeat(300))] {
             let q = hook_params(&json!({"hook_event_name": "Stop", "session_id": bad}), Some(&[7; 32])).unwrap();
             assert_eq!(q["sid"], Value::Null);
@@ -347,7 +347,7 @@ mod tests {
     fn a_pre_rename_notch_exe_hook_is_offered_and_replaced() {
         let mut d = owner_doc();
         merge(&mut d, r"C:\Program Files\Peeka\notch.exe").unwrap();
-        assert_eq!(status(&d, EXE), (true, false), "old notch.exe entries: Yeniden kur");
+        assert_eq!(status(&d, EXE), (true, false), "old notch.exe entries: Reinstall");
         merge(&mut d, EXE).unwrap();
         assert_eq!(status(&d, EXE), (true, true));
         assert_eq!(d["hooks"]["PreToolUse"].as_array().unwrap().len(), 3, "replaced, not added beside it");
@@ -359,7 +359,7 @@ mod tests {
         merge(&mut d, EXE).unwrap();
         let once = d.clone();
         merge(&mut d, EXE).unwrap();
-        assert_eq!(d, once, "a second Kur changes nothing");
+        assert_eq!(d, once, "a second Install changes nothing");
         assert_eq!(status(&d, EXE), (true, true));
         assert_eq!(status(&d, r"C:\new\peeka.exe"), (true, false), "moved: points at the old exe");
         let pre = d["hooks"]["PreToolUse"].as_array().unwrap();
@@ -382,7 +382,7 @@ mod tests {
         assert_eq!(d["hooks"]["PreToolUse"].as_array().unwrap().len(), 3, "an older entry of ours is replaced");
 
         remove(&mut d).unwrap();
-        assert_eq!(d, owner_doc(), "Kaldır leaves exactly the owner's file");
+        assert_eq!(d, owner_doc(), "Remove leaves exactly the owner's file");
         assert_eq!(status(&d, EXE), (false, false));
         remove(&mut d).unwrap();
         assert_eq!(d, owner_doc());

@@ -3,7 +3,6 @@
 //! `MediaPropertiesChanged` / `PlaybackInfoChanged` / `TimelinePropertiesChanged` re-read it. No polling: the page
 //! projects the position forward itself from `positionMs` + `positionAt`.
 //!
-//! Inspired by HeyyCzer/windows-dynamic-island (ideas only; no code copied).
 
 #[cfg(windows)]
 use notch_core::media::{self, Media, MediaAction};
@@ -157,7 +156,7 @@ pub fn watch(sink: impl Fn(Option<Media>) + Send + 'static) {
     std::thread::spawn(move || {
         crate::com();
         let Ok(manager) = Manager::RequestAsync().and_then(|op| op.get()) else {
-            eprintln!("[notch] SMTC yok: müzik gösterilmeyecek");
+            eprintln!("[notch] no SMTC: music will not be shown");
             return;
         };
         let (tx, rx) = std::sync::mpsc::channel::<Msg>();

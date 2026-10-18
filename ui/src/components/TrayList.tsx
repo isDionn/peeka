@@ -2,27 +2,27 @@ import { useEffect, useRef, useState } from "react";
 import { bridge, type TrayIconX } from "../bridge";
 import { initial } from "../lib/plugin";
 import { AppIcon, SAFE_ICON } from "./common";
-import "../fidelity-ayar.css";
+import "../fidelity-settings.css";
 
-/** Rust `tray_icons`: `open_tray` + renkli simge. Rozet sayısı gelmez; `badge` yoksa rozet çizilmez. */
+/** Rust `tray_icons`: `open_tray` + color icon. No badge count arrives; without `badge` no badge is drawn. */
 const loadTray = (monitor: string): Promise<TrayIconX[]> => bridge.call("tray_icons", { monitor });
 const open = (t: TrayIconX, then?: () => void) => bridge.call("tray_open", { id: t.id }).then(then).catch(() => undefined);
-const label = (t: TrayIconX) => t.name + (t.badge ? `, ${t.badge} yeni` : "");
+const label = (t: TrayIconX) => t.name + (t.badge ? `, ${t.badge} new` : "");
 
-/** Şerit simgesi 17, gizli simgeler ızgarası (liste rolü) 18: notch.css uygulama simgesi merdiveni. */
+/** Strip icon 17, hidden-icons grid (list role) 18: the notch.css app icon scale. */
 function TrayIconView({ t, size }: { t: TrayIconX; size: number }) {
   return (
     <>
       {SAFE_ICON.test(t.icon) ? <AppIcon src={t.icon} color={t.colorIcon} size={size} /> : <b aria-hidden="true">{initial(t.name)}</b>}
-      {!!t.badge && <span className="rozet" aria-hidden="true">{t.badge > 99 ? "99+" : t.badge}</span>}
+      {!!t.badge && <span className="badge" aria-hidden="true">{t.badge > 99 ? "99+" : t.badge}</span>}
     </>
   );
 }
 
 /**
- * Şerit okunun altındaki gizli simgeler (maket y1): 4 sütunlu küçük ızgara, ad üstüne gelince ipucu, rozet kırmızı. Dalga 0 test 4 yedeği:
- * Rust salt okunur `NotifyIconSettings` listesini verir; tıklama `tray_open` (pencere öne gelir ya da uygulama başlar).
- * Panel genişliği ~188 px olmalı (Shell `<Panel width>`), 300 px'te ızgara solda kalır.
+ * Hidden icons under the strip arrow (mockup y1): small 4-column grid, name as a tooltip on hover, red badge. Wave 0 test 4 fallback:
+ * Rust gives the read-only `NotifyIconSettings` list; clicking calls `tray_open` (the window comes forward or the app starts).
+ * Panel width should be ~188 px (Shell `<Panel width>`); at 300 px the grid sits to the left.
  */
 export function TrayList({ monitor, onClose }: { monitor: string; onClose: () => void }) {
   const [list, setList] = useState<TrayIconX[] | null>(null);
@@ -32,14 +32,14 @@ export function TrayList({ monitor, onClose }: { monitor: string; onClose: () =>
     return () => { live = false; };
   }, [monitor]);
   const grid = useRef<HTMLDivElement>(null);
-  // simgeler asenkron gelir: panel açılırken odak alacak denetim yoktu, liste gelince ilk simgeye (ya da ızgaraya) odak verilir (F-09)
+  // icons arrive async: nothing could take focus when the panel opened, so focus goes to the first icon (or the grid) once the list arrives (F-09)
   useEffect(() => { if (list?.length) grid.current?.querySelector<HTMLElement>("button")?.focus(); }, [list]);
   return (
-    <div className="govde tepsi tepsiIzgara">
-      <div className="trayBas t12 b6">Gizli simgeler</div>
-      {list && list.length === 0 && <div className="bosSonuc">Simge yok</div>}
+    <div className="body tray trayGrid">
+      <div className="trayHead t12 b6">Hidden icons</div>
+      {list && list.length === 0 && <div className="noResults">No icons</div>}
       {list && list.length > 0 && (
-        <div className="trayIzgara" role="group" aria-label="Gizli simgeler" ref={grid}>
+        <div className="trayIconGrid" role="group" aria-label="Hidden icons" ref={grid}>
           {list.map((t, i) => (
             <button key={t.id} title={t.name} aria-label={label(t)} data-autofocus={i === 0 ? "" : undefined} onClick={() => open(t, onClose)}><TrayIconView t={t} size={18} /></button>
           ))}
@@ -49,20 +49,20 @@ export function TrayList({ monitor, onClose }: { monitor: string; onClose: () =>
   );
 }
 
-/** Şeridin sağ kümesinde, okun solunda "Hep görünür" işaretli tepsi simgeleri (maket y2). Şerit bunu `<PromotedTray monitor={monitor.id} />` ile çizer. */
+/** Tray icons marked "Always show", in the strip's right group left of the arrow (mockup y2). The strip draws this with `<PromotedTray monitor={monitor.id} />`. */
 export function PromotedTray({ monitor }: { monitor: string }) {
   const [list, setList] = useState<TrayIconX[]>([]);
   useEffect(() => {
     let live = true;
     const load = () => loadTray(monitor).then((l) => { if (live) setList(l.filter((t) => t.promoted)); }).catch(() => undefined);
     load();
-    window.addEventListener("focus", load); // rozetler Rust'tan olay almıyor: pencere odağa gelince yenilenir
+    window.addEventListener("focus", load); // badges get no events from Rust: refresh when the window gains focus
     return () => { live = false; window.removeEventListener("focus", load); };
   }, [monitor]);
   if (!list.length) return null;
   return (
-    <span className="favTray" role="group" aria-label="Sık tepsi simgeleri">
-      {list.map((t) => <button key={t.id} className="tus" title={t.name} aria-label={label(t)} onClick={() => open(t)}><TrayIconView t={t} size={17} /></button>)}
+    <span className="favTray" role="group" aria-label="Pinned tray icons">
+      {list.map((t) => <button key={t.id} className="key" title={t.name} aria-label={label(t)} onClick={() => open(t)}><TrayIconView t={t} size={17} /></button>)}
     </span>
   );
 }

@@ -4,7 +4,7 @@ Add-Type -AssemblyName System.Windows.Forms
 $f = New-Object System.Windows.Forms.Form
 $f.Text = 'VMTEST'
 $tb = New-Object System.Windows.Forms.TextBox
-$tb.Multiline = $true; $tb.Dock = 'Fill'; $tb.Text = 'deneme'
+$tb.Multiline = $true; $tb.Dock = 'Fill'; $tb.Text = 'trial'
 $tb.Add_MouseDown({ param($s, $e) "$([DateTime]::Now.ToString('HH:mm:ss.fff')) $($e.X),$($e.Y)" | Add-Content 'C:\out\testwin-clicks.txt' })
 $f.Controls.Add($tb)
 $f.WindowState = 'Maximized'

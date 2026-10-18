@@ -27,185 +27,185 @@ afterEach(() => {
   if (saved.h) Object.defineProperty(proto, "offsetHeight", saved.h); else Reflect.deleteProperty(proto, "offsetHeight");
   if (saved.w) Object.defineProperty(proto, "offsetWidth", saved.w); else Reflect.deleteProperty(proto, "offsetWidth");
 });
-// sahte zamanlayıcı: bekleme gerçek saate bağlı değil, yük altında da aynı sonucu verir
+// fake timers: waiting does not depend on the real clock, same result under load
 const settle = (ms = 120) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 const disconnected = () => fakeBridge.setPlugins(PLUGINS.map((p) => (p.main ? { ...p, connected: false } : p)));
 
-describe("Pusula çizgisi kuralları", () => {
-  it("onayda turuncu bekle, dikteyle nane dinle, Pusula yokken ya da gizliyken çizgi yok, geri kalanı soluk gri", () => {
-    const base = { asistanUp: true, hidden: false };
-    expect(lineOf({ ...base, kind: "approval" })).toEqual({ color: AMBER, mod: "bekle" });
-    expect(lineOf({ ...base, kind: "approval-card" }).mod).toBe("bekle");
-    expect(lineOf({ ...base, kind: "plugin", mascot: "dinliyor" })).toEqual({ color: MINT, mod: "dinle" });
-    expect(lineOf({ ...base, kind: "plugin", mascot: "dusunuyor" })).toEqual({ color: AMBER, mod: "bekle" });
-    expect(lineOf({ ...base, kind: "plugin", mascot: "konusuyor" })).toEqual({ color: "#F2555A", mod: "konus" });
-    expect(lineOf({ ...base, kind: "plugin" }).mod).toBe("bos");
-    expect(lineOf({ ...base, kind: "rest" }).mod).toBe("bos");
-    expect(lineOf({ ...base, kind: "rest", asistanUp: false }).mod).toBe("yok");
-    expect(lineOf({ ...base, kind: "rest", hidden: true }).mod).toBe("yok");
-    expect(lineOf({ ...base, kind: "asistanyok" }).mod).toBe("yok");
-    expect(lineOf({ ...base, kind: "ilk" }).mod).toBe("yok");
+describe("Compass line rules", () => {
+  it("orange wait on approval, mint listen on dictation, no line without Compass or while hidden, the rest faded gray", () => {
+    const base = { assistantUp: true, hidden: false };
+    expect(lineOf({ ...base, kind: "approval" })).toEqual({ color: AMBER, mod: "wait" });
+    expect(lineOf({ ...base, kind: "approval-card" }).mod).toBe("wait");
+    expect(lineOf({ ...base, kind: "plugin", mascot: "listening" })).toEqual({ color: MINT, mod: "listen" });
+    expect(lineOf({ ...base, kind: "plugin", mascot: "thinking" })).toEqual({ color: AMBER, mod: "wait" });
+    expect(lineOf({ ...base, kind: "plugin", mascot: "speaking" })).toEqual({ color: "#F2555A", mod: "speak" });
+    expect(lineOf({ ...base, kind: "plugin" }).mod).toBe("idle");
+    expect(lineOf({ ...base, kind: "rest" }).mod).toBe("idle");
+    expect(lineOf({ ...base, kind: "rest", assistantUp: false }).mod).toBe("off");
+    expect(lineOf({ ...base, kind: "rest", hidden: true }).mod).toBe("off");
+    expect(lineOf({ ...base, kind: "noassistant" }).mod).toBe("off");
+    expect(lineOf({ ...base, kind: "welcome" }).mod).toBe("off");
   });
-  it("CSS değişkenleri maketteki sayılar", () => {
-    expect(lineVars({ color: MINT, mod: "dinle" })).toMatchObject({ "--sh": .55, "--gl": .45, "--co": 1 });
-    expect(lineVars({ color: "#8E8E93", mod: "bos" })).toMatchObject({ "--sh": .22, "--co": .32 });
-    expect(lineVars({ color: "#8E8E93", mod: "yok" })).toMatchObject({ "--co": 0 });
+  it("CSS variables are the mockup's numbers", () => {
+    expect(lineVars({ color: MINT, mod: "listen" })).toMatchObject({ "--sh": .55, "--gl": .45, "--co": 1 });
+    expect(lineVars({ color: "#8E8E93", mod: "idle" })).toMatchObject({ "--sh": .22, "--co": .32 });
+    expect(lineVars({ color: "#8E8E93", mod: "off" })).toMatchObject({ "--co": 0 });
   });
-  it("ada durumu duyurunca şerit çizgisi renk ve kipi alır", async () => {
+  it("when the island announces a state the strip line takes color and mode", async () => {
     render(<StripLine />);
-    announceLine({ color: AMBER, mod: "bekle", gap: 0 });
+    announceLine({ color: AMBER, mod: "wait", gap: 0 });
     await settle(200);
-    const el = document.getElementById("cizgi")!;
-    expect(el.dataset.mod).toBe("bekle");
+    const el = document.getElementById("line")!;
+    expect(el.dataset.mode).toBe("wait");
     expect(el.style.getPropertyValue("--lc")).toBe(AMBER);
   });
 });
 
-describe("ada: yeni halleri", () => {
-  it("dnd: sessiz maskot, Rahatsız etme, onay sayısı, bitiş saati", async () => {
+describe("island: new states", () => {
+  it("dnd: quiet mascot, Do not disturb, approval count, end time", async () => {
     fakeBridge.setSurfaces({ approvals: [APPROVAL_LOW], approvalTop: null });
-    fakeBridge.setStatus({ dnd: true, dndUntil: "18:00'e kadar" });
+    fakeBridge.setStatus({ dnd: true, dndUntil: "until 6:00 PM" });
     render(<Island monitor="m1" init={{ view: null }} />);
     await settle();
-    expect(screen.getByText("Rahatsız etme")).toBeTruthy();
-    expect(screen.getByText("1 onay")).toBeTruthy();
-    expect(screen.getByText("18:00'e kadar")).toBeTruthy();
+    expect(screen.getByText("Do not disturb")).toBeTruthy();
+    expect(screen.getByText("1 approval")).toBeTruthy();
+    expect(screen.getByText("until 6:00 PM")).toBeTruthy();
   });
-  it("çevrimdışı: uyku maskotu ve Çevrimdışı; olayla da açılır", async () => {
+  it("offline: sleeping mascot and Offline; also opens via the event", async () => {
     render(<Island monitor="m1" init={{ view: null }} />);
     await settle();
-    expect(screen.queryByText("Çevrimdışı")).toBeNull();
+    expect(screen.queryByText("Offline")).toBeNull();
     await act(async () => { fakeBridge.emit("assistant_offline", true); });
     await settle();
-    expect(screen.getByText("Çevrimdışı")).toBeTruthy();
+    expect(screen.getByText("Offline")).toBeTruthy();
   });
-  it("ses kapalı: ortada Ses kapalı, çıkıntıda Kapalı", async () => {
+  it("muted: Muted in the center, Off in the peek", async () => {
     render(<Island monitor="m1" init={{ view: null, pin: true, osd: { percent: 0, muted: true, device: null } }} />);
     await settle();
-    expect(screen.getAllByText("Ses kapalı").length).toBeGreaterThan(0);
-    expect(screen.getByText("Kapalı")).toBeTruthy();
+    expect(screen.getAllByText("Muted").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Muted").length).toBeGreaterThan(1);
   });
-  it("ada gizlenince ortada yalnız göz simgesi; ortaya tıklamak geri getirir", async () => {
+  it("when the island is hidden only an eye icon shows in the center; clicking the center brings it back", async () => {
     render(<Island monitor="m1" init={{ view: null }} />);
     await settle();
     await act(async () => { await fakeBridge.call("island_hide", { on: true }); });
     await settle(400);
-    const c = screen.getByRole("button", { name: /Ada gizli: Ctrl\+Shift\+A ile geri getir/ });
-    expect(screen.queryByText("Pusula hazır")).toBeNull();
+    const c = screen.getByRole("button", { name: /Island hidden\. Press Ctrl\+Shift\+A to show it/ });
+    expect(screen.queryByText("Compass ready")).toBeNull();
     fireEvent.click(c);
     await settle();
-    expect(screen.getByText("Pusula hazır")).toBeTruthy();
+    expect(screen.getByText("Compass ready")).toBeTruthy();
   });
-  it("iş bitti: şeritte başlık ve süre, saatte en çok 3", async () => {
+  it("task done: title and duration on the strip, at most 3 in the clock", async () => {
     render(<Island monitor="m1" init={{ view: null, pin: true }} />);
     await settle();
-    for (const t of ["bir", "iki", "uc", "dort"]) await act(async () => { fakeBridge.emit("job_done", { title: t, took: "4 dk sürdü" }); });
+    for (const t of ["bir", "iki", "uc", "dort"]) await act(async () => { fakeBridge.emit("job_done", { title: t, took: "Took 4 min" }); });
     await settle();
     expect(screen.getByText("uc")).toBeTruthy();
     expect(screen.queryByText("dort")).toBeNull();
-    expect(screen.getByText("4 dk sürdü")).toBeTruthy();
+    expect(screen.getByText("Took 4 min")).toBeTruthy();
   });
-  it("bütçe %80: yorgun maskot, Ayrıntı Sistem kartını açar; Sonra yok", async () => {
-    fakeBridge.pushAlert({ id: "q1", title: "Günlük bütçe %80", subtitle: "Otomatik işler durdu, senin isteklerin sürer", icon: "yorgun", progress: 0.8, priority: 70 });
+  it("budget 80%: tired mascot, Details opens the System card; no Later", async () => {
+    fakeBridge.pushAlert({ id: "q1", title: "Daily budget at 80%", subtitle: "Automatic jobs paused, your requests still run", icon: "tired", progress: 0.8, priority: 70 });
     render(<Island monitor="m1" init={{ view: null }} />);
     await settle();
-    expect(screen.getAllByText("Günlük bütçe %80").length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: "Sonra" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Ayrıntı" }));
+    expect(screen.getAllByText("Daily budget at 80%").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Later" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Details" }));
     await settle();
-    expect(screen.getByRole("dialog", { name: /^Modüller/ })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: /^Modules/ })).toBeTruthy();
   });
-  it("uyarı u: birincil düğme Görev Yöneticisi eylemiyle, yanında Sonra", async () => {
-    fakeBridge.pushAlert({ id: "cpu", title: "Chrome işlemciyi zorluyor", subtitle: "30 sn'dir %100", icon: "dikkat", action: "task_manager", priority: 70 });
+  it("alert u: primary button with the Task Manager action, Later beside it", async () => {
+    fakeBridge.pushAlert({ id: "cpu", title: "Chrome is maxing out the CPU", subtitle: "100% for 30 s", icon: "attention", action: "task_manager", priority: 70 });
     render(<Island monitor="m1" init={{ view: null }} />);
     await settle();
-    expect(screen.getByRole("button", { name: "Görev Yöneticisi'nde aç" }).className).toContain("ana");
-    expect(screen.getByRole("button", { name: "Sonra" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open Task Manager" }).className).toContain("primary");
+    expect(screen.getByRole("button", { name: "Later" })).toBeTruthy();
   });
 });
 
-describe("ada: toplantı, Pusula bağlı değil, raf önerisi", () => {
-  it("toplantı çıkıntısının ortasına tıklayınca toplantı kartı: Katıl ve sıradaki etkinlikler", async () => {
+describe("island: meeting, Compass not connected, shelf suggestion", () => {
+  it("clicking the center of the meeting peek opens the meeting card: Join and upcoming events", async () => {
     fakeBridge.setSurfaces({ protrusion: PROTRUSION });
     render(<Island monitor="m1" init={{ view: null }} />);
     await settle();
-    fireEvent.click(screen.getAllByRole("button").find((b) => b.className.includes("adaMerkez"))!);
+    fireEvent.click(screen.getAllByRole("button").find((b) => b.className.includes("islandCenter"))!);
     await settle();
-    const dlg = screen.getByRole("dialog", { name: /^Modüller/ }); // Modüller, Takvim sekmesinde
-    expect(screen.getByRole("tab", { name: "Takvim" }).getAttribute("aria-selected")).toBe("true");
-    expect(dlg.textContent).toContain("Haftalık plan");
-    expect(dlg.textContent).toContain("Asistan rutini");
-    expect(screen.getByRole("button", { name: "Katıl" })).toBeTruthy();
+    const dlg = screen.getByRole("dialog", { name: /^Modules/ }); // Modules, on the Calendar tab
+    expect(screen.getByRole("tab", { name: "Calendar" }).getAttribute("aria-selected")).toBe("true");
+    expect(dlg.textContent).toContain("Weekly planning");
+    expect(dlg.textContent).toContain("Assistant routine");
+    expect(screen.getByRole("button", { name: "Join" })).toBeTruthy();
   });
-  it("Pusula bağlı değil kartı: beyaz Pusula'yı başlat düğmesi assistant_start çağırır", async () => {
+  it("Compass-not-connected card: the white Launch Compass button calls assistant_start", async () => {
     disconnected();
-    render(<Island monitor="m1" init={{ view: "asistanyok" }} />);
+    render(<Island monitor="m1" init={{ view: "noassistant" }} />);
     await settle();
-    const b = screen.getByRole("button", { name: "Pusula'yı başlat" });
-    expect(b.className).toContain("ana");
+    const b = screen.getByRole("button", { name: "Launch Compass" });
+    expect(b.className).toContain("primary");
     fireEvent.click(b);
     await settle();
     expect(fakeBridge.log.some((l) => l.cmd === "assistant_start")).toBe(true);
   });
-  it("Pusula bağlı değilken dinlenmede ortaya tıklamak Pusula bağlı değil kartını açar", async () => {
+  it("clicking the center at rest while Compass is not connected opens the Compass-not-connected card", async () => {
     disconnected();
     render(<Island monitor="m1" init={{ view: null }} />);
     await settle();
-    fireEvent.click(screen.getByRole("button", { name: /Pusula bağlı değil. Başlatmak için aç/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Compass isn't connected. Open to launch it/ }));
     await settle();
-    expect(screen.getByRole("dialog", { name: "Pusula bağlı değil" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Compass isn't connected" })).toBeTruthy();
   });
-  it("raf kartı: PDF için Pusula önerisi ve üç düğme; ortada yalnız Raf", async () => {
-    fakeBridge.setShelf([{ id: "f1", name: "sunum-taslak.pdf", sub: "2,4 MB", kind: "pdf" }, { id: "f2", name: "ekran-kaydı.mp4", sub: "38 MB", kind: "video" }]);
-    render(<Island monitor="m1" init={{ view: "raf" }} />);
+  it("shelf card: Compass suggestion for a PDF and three buttons; only Shelf in the center", async () => {
+    fakeBridge.setShelf([{ id: "f1", name: "presentation-draft.pdf", sub: "2,4 MB", kind: "pdf" }, { id: "f2", name: "screen-recording.mp4", sub: "38 MB", kind: "video" }]);
+    render(<Island monitor="m1" init={{ view: "shelf" }} />);
     await settle();
-    expect(screen.getByText(/Özetleyip Notlara not olarak ekleyeyim mi/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /Notlara ekle/ }));
+    expect(screen.getByText(/summarize it into Notes/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Add to Notes/ }));
     await settle();
     expect(fakeBridge.log.some((l) => l.cmd === "shelf_memory")).toBe(true);
     expect(screen.queryByText("2 dosya")).toBeNull();
   });
 });
 
-describe("kart durumları ve bağlamalar", () => {
-  it("ilk bağlantı: ilk2 kartı açılır, Tamam kapatır ve first_connect_ack söner", async () => {
+describe("card states and bindings", () => {
+  it("first connection: the firstconnect card opens, OK closes it and first_connect_ack fires", async () => {
     fakeBridge.setFirstConnect(true);
     render(<Island monitor="m1" init={{ view: null }} />);
     await settle();
-    const dlg = screen.getByRole("dialog", { name: "Pusula bağlandı" });
+    const dlg = screen.getByRole("dialog", { name: "Compass connected" });
     expect(dlg).toBeTruthy();
-    fireEvent.click(screen.getAllByRole("button").find((b) => b.textContent === "Tamam")!);
+    fireEvent.click(screen.getAllByRole("button").find((b) => b.textContent === "OK")!);
     await settle();
-    expect(screen.queryByRole("dialog", { name: "Pusula bağlandı" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Compass connected" })).toBeNull();
   });
-  it("Pano yüklenemezse hata kartı: Claude Code'a ulaşamıyorum, Yeniden dene", async () => {
-    render(<Island monitor="m1" init={{ view: "pano", card: "kh" }} />);
+  it("if Clipboard fails to load: error card: can't reach Claude Code, Try again", async () => {
+    render(<Island monitor="m1" init={{ view: "clipboard", card: "kh" }} />);
     await settle();
-    expect(screen.getByRole("dialog", { name: "Hata" }).textContent).toContain("Claude Code'a ulaşamıyorum");
-    expect(screen.getByRole("button", { name: "Yeniden dene" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Error" }).textContent).toContain("Can't reach Claude Code");
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
   });
-  it("yükleniyor kartı 800 ms geçmeden görünmez", async () => {
-    render(<Island monitor="m1" init={{ view: "pano" }} />);
+  it("the loading card does not show before 800 ms", async () => {
+    render(<Island monitor="m1" init={{ view: "clipboard" }} />);
     await settle(30);
-    expect(screen.queryByRole("status", { name: "Pano okunuyor" })).toBeNull();
+    expect(screen.queryByRole("status", { name: "Reading clipboard" })).toBeNull();
   });
-  it("eklenti izni bekleyince şeritte kalkan simgesi ve Eklenti izni; d2 sohbetinde bildirim sayısı", async () => {
+  it("when a plugin permission is pending: shield icon on the strip and Plugin permission; notification count in the d2 chat", async () => {
     fakeBridge.setConsent(CONSENT);
     render(<Island monitor="m1" init={{ view: null }} />);
     await settle();
-    expect(screen.getByText("Eklenti izni")).toBeTruthy();
+    expect(screen.getByText("Plugin permission")).toBeTruthy();
   });
-  it("şerit menüsünde Çık, Peeka'nın kendi onay sorusunu açar", async () => {
+  it("Quit in the strip menu opens Peeka's own confirmation question", async () => {
     render(<Shell monitor="m1" init={{ menu: { kind: "strip", x: 900 } }} />);
     await settle();
-    fireEvent.click(screen.getByRole("menuitem", { name: "Çık" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Quit" }));
     await settle(400);
-    expect(screen.getByRole("dialog", { name: "Çıkış onayı" }).getAttribute("aria-hidden")).toBe("false");
+    expect(screen.getByRole("dialog", { name: "Quit Peeka" }).getAttribute("aria-hidden")).toBe("false");
   });
-  it("ada sayfasındaki dişli (open-panel) Ayarlar › Modüller'i açar", async () => {
+  it("the gear on the island page (open-panel) opens Settings > Modules", async () => {
     render(<Shell monitor="m1" />);
     await settle();
-    act(() => sendX({ t: "open-panel", panel: "aym" }));
+    act(() => sendX({ t: "open-panel", panel: "modules" }));
     await settle(300);
     expect(document.querySelector("[data-panel=settings]")!.getAttribute("aria-hidden")).toBe("false");
   });

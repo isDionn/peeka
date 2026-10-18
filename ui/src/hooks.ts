@@ -4,7 +4,6 @@ import { liveAlerts, nextExpiry, sortAlerts } from "./lib/alerts";
 import { livePosition } from "./lib/media";
 import { meetingReminder, type ReminderItem } from "./lib/meetingReminder";
 import { collectHitRects, sameRects } from "./lib/hitRects";
-import { dative } from "./lib/cardsText";
 
 /** The strip draws nothing until its monitor is known: a failed query is asked again, 3 tries in all (250, 500 ms apart). */
 export function useMonitor(monitor: string) {
@@ -59,7 +58,7 @@ export function useStatus() {
 export function useSettings() {
   const [settings, setSettings] = useState<Settings | null>(null);
   useEffect(() => {
-    const take = (s: Settings) => { setSettings(s); document.documentElement.toggleAttribute("data-renkli", !!s.colorIcons); };
+    const take = (s: Settings) => { setSettings(s); document.documentElement.toggleAttribute("data-color", !!s.colorIcons); };
     bridge.call("get_settings").then(take);
     const off = bridge.on("settings_changed", take);
     return () => { off.then((f) => f()); };
@@ -67,14 +66,14 @@ export function useSettings() {
   return settings;
 }
 
-/** Şimdiki zaman, dakikada bir tazelenir. */
+/** Current time, refreshed every 15 s (so the minute flips on time). */
 export function useNow() {
   const [now, setNow] = useState(() => bridge.now());
   useEffect(() => { const t = setInterval(() => setNow(bridge.now()), 15_000); return () => clearInterval(t); }, []);
   return now;
 }
 
-/** `[data-hit]` dikdörtgenlerini Rust'a bildirir (değişince, kare başına en çok bir kez). */
+/** Reports `[data-hit]` rectangles to Rust (on change, at most once per frame). */
 export function useHitRects(page: "strip" | "island", monitor: string) {
   const last = useRef<Rect[]>([]);
   const send = useCallback(() => {
@@ -96,10 +95,10 @@ export function useHitRects(page: "strip" | "island", monitor: string) {
   }, [send]);
 }
 
-/** Çalan parça; `position()` çalarken yerel saatle ilerler. */
+/** Now playing; `position()` advances on the local clock while playing. */
 export function useMedia() {
   const [media, setMedia] = useState<Media | null>(null);
-  const [ready, setReady] = useState(false); // ilk okuma geldi mi: açılışta çalan parça için çıkıntı açılmaz
+  const [ready, setReady] = useState(false); // has the first read arrived: no peek opens for a track already playing at launch
   useEffect(() => {
     const set = (m: Media | null) => { setMedia(m); setReady(true); };
     bridge.call("get_media").then(set);
@@ -110,7 +109,7 @@ export function useMedia() {
   return { media, ready, position };
 }
 
-/** Uyarı listesi: sıralı, süresi dolanlar kendiliğinden düşer. */
+/** Alert list: sorted, expired ones drop out by themselves. */
 export function useAlerts() {
   const [raw, setRaw] = useState<Alert[]>([]);
   const [top, setTop] = useState<string | null>(null);
@@ -127,12 +126,12 @@ export function useAlerts() {
     const t = setTimeout(() => setTick((n) => n + 1), wait + 20);
     return () => clearTimeout(t);
   }, [raw, tick]);
-  // tick: süre dolunca yeniden süzmek için
+  // tick: refilter when something expires
   const alerts = useMemo(() => sortAlerts(liveAlerts(raw, Date.now())), [raw, tick]); // eslint-disable-line react-hooks/exhaustive-deps
   return { alerts, top };
 }
 
-/** Sistem izleme: kart açıkken (`active`) başlar, kapanınca ya da söküldüğünde durur. Son 16 işlemci örneği sparkline için. */
+/** System monitor: starts while the card is open (`active`), stops when it closes or unmounts. The last 16 CPU samples feed the sparkline. */
 export function useSysmon(active: boolean) {
   const [tick, setTick] = useState<SysmonTick | null>(null);
   const [cpu, setCpu] = useState<number[]>([]);
@@ -145,11 +144,11 @@ export function useSysmon(active: boolean) {
   return { tick, cpu };
 }
 
-/* ---- eklenti yüzeyleri (plugin-api.ts) ---- */
+/* ---- plugin surfaces (plugin-api.ts) ---- */
 import { EMPTY_SURFACES } from "./plugin.fixtures";
 import type { ComposerEvent, ConsentRequest, PluginInfo, SurfacesView } from "./plugin-api";
 
-/** Eklentilerin ekrandaki hali: çıkıntı, onaylar, Modüller sekmeleri, Ctrl+Space sahibi. */
+/** What plugins show on screen: peek, approvals, Modules tabs, the Ctrl+Space owner. */
 export function useSurfaces(): SurfacesView {
   const [s, setS] = useState<SurfacesView>(EMPTY_SURFACES);
   useEffect(() => {
@@ -160,7 +159,7 @@ export function useSurfaces(): SurfacesView {
   return s;
 }
 
-/** Ana asistanın takvimindeki sıradaki toplantı için hatırlatma çıkıntısı (lib/meetingReminder.ts). Takvim dakikada bir okunur, saat 15 sn'de bir kontrol edilir. */
+/** Reminder peek for the next meeting on the main assistant's calendar (lib/meetingReminder.ts). The calendar is read every minute, the clock checked every 15 s. */
 export function useMeetingReminder(generic: boolean): ReminderItem | null {
   const [cal, setCal] = useState<CalendarNext | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -174,7 +173,7 @@ export function useMeetingReminder(generic: boolean): ReminderItem | null {
   return useMemo(() => meetingReminder(cal, now, generic), [cal, now, generic]);
 }
 
-/** `live_text` / `voice.transcript` akışının son metni (Rust 50 ms'de birleştirir) ve varsa konuşanın etiketi. */
+/** Latest text of the `live_text` / `voice.transcript` stream (Rust merges every 50 ms) and the speaker label, if any. */
 export function useStream(streamId: string | undefined): { text: string; speaker: string } {
   const [s, setS] = useState({ text: "", speaker: "" });
   useEffect(() => {
@@ -185,7 +184,7 @@ export function useStream(streamId: string | undefined): { text: string; speaker
   return s;
 }
 
-/** Saniyede bir tazelenen şimdiki zaman (sayaçlar). `on` false iken durur. */
+/** Current time refreshed every second (counters). Stops while `on` is false. */
 export function useSecond(on = true): number {
   const [t, setT] = useState(() => Date.now());
   useEffect(() => { if (!on) return; const i = setInterval(() => setT(Date.now()), 1000); return () => clearInterval(i); }, [on]);
@@ -193,7 +192,7 @@ export function useSecond(on = true): number {
 }
 
 const firstSeen = new Map<string, number>();
-/** Kalan saniye. Rust `expiresS`i özgün süre olarak yollar; sayaç öğenin ilk görüldüğü andan (kimliğe göre) sayar, yüzey güncellemesinde başa dönmez. */
+/** Seconds left. Rust sends `expiresS` as the original duration; the counter runs from when the item was first seen (by id) and doesn't restart on surface updates. */
 export function useDeadline(id: string, seconds: number | null | undefined): number | null {
   const now = useSecond(!!seconds);
   if (!seconds) return null;
@@ -201,7 +200,7 @@ export function useDeadline(id: string, seconds: number | null | undefined): num
   return Math.max(0, Math.ceil(seconds - (now - firstSeen.get(id)!) / 1000));
 }
 
-/** Bekleyen eklenti onay isteği (onay penceresi sayfası). */
+/** Pending plugin consent request (consent window page). */
 export function useConsent(): ConsentRequest | null {
   const [c, setC] = useState<ConsentRequest | null>(null);
   useEffect(() => {
@@ -225,7 +224,7 @@ export function usePlugins(): PluginInfo[] {
 }
 
 export interface Turn { id: number; ask: string; answer: string; chips: { label: string; kind: string }[]; state: "wait" | "done" | "error"; error?: string }
-/** Ctrl+Space sohbeti: gönderilen sorular ve akan cevaplar. Cevap parçaları `composer_submit` dönmeden gelebilir; tur o zaman oluşur. */
+/** Ctrl+Space chat: sent questions and streaming answers. Answer chunks may arrive before `composer_submit` returns; the turn is created then. */
 export function useComposer() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const upd = useCallback((id: number, f: (t: Turn) => Turn) => setTurns((cur) => {
@@ -249,11 +248,11 @@ export function useComposer() {
   return { turns, send };
 }
 
-/* ---- Dalga 4: kilit, ana asistan, pano (bridge.ts) ---- */
+/* ---- Wave 4: lock, main assistant, clipboard (bridge.ts) ---- */
 import { alive } from "./lib/clip";
 import type { ClipItem, LockState, MirrorView } from "./bridge";
 
-/** Peeka'nın kendi kilidi. Okuma başarısızsa (Rust henüz yok) kilitsiz sayılır. */
+/** Peeka's own lock. If the read fails (no Rust yet) it counts as unlocked. */
 export function useLock(): LockState {
   const [l, setL] = useState<LockState>({ locked: false, reason: null });
   useEffect(() => {
@@ -264,15 +263,15 @@ export function useLock(): LockState {
   return l;
 }
 
-/** Bağlı ana asistan ("Sor" satırları yalnız o varken görünür); yoksa null. */
+/** The connected main assistant ("Ask" rows show only while it exists); otherwise null. */
 export function useMainAssistant(): PluginInfo | null {
   return usePlugins().find((p) => p.main && p.connected) ?? null;
 }
 
-/** "<ad>'a sor" yazısı: ana asistanın adıyla. */
-export const askLabel = (main: Pick<PluginInfo, "name">) => `${dative(main.name)} sor`;
+/** "Ask <name>" label, with the main assistant's name. */
+export const askLabel = (main: Pick<PluginInfo, "name">) => `Ask ${main.name}`;
 
-/** Pano listesi. Kilitliyken parola satırları listede yoktur (Rust zaten göndermez, arayüz de eler); süresi dolan parola düşer. */
+/** Clipboard list. While locked there are no password rows (Rust doesn't send them, the UI filters too); expired passwords drop out. */
 export function useClips(): ClipItem[] {
   const [raw, setRaw] = useState<ClipItem[]>([]);
   const lock = useLock();
@@ -288,10 +287,10 @@ export function useClips(): ClipItem[] {
   return useMemo(() => raw.filter((c) => (!lock.locked || c.kind !== "password") && alive(c, now)), [raw, lock.locked, now]);
 }
 
-/* ---- Dalga 5 (bridge.ts): zamanlayıcı, raf, gizlilik, Bluetooth, girdi ---- */
+/* ---- Wave 5 (bridge.ts): timer, shelf, privacy, Bluetooth, input ---- */
 import type { BluetoothEvent, InputTick, PrivacyState, ShelfItem, TimerState } from "./bridge";
 
-/** Peeka'nın zamanlayıcısı; kalanı çizen bileşen `remaining()` ile saniyede bir hesaplar. */
+/** Peeka's timer; the component drawing the time left computes it every second. */
 export function useTimer(): TimerState | null {
   const [t, setT] = useState<TimerState | null>(null);
   useEffect(() => {
@@ -301,7 +300,7 @@ export function useTimer(): TimerState | null {
   }, []);
   return t;
 }
-/** Kalan saniye: çalarken `at` anından geriye sayar. */
+/** Seconds left: counts down from `at` while running. */
 export const timerLeft = (t: TimerState, nowMs: number) => Math.max(0, t.running ? t.remainingS - (nowMs - t.at) / 1000 : t.remainingS);
 
 export function useShelf(): ShelfItem[] {
@@ -321,7 +320,7 @@ export function useShelfDrag(): boolean {
   return on;
 }
 
-/** Mikrofon ve kamerayı kullanan uygulamalar (Windows ConsentStore'dan, Rust). */
+/** Apps using the mic and camera (from the Windows ConsentStore, via Rust). */
 export function usePrivacy(): PrivacyState {
   const [p, setP] = useState<PrivacyState>({ mic: [], camera: [] });
   useEffect(() => {
@@ -332,7 +331,7 @@ export function usePrivacy(): PrivacyState {
   return p;
 }
 
-/** Bluetooth kulaklık bağlandı: olay gelince `ms` kadar (varsayılan 3 sn) dolu döner, sonra null. `pin` önizlemede kapanmasın diye. */
+/** Bluetooth headphones connected: after the event, returns it for `ms` (3 s by default), then null. `pin` keeps it open in the preview. */
 export function useBluetooth(pin = false, ms = 3000, initial: BluetoothEvent | null = null) {
   const [b, setB] = useState<BluetoothEvent | null>(initial);
   useEffect(() => { const off = bridge.on("bluetooth_connected", setB); return () => { off.then((f) => f()); }; }, []);
@@ -341,13 +340,13 @@ export function useBluetooth(pin = false, ms = 3000, initial: BluetoothEvent | n
 }
 
 /**
- * Son girdi ve imleç. Rust `input_tick` yollar (GetLastInputInfo + imleç); gelene dek ve tarayıcı önizlemesinde sayfanın kendi fare/klavye olayları
- * taklit eder. `cursor` undefined = Rust beslemiyor (Mascot kendi pointermove'unu dinler).
+ * Last input and cursor. Rust sends `input_tick` (GetLastInputInfo + cursor); until it arrives, and in the browser preview, the page's own mouse/keyboard
+ * events stand in. `cursor` undefined = Rust isn't feeding it (Mascot listens to its own pointermove).
  */
 export function useInput() {
   const last = useRef({ at: Date.now(), tickAgo: null as number | null, tickAt: 0 });
   const [cursor, setCursor] = useState<InputTick["cursor"] | undefined>(undefined);
-  // Windows sunum modu / meşgul: Rust yalnız değişince yollar, son değer kalır
+  // Windows presentation mode / busy: Rust sends only on change, the last value sticks
   const [calm, setCalm] = useState({ presentation: false, busy: false });
   useEffect(() => {
     const local = () => { last.current.at = Date.now(); };
@@ -362,8 +361,8 @@ export function useInput() {
   return { lastInputAgoMs, cursor, presentation: calm.presentation, busy: calm.busy };
 }
 
-/** Windows bildirim aynası (Dalga 6): kartlar ve `quiet` (sessizken hiçbir kart kendiliğinden açılmaz). */
-export function useMirror(): MirrorView & { /** İlk liste geldi (sonrası "yeni" sayılır). */ ready: boolean } {
+/** Windows notification mirror (Wave 6): cards and `quiet` (while quiet no card opens by itself). */
+export function useMirror(): MirrorView & { /** The first list arrived (anything after counts as "new"). */ ready: boolean } {
   const [v, setV] = useState<MirrorView & { ready: boolean }>({ items: [], quiet: false, ready: false });
   useEffect(() => {
     let live = true;

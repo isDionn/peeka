@@ -1,6 +1,6 @@
 import type { PinnedApp, WindowInfo } from "../bridge";
 
-/** Şeritteki tek öğe: sabit + açık uygulama tek öğedir (sahip kararı 20). */
+/** One strip item: a pin + its open app are a single item (owner decision 20). */
 export interface StripItem {
   appId: string;
   name: string;
@@ -17,7 +17,7 @@ const group = (windows: WindowInfo[]): Map<string, WindowInfo[]> => {
   return m;
 };
 
-/** `pinned`: sabitlerin sırası (kapalı olanlar yalnız simge). `tabs`: sabit olmayan uygulamaların pencereleri, uygulama başına bir öğe, ilk görülme sırasıyla. */
+/** `pinned`: pin order (closed ones are icon only). `tabs`: windows of unpinned apps, one item per app, in first-seen order. */
 export function mergePins(pins: PinnedApp[], windows: WindowInfo[]): { pinned: StripItem[]; tabs: StripItem[] } {
   const byApp = group(windows);
   const pinnedIds = new Set(pins.map((p) => p.appId));
@@ -30,12 +30,12 @@ export function mergePins(pins: PinnedApp[], windows: WindowInfo[]): { pinned: S
   };
 }
 
-/** Sürükle-sırala: tutulan öğenin yeni sırası ve diğerlerinin kayma miktarı (px). `widths` sıralı genişlikler (boşluk dahil), `dx` işaretçinin başlangıçtan kayması. */
+/** Drag to reorder: the held item's new index and how far the others shift (px). `widths` are the ordered widths (gap included), `dx` the pointer's offset from the start. */
 export function dragLayout(widths: number[], from: number, dx: number): { to: number; shifts: number[]; dx: number } {
   const lefts = widths.reduce<number[]>((a, _w, i) => (a.push(i ? a[i - 1] + widths[i - 1] : 0), a), []);
   const total = lefts[lefts.length - 1] + widths[widths.length - 1];
   const w = widths[from];
-  const x = Math.min(Math.max(lefts[from] + dx, 0), total - w); // kenarda dur
+  const x = Math.min(Math.max(lefts[from] + dx, 0), total - w); // stop at the edge
   const center = x + w / 2;
   let to = 0;
   widths.forEach((ww, i) => { if (i !== from && lefts[i] + ww / 2 < center) to++; });

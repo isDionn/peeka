@@ -7,10 +7,10 @@ const DTS = [1 / 60, 1 / 144, 1 / 240];
 const boxAt = (left: number, top: number, w: number, h: number) =>
   ({ left, top, right: left + w, bottom: top + h, width: w, height: h, x: left, y: top, toJSON() {} }) as DOMRect;
 
-/** Kare kare ilerlet; durgunlaşma süresini (sn) ve ara değer örneğini döndürür. */
+/** Advance frame by frame; returns the settle time (s) and a sample of the intermediate value. */
 function settle(step: (dt: number) => boolean, dt: number, probeAt = 0.25, probe: () => number = () => 0) {
   let t = 0, at = 0, n = 0;
-  const probeN = Math.round(probeAt / dt); // 0,25 sn: 15 / 36 / 60 kare, üç Hz'de aynı an
+  const probeN = Math.round(probeAt / dt); // 0.25 s: frame 15 / 36 / 60, the same instant at all three Hz
   while (t < 5) {
     const moving = step(dt);
     t += dt;
@@ -21,8 +21,8 @@ function settle(step: (dt: number) => boolean, dt: number, probeAt = 0.25, probe
 }
 const within = (times: number[]) => Math.max(...times) - Math.min(...times);
 
-describe("yüksek Hz: aynı hareket", () => {
-  it("Spring: durgunlaşma süresi 1/60, 1/144, 1/240'ta ~1 kare içinde aynı ve uç değer aynı", () => {
+describe("high Hz: the same motion", () => {
+  it("Spring: settle time is the same within ~1 frame at 1/60, 1/144, 1/240, and the end value is the same", () => {
     for (const p of [SPRINGS.card, SPRINGS.pill, SPRINGS.press, SPRINGS.line]) {
       const r = DTS.map((dt) => {
         const s = new Spring(0, p);
@@ -32,11 +32,11 @@ describe("yüksek Hz: aynı hareket", () => {
       });
       expect(within(r.map((x) => x.t))).toBeLessThanOrEqual(1 / 60 + 0.02);
       r.forEach((x) => expect(x.end).toBe(100));
-      expect(within(r.map((x) => x.at))).toBeLessThan(1.5); // 0,25 sn'deki konum (0..100) aynı an örneklenir, ≤%1,5 fark
+      expect(within(r.map((x) => x.at))).toBeLessThan(1.5); // position at 0.25 s (0..100) is sampled at the same instant, ≤1.5% difference
     }
   });
 
-  it("Spring: 1/30'dan uzun kare kırpılır, 1/240 kararlı (patlamaz)", () => {
+  it("Spring: a frame longer than 1/30 is clamped, 1/240 is stable (doesn't blow up)", () => {
     for (const dt of [1 / 30, 1 / 240, 0.2]) {
       const s = new Spring(0, SPRINGS.press);
       s.retarget(100);
@@ -45,7 +45,7 @@ describe("yüksek Hz: aynı hareket", () => {
     }
   });
 
-  it("Shape: aynı durgunlaşma süresi, aynı son dikdörtgen", () => {
+  it("Shape: same settle time, same final rectangle", () => {
     const r = DTS.map((dt) => {
       const host = document.createElement("div"), body = document.createElement("div");
       host.getBoundingClientRect = () => boxAt(0, 0, 600, 300);
@@ -56,12 +56,12 @@ describe("yüksek Hz: aynı hareket", () => {
     });
     expect(within(r.map((x) => x.t))).toBeLessThanOrEqual(1 / 60 + 0.02);
     r.forEach((x) => expect(x.rect).toEqual({ x: 20, y: 0, w: 560, h: 240 }));
-    expect(within(r.map((x) => x.at))).toBeLessThan(3.6); // 0,25 sn'de yükseklik (0..240), ≤%1,5 fark
+    expect(within(r.map((x) => x.at))).toBeLessThan(3.6); // height at 0.25 s (0..240), ≤1.5% difference
   });
 
-  it("Flight: aynı durgunlaşma süresi, dönüşüm temizlenir", () => {
+  it("Flight: same settle time, the transform is cleared", () => {
     const r = DTS.map((dt) => {
-      document.body.innerHTML = `<div id="a" data-paylas="t"></div>`;
+      document.body.innerHTML = `<div id="a" data-share="t"></div>`;
       const el = document.getElementById("a")!;
       let pos = { left: 10, top: 5, height: 20 };
       el.getBoundingClientRect = () => boxAt(pos.left, pos.top, 50, pos.height);

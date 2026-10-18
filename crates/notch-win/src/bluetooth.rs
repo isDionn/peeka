@@ -2,7 +2,6 @@
 //! Bluetooth association endpoints, event driven (no PowerShell, no polling). What a change means is
 //! `notch_core::sources::Bluetooth` (tested there): nothing is announced until the first enumeration completes.
 //!
-//! Inspired by HeyyCzer/windows-dynamic-island (ideas only; no code copied).
 //!
 //! Headset battery (Wave 5): the level Windows itself shows in Settings › Bluetooth, the hands-free (HFP) battery
 //! property on the headset's device nodes, read through WinRT `DeviceInformation` by the headset's container id. Only

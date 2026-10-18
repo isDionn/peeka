@@ -1,0 +1,246 @@
+// Friction audit (Y1-Y4, O2-O4, O8, System history): leaving with the mouse, the single rule "a peek opens Modules on its own tab", a fixed tab bar.
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+// @ts-expect-error node types are not installed; vitest runs on Node
+import { readFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fakeBridge } from "../bridge.fake";
+import { SURFACES_J, COMPASS, APPROVAL_LOW } from "../plugin.fixtures";
+import { Island } from "../components/Island";
+import { FirstRunCard, modulesKw, TimerStart } from "../components/IslandCards";
+import { ComposerCard, resetComposerDraft } from "../components/Plugin";
+import { onX, sendX } from "../lib/xwin";
+import { resetMascotRegistry } from "../mascot/useSingleMascot";
+
+const proto = HTMLElement.prototype;
+const saved = { h: Object.getOwnPropertyDescriptor(proto, "offsetHeight"), w: Object.getOwnPropertyDescriptor(proto, "offsetWidth") };
+beforeEach(() => {
+  Object.defineProperty(proto, "offsetHeight", { configurable: true, get: () => 100 });
+  Object.defineProperty(proto, "offsetWidth", { configurable: true, get: () => 100 });
+  fakeBridge.reset(); resetMascotRegistry(); resetComposerDraft(); localStorage.clear();
+});
+afterEach(() => {
+  cleanup(); vi.useRealTimers(); vi.restoreAllMocks();
+  if (saved.h) Object.defineProperty(proto, "offsetHeight", saved.h); else Reflect.deleteProperty(proto, "offsetHeight");
+  if (saved.w) Object.defineProperty(proto, "offsetWidth", saved.w); else Reflect.deleteProperty(proto, "offsetWidth");
+});
+const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 80)); });
+const pill = () => screen.getAllByRole("button").find((b) => b.className.includes("islandCenter"))!;
+const TIMER = { label: "Tea", totalS: 300, remainingS: 200, running: true };
+
+describe("Y1: with a peek showing, the island opens to Modules", () => {
+  it("with an approval peek, clicking the center opens Modules; Esc returns to the peek", async () => {
+    fakeBridge.setSurfaces({ approvals: [APPROVAL_LOW], approvalTop: APPROVAL_LOW.id });
+    render(<Island monitor="m1" init={{ view: null }} />);
+    await settle();
+    fireEvent.click(pill());
+    await settle();
+    expect(screen.getByRole("dialog", { name: /^Modules/ })).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
+    await settle();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+  it("while the pointer is over it, an 'Open Modules' hint shows", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    fakeBridge.setSurfaces({ approvals: [APPROVAL_LOW], approvalTop: APPROVAL_LOW.id });
+    render(<Island monitor="m1" init={{ view: null }} />);
+    await act(async () => { vi.advanceTimersByTime(100); });
+    fireEvent.pointerEnter(pill());
+    await act(async () => { vi.advanceTimersByTime(200); });
+    expect(pill().getAttribute("title")).toBe("Open Modules");
+  });
+});
+
+describe("Y2: every card has a visible way out", () => {
+  it("× closes the card (no keyboard focus needed)", async () => {
+    render(<Island monitor="m1" init={{ view: "modules" }} />);
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await settle();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+  it("clicking outside the card closes it; clicking inside does not", async () => {
+    render(<Island monitor="m1" init={{ view: "modules" }} />);
+    await settle();
+    fireEvent.pointerDown(screen.getByRole("tab", { name: "Clipboard" }));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    fireEvent.pointerDown(document.body);
+    await settle();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+  it("the Rust outside message closes it too; the card closes when a strip panel opens (panel-open)", async () => {
+    render(<Island monitor="m1" init={{ view: "modules" }} />);
+    await settle();
+    sendX({ t: "outside" });
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    cleanup();
+    render(<Island monitor="m1" init={{ view: "modules" }} />);
+    await settle();
+    sendX({ t: "panel-open", panel: "search" });
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+  it("a click on another app (notch://outside_press) closes the card; a click on the island's own window does not", async () => {
+    render(<Island monitor="m1" init={{ view: "modules" }} />);
+    await settle();
+    await act(async () => { fakeBridge.emit("notch://outside_press", "island"); });
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    await act(async () => { fakeBridge.emit("notch://outside_press", ""); });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+  it("on a card without a tab bar, the Modules button opens Modules on its own tab", async () => {
+    render(<Island monitor="m1" init={{ view: "clipboard" }} />);
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Modules" }));
+    await settle();
+    expect(screen.getByRole("tab", { name: "Clipboard" }).getAttribute("aria-selected")).toBe("true");
+  });
+});
+
+describe("Y5: the island and a strip panel close each other", () => {
+  it("clicking inside the island sends island-click", async () => {
+    const got: string[] = [];
+    const off = onX((m) => got.push(m.t));
+    render(<Island monitor="m1" init={{ view: null }} />);
+    await settle();
+    fireEvent.pointerDown(pill());
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    off();
+    expect(got).toContain("island-click");
+  });
+});
+
+describe("Y3: peeks open Modules on their own tab", () => {
+  it("shelf drag peek -> Shelf tab", async () => {
+    render(<Island monitor="m1" init={{ view: null, shelfDrag: true }} />);
+    await settle();
+    fireEvent.click(pill());
+    await settle();
+    expect(screen.getByRole("tab", { name: "Shelf" }).getAttribute("aria-selected")).toBe("true");
+  });
+  it("screenshot peek -> Clipboard tab", async () => {
+    render(<Island monitor="m1" init={{ view: null, shot: true }} />);
+    await settle();
+    fireEvent.click(pill());
+    await settle();
+    expect(screen.getByRole("tab", { name: "Clipboard" }).getAttribute("aria-selected")).toBe("true");
+  });
+});
+
+describe("Y4: the tab bar never shifts and is the same on every tab", () => {
+  const css: string = readFileSync("src/components/cards.css", "utf8");
+  it("every tab other than General has the same width; only General is wide", () => {
+    const pages = ["music", "clipboard", "shelf", "calendar", "timer", "system", "notifications", "plugin"];
+    expect(new Set(pages.map((p) => modulesKw(p, 1920)))).toEqual(new Set([620]));
+    expect(modulesKw("general", 1920)).toBeGreaterThan(620);
+  });
+  it("the corner group has a fixed width (464) on the island center line, and × is always at the same screen point (independent of card width)", () => {
+    expect(css).toMatch(/\.modTop \{[^}]*justify-content: flex-end;[^}]*width: 464px/);
+    expect(css).toMatch(/\.cardBar \{[^}]*width: 464px/); // Modules and the card bar share the same corner group (R1-1)
+    expect(css).toMatch(/\.modTop \.seg \{[^}]*flex: none;[^}]*max-width: 388px/);
+    expect(css).not.toMatch(/\.modUst > \.mini \{[^}]*margin-left: auto/);
+  });
+  it("on every tab the button boxes, icon size and button count are the same; the bar is the same element", async () => {
+    fakeBridge.setSurfaces(SURFACES_J);
+    render(<Island monitor="m1" init={{ view: "modules" }} />);
+    await settle();
+    const bar = () => screen.getByRole("tablist", { name: "Modules" });
+    const el0 = bar();
+    const snap = () => within(bar()).getAllByRole("tab").map((t) => [t.getAttribute("aria-label"), t.className.replace(" on", ""), t.querySelector("svg")?.getAttribute("class") ?? "", t.style.cssText]);
+    const first = snap();
+    for (const t of within(bar()).getAllByRole("tab")) {
+      fireEvent.click(t);
+      expect(snap()).toEqual(first);
+      expect(bar()).toBe(el0);
+    }
+  });
+});
+
+describe("O2: a peek does not close while the pointer is over it", () => {
+  it("the screenshot peek does not close while the pointer is over it and closes after it leaves", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    render(<Island monitor="m1" init={{ view: null, shot: true }} />);
+    await act(async () => { vi.advanceTimersByTime(100); });
+    fireEvent.pointerEnter(pill());
+    await act(async () => { vi.advanceTimersByTime(300); });
+    await act(async () => { vi.advanceTimersByTime(6000); });
+    expect(pill().getAttribute("title")).toBe("Open Modules");
+    fireEvent.pointerLeave(pill());
+    await act(async () => { vi.advanceTimersByTime(300); });
+    await act(async () => { vi.advanceTimersByTime(5000); });
+    expect(pill().getAttribute("title")).toBeNull();
+  });
+});
+
+describe("O3: timer", () => {
+  it("clicking the peek opens the Timer tab; the running counter and controls are above the form", async () => {
+    fakeBridge.setTimer(TIMER);
+    fakeBridge.setMedia(null); // playing music takes precedence over the timer (side bubble decision 2026-10-17); here the timer is the only job
+    render(<Island monitor="m1" init={{ view: null }} />);
+    await settle();
+    fireEvent.click(pill());
+    await settle();
+    expect(screen.getByRole("tab", { name: "Timer" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByLabelText("Running timer").textContent).toContain("Tea");
+    expect(screen.getAllByRole("button", { name: "Pause" }).length).toBeGreaterThan(0);
+  });
+  it("Start gives visible feedback", async () => {
+    render(<TimerStart />);
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    expect(screen.getByRole("button", { name: "Started" })).toBeTruthy();
+  });
+});
+
+describe("O4: Ctrl+Space box", () => {
+  const send = vi.fn();
+  const owner = { ...COMPASS, voice: false };
+  it("after sending, the box stays the same element, with focus and position preserved", () => {
+    const view = render(<ComposerCard owner={owner} turns={[]} send={send} suggestions={[]} />);
+    const inp = screen.getByRole("textbox") as HTMLInputElement;
+    inp.focus();
+    fireEvent.change(inp, { target: { value: "hello" } });
+    fireEvent.keyDown(inp, { key: "Enter" });
+    view.rerender(<ComposerCard owner={owner} turns={[{ id: 1, ask: "hello", answer: "", chips: [], state: "wait" }]} send={send} suggestions={[]} />);
+    expect(screen.getByRole("textbox")).toBe(inp);
+    expect(document.activeElement).toBe(inp);
+    expect(inp.closest("[data-composer]")!.firstElementChild!.contains(inp)).toBe(true);
+  });
+  it("a written draft is not lost when closing and reopening; it is cleared when sent", () => {
+    const a = render(<ComposerCard owner={owner} turns={[]} send={send} suggestions={[]} />);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "half written" } });
+    a.unmount();
+    render(<ComposerCard owner={owner} turns={[]} send={send} suggestions={[]} />);
+    const inp = screen.getByRole("textbox") as HTMLInputElement;
+    expect(inp.value).toBe("half written");
+    fireEvent.keyDown(inp, { key: "Enter" });
+    expect(inp.value).toBe("");
+  });
+});
+
+describe("O8: first-run buttons stay in place", () => {
+  it("Back, Skip and Next are in the same three slots on every page; a missing one is only hidden", () => {
+    render(<FirstRunCard onDone={() => undefined} />);
+    const row = () => [...document.querySelector(".frBtn")!.children] as HTMLElement[];
+    expect(row().length).toBe(3);
+    const go = () => fireEvent.click(screen.getByRole("button", { name: /Next|Start/ }));
+    go();
+    expect(row().length).toBe(3);
+    go();
+    expect(row().length).toBe(3);
+    expect(row()[1].style.visibility).toBe("hidden");
+    expect(row()[0].style.visibility).toBe("visible");
+    expect(row()[2].textContent).toBe("Start");
+  });
+});
+
+describe("System history", () => {
+  it("16 bars; those without a sample are dim, the rest have heights", async () => {
+    render(<Island monitor="m1" init={{ view: "modules" }} />);
+    await settle();
+    fireEvent.click(screen.getByRole("tab", { name: "System" }));
+    await act(async () => { await new Promise((r) => setTimeout(r, 1200)); });
+    expect(document.querySelectorAll(".spark i").length).toBe(16);
+    expect(document.querySelectorAll(".spark i.empty").length).toBeLessThan(16);
+  });
+});

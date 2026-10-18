@@ -161,7 +161,7 @@ pub fn watch(on_change: impl Fn() + Send + 'static) -> bool {
                 RegNotifyChangeKeyValue(root.0, true, REG_NOTIFY_CHANGE_LAST_SET | REG_NOTIFY_CHANGE_NAME, None, false)
             };
             if r.is_err() {
-                eprintln!("[notch] ConsentStore izlenemiyor: mikrofon noktası durdu");
+                eprintln!("[notch] cannot watch ConsentStore: microphone indicator stopped");
                 return;
             }
             // Windows writes Start and Stop as two values: a short pause reads them together.

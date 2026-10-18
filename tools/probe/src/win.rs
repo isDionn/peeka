@@ -42,7 +42,7 @@ pub fn dispatch(cmd: Cmd, dir: &Path) -> i32 {
     let result = match cmd {
         Cmd::Help => Ok(()),
         Cmd::Restore | Cmd::AppBar(false) | Cmd::Hide(false) => {
-            log("Geri alma tamam. Yukarıda 'Kalan ... işareti' satırı yoksa geri alınacak bir şey yoktu.");
+            log("Undo done. If there is no 'Leftover ... marker' line above, there was nothing to undo.");
             Ok(())
         }
         Cmd::AppBar(true) => appbar(dir, false),
@@ -60,11 +60,11 @@ pub fn dispatch(cmd: Cmd, dir: &Path) -> i32 {
     };
     match result {
         Ok(()) => {
-            log("Bitti.");
+            log("Done.");
             0
         }
         Err(error) => {
-            log(&format!("HATA: {error}"));
+            log(&format!("ERROR: {error}"));
             1
         }
     }
@@ -85,7 +85,7 @@ fn install_ctrl_handler(dir: &Path) {
     let _ = CTRL_DIR.set(dir.to_path_buf());
     // SAFETY: a plain extern "system" handler that lives for the whole process.
     if let Err(error) = unsafe { windows::Win32::System::Console::SetConsoleCtrlHandler(Some(on_ctrl), true) } {
-        log(&format!("Ctrl+C geri alması kurulamadı ({error}); geri alma yine 60 sn'de ve bir sonraki açılışta olur."));
+        log(&format!("Could not set up the Ctrl+C undo ({error}); the undo still happens after 60 s and at the next start."));
     }
 }
 
@@ -127,7 +127,7 @@ fn primary() -> Result<Mon, String> {
     let mut all = monitors();
     let at = all.iter().position(|m| m.primary).unwrap_or(0);
     if all.is_empty() {
-        return Err("Monitör bulunamadı".into());
+        return Err("No monitor found".into());
     }
     Ok(all.swap_remove(at))
 }
@@ -144,7 +144,7 @@ fn work_tops() -> Vec<(i32, i32)> {
 pub fn log_work_areas() {
     for (i, m) in monitors().iter().enumerate() {
         log(&format!(
-            "  Monitör {}{}: {}x{} @ ({},{}), ölçek %{}; çalışma alanı üstü {} px aşağıda, altı {} px yukarıda.",
+            "  Monitor {}{}: {}x{} @ ({},{}), scale {}%; work area top is {} px lower, bottom {} px higher.",
             i + 1,
             if m.primary { " (ana)" } else { "" },
             m.rect.right - m.rect.left,
@@ -197,7 +197,7 @@ fn create(ex: WINDOW_EX_STYLE, class: PCWSTR, title: &str, style: WINDOW_STYLE, 
             None,
         )
     }
-    .map_err(|e| format!("Pencere açılamadı: {e}"))
+    .map_err(|e| format!("Could not open the window: {e}"))
 }
 
 fn destroy(hwnd: HWND) {
@@ -286,7 +286,7 @@ fn foreground_exe() -> String {
     // SAFETY: no arguments.
     let fg = unsafe { GetForegroundWindow() };
     if fg.is_invalid() {
-        "yok".into()
+        "none".into()
     } else {
         exe_of_pid(pid_of(fg))
     }
@@ -302,20 +302,20 @@ unsafe extern "system" fn probe_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lpara
         }
         APPBAR_CB => {
             let what = match wparam.0 as u32 {
-                0 => "ABN_STATECHANGE (görev çubuğu durumu değişti)".to_string(),
-                1 => "ABN_POSCHANGED (başka bir çubuk yer değiştirdi)".to_string(),
+                0 => "ABN_STATECHANGE (taskbar state changed)".to_string(),
+                1 => "ABN_POSCHANGED (another bar moved)".to_string(),
                 2 => format!(
-                    "ABN_FULLSCREENAPP: tam ekran uygulama {}",
-                    if lparam.0 != 0 { "AÇILDI" } else { "kapandı" }
+                    "ABN_FULLSCREENAPP: fullscreen app {}",
+                    if lparam.0 != 0 { "TURNED ON" } else { "turned off" }
                 ),
                 3 => "ABN_WINDOWARRANGE".to_string(),
-                other => format!("bilinmeyen AppBar bildirimi {other}"),
+                other => format!("unknown AppBar notification {other}"),
             };
-            log(&format!("AppBar bildirimi (pencere {:#x}): {what}", hwnd.0 as isize));
+            log(&format!("AppBar notification (window {:#x}): {what}", hwnd.0 as isize));
             LRESULT(0)
         }
         WM_DISPLAYCHANGE => {
-            log("Ekran düzeni değişti (WM_DISPLAYCHANGE).");
+            log("Display layout changed (WM_DISPLAYCHANGE).");
             // SAFETY: default handling.
             unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
         }
@@ -374,12 +374,12 @@ fn spawn_guard() -> Result<u32, String> {
         Ok(child) => (child, true),
         Err(error) => {
             log(&format!(
-                "Bekçi işten (job) ayrılamadı ({error}); iş içinde başlatılıyor, ana süreçle birlikte ölebilir."
+                "The guard could not break away from the job ({error}); starting it inside the job, it may die with the main process."
             ));
-            (spawn(CREATE_NO_WINDOW).map_err(|e| format!("Bekçi başlamadı: {e}"))?, false)
+            (spawn(CREATE_NO_WINDOW).map_err(|e| format!("The guard did not start: {e}"))?, false)
         }
     };
-    log(&format!("Bekçi başladı: PID {}, işten ayrıldı: {}.", child.id(), if broke_away { "evet" } else { "hayır" }));
+    log(&format!("Guard started: PID {}, broke away from the job: {}.", child.id(), if broke_away { "yes" } else { "no" }));
     Ok(child.id())
 }
 
@@ -387,7 +387,7 @@ fn appbar(dir: &Path, guard: bool) -> Result<(), String> {
     let deadline = Deadline::after(Instant::now(), HOLD);
     let mons = monitors();
     if mons.is_empty() {
-        return Err("Monitör bulunamadı".into());
+        return Err("No monitor found".into());
     }
     if guard {
         spawn_guard()?;
@@ -399,9 +399,9 @@ fn appbar(dir: &Path, guard: bool) -> Result<(), String> {
         let height = strip_height(m.dpi);
         let r = RECT { left: m.rect.left, top: m.rect.top, right: m.rect.right, bottom: m.rect.top + height };
         let title = if guard {
-            "Notch deneme şeridi + bekçi (60 sn sonra kalkar)"
+            "Notch trial strip + guard (removed after 60 s)"
         } else {
-            "Notch deneme şeridi (60 sn sonra kalkar)"
+            "Notch trial strip (removed after 60 s)"
         };
         let hwnd = create(WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE, class, title, WS_POPUP, r)?;
         windows.push((hwnd, r, Bar { hwnd: hwnd.0 as isize, mon_top: m.rect.top, height }));
@@ -409,7 +409,7 @@ fn appbar(dir: &Path, guard: bool) -> Result<(), String> {
     let marker = appbar_marker(dir);
     // Before ABM_NEW: a kill from here on leaves a marker the next start (or the guard) acts on.
     write_json(&marker, &AppBarMarker { appbars: windows.iter().map(|w| w.2).collect() })?;
-    log("İşaret yazıldı. Önceki çalışma alanları:");
+    log("Marker written. Previous work areas:");
     log_work_areas();
     for (hwnd, r, bar) in &windows {
         let mut abd = APPBARDATA {
@@ -439,9 +439,9 @@ fn appbar(dir: &Path, guard: bool) -> Result<(), String> {
             )
         };
         log(&format!(
-            "AppBar kaydı (ABM_NEW) pencere {:#x}: {}; Windows'un verdiği yer ({},{})-({},{}), yükseklik {} px.",
+            "AppBar registration (ABM_NEW) window {:#x}: {}; the place Windows gave ({},{})-({},{}), height {} px.",
             bar.hwnd,
-            if registered { "kabul edildi" } else { "REDDEDİLDİ" },
+            if registered { "accepted" } else { "REJECTED" },
             rc.left,
             rc.top,
             rc.right,
@@ -450,15 +450,15 @@ fn appbar(dir: &Path, guard: bool) -> Result<(), String> {
         ));
     }
     wait(Duration::from_millis(1500));
-    log("Şerit açıldıktan 1,5 sn sonra çalışma alanları:");
+    log("Work areas 1.5 s after the strip opened:");
     log_work_areas();
     if guard {
         log(&format!(
-            "Şimdi Görev Yöneticisi > Ayrıntılar'da PID'i {} olan notch-probe.exe'yi 'Görevi sonlandır' ile kapat. Bekçinin ne yaptığı günlük dosyasına yazılır.",
+            "Now, in Task Manager > Details, end the notch-probe.exe with PID {} using 'End task'. What the guard does is written to the log file.",
             std::process::id()
         ));
     } else {
-        log("Büyütülmüş bir pencere şeridin altından mı başlıyor, bak. 60 sn sonra şerit kendiliğinden kalkar.");
+        log("Check whether a maximized window starts below the strip. After 60 s the strip goes away by itself.");
     }
     pump(deadline, Duration::from_millis(250), || {});
     let _ops = ops();
@@ -470,7 +470,7 @@ fn appbar(dir: &Path, guard: bool) -> Result<(), String> {
         destroy(*hwnd);
     }
     wait(Duration::from_millis(1000));
-    log("60 sn doldu, şeritler kaldırıldı. Şimdiki çalışma alanları:");
+    log("60 s are up, strips removed. Current work areas:");
     log_work_areas();
     Ok(())
 }
@@ -478,19 +478,19 @@ fn appbar(dir: &Path, guard: bool) -> Result<(), String> {
 /// `--guard-child <pid>`: wait for the `guard` process to end; if it left an AppBar marker (killed), watch whether
 /// Windows frees the 30 px by itself, then try the four recovery steps in order and log which one worked.
 fn guard_child(dir: &Path, pid: u32) -> Result<(), String> {
-    log(&format!("Bekçi: PID {pid} izleniyor."));
+    log(&format!("Guard: watching PID {pid}."));
     if !taskbar::wait_for_exit(pid) {
-        return Err("Bekçi ana süreci izleyemedi; hiçbir şeye dokunmadan çıkıyor.".into());
+        return Err("The guard could not watch the main process; exiting without touching anything.".into());
     }
     let t0 = Instant::now();
     let (am, tm) = (appbar_marker(dir), taskbar_marker(dir));
     let Some(marker) = crate::read_json::<AppBarMarker>(&am) else {
-        log("Bekçi: ana süreç temiz kapandı (işaret yok); bekçi hiçbir şey yapmadı.");
+        log("Guard: the main process closed cleanly (no marker); the guard did nothing.");
         return Ok(());
     };
     let bars = marker.appbars;
     log(&format!(
-        "Bekçi: ana süreç işaret bırakarak öldü (çökme ya da Görev Yöneticisi). {} şerit. Şimdiki durum:",
+        "Guard: the main process died leaving a marker (crash or Task Manager). {} strips. Current state:",
         bars.len()
     ));
     log_work_areas();
@@ -498,23 +498,23 @@ fn guard_child(dir: &Path, pid: u32) -> Result<(), String> {
     let watch = Deadline::after(t0, Duration::from_secs(10));
     while watch.left(Instant::now()).is_some() {
         if !still_reserved(&bars, &work_tops()) {
-            log(&format!("Bekçi: Windows 30 px'i KENDİSİ bıraktı, ölümden {} ms sonra. Adımlara gerek kalmadı.", ms()));
+            log(&format!("Guard: Windows released the 30 px BY ITSELF, {} ms after the death. No steps were needed.", ms()));
             restore_appbars(&am, appbar_remove);
             return Ok(());
         }
         std::thread::sleep(Duration::from_millis(250));
     }
-    log("Bekçi: 10 sn geçti, 30 px hâlâ ayrılmış. Adımlar başlıyor.");
+    log("Guard: 10 s passed, the 30 px are still reserved. Starting the steps.");
 
     let mut step1 = || {
         let had = tm.exists();
         let ok = taskbar::restore(&Win32Shell, &tm);
         log(&format!(
-            "  Windows görev çubuğu: {}",
+            "  Windows taskbar: {}",
             if !had {
-                "işaret yok, dokunulmadı".to_string()
+                "no marker, left alone".to_string()
             } else {
-                format!("geri getirme {}", if ok { "tamam" } else { "başarısız" })
+                format!("restore {}", if ok { "ok" } else { "failed" })
             }
         ));
     };
@@ -535,7 +535,7 @@ fn guard_child(dir: &Path, pid: u32) -> Result<(), String> {
                 Some(&mut result),
             )
         };
-        log(&format!("  WM_SETTINGCHANGE yayını: {}", if sent.0 != 0 { "gönderildi" } else { "zaman aşımı" }));
+        log(&format!("  WM_SETTINGCHANGE broadcast: {}", if sent.0 != 0 { "sent" } else { "timed out" }));
     };
     let mut step3b = || {
         for m in monitors() {
@@ -550,31 +550,31 @@ fn guard_child(dir: &Path, pid: u32) -> Result<(), String> {
             }
             .is_ok();
             log(&format!(
-                "  SPI_SETWORKAREA (üst kenar {} -> {}): {}",
+                "  SPI_SETWORKAREA (top edge {} -> {}): {}",
                 m.work.top,
                 m.rect.top,
-                if ok { "kabul" } else { "ret" }
+                if ok { "accepted" } else { "rejected" }
             ));
         }
     };
     let mut step4 = || {
-        log("  Explorer'ı yeniden başlatma önerisi gösteriliyor (bekçi Explorer'ı kendisi kapatmaz).");
+        log("  Showing the 'restart Explorer' suggestion (the guard never closes Explorer itself).");
         // SAFETY: a message box with live HSTRINGs; blocks only the guard until the owner clicks.
         unsafe {
             MessageBoxW(
                 None,
-                &HSTRING::from("Notch deneme aracı üstteki 30 px'i geri veremedi.\n\nGörev Yöneticisi > Windows Gezgini > Yeniden başlat ile düzelir."),
-                &HSTRING::from("Notch deneme bekçisi"),
+                &HSTRING::from("The Notch trial tool could not give back the top 30 px.\n\nFix it with Task Manager > Windows Explorer > Restart."),
+                &HSTRING::from("Notch trial guard"),
                 MB_OK | MB_ICONWARNING | MB_TOPMOST | MB_SETFOREGROUND,
             )
         };
     };
     let mut steps: [(&str, &mut dyn FnMut()); 5] = [
-        ("1) Windows görev çubuğunu göster, otomatik gizleyi geri yaz", &mut step1),
-        ("2) işaretteki her şerit için ABM_REMOVE", &mut step2),
-        ("3a) WM_SETTINGCHANGE (SPI_SETWORKAREA) yayını", &mut step3a),
-        ("3b) SPI_SETWORKAREA ile üst kenarı geri yaz", &mut step3b),
-        ("4) 'Explorer'ı yeniden başlat' önerisi", &mut step4),
+        ("1) show the Windows taskbar, restore auto-hide", &mut step1),
+        ("2) ABM_REMOVE for every strip in the marker", &mut step2),
+        ("3a) WM_SETTINGCHANGE (SPI_SETWORKAREA) broadcast", &mut step3a),
+        ("3b) write the top edge back with SPI_SETWORKAREA", &mut step3b),
+        ("4) the 'restart Explorer' suggestion", &mut step4),
     ];
     let mut reserved = || {
         std::thread::sleep(Duration::from_millis(1500));
@@ -582,8 +582,8 @@ fn guard_child(dir: &Path, pid: u32) -> Result<(), String> {
         still_reserved(&bars, &work_tops())
     };
     match run_steps(&mut steps, &mut reserved) {
-        Some(_) => log(&format!("Bekçi: 30 px ölümden {} ms sonra serbest.", ms())),
-        None => log("Bekçi: hiçbir adım 30 px'i geri vermedi."),
+        Some(_) => log(&format!("Guard: the 30 px were free {} ms after the death.", ms())),
+        None => log("Guard: no step gave the 30 px back."),
     }
     let _ = restore_appbars(&am, appbar_remove); // the marker goes even when step 1 already freed the space
     Ok(())
@@ -592,7 +592,7 @@ fn guard_child(dir: &Path, pid: u32) -> Result<(), String> {
 // ---------------------------------------------------------------- hide
 
 fn hide(dir: &Path) -> Result<(), String> {
-    log("Görev çubuğu 60 sn tamamen gizlenecek. Dene: Win tuşu, Win+A, Win+N.");
+    log("The taskbar will be fully hidden for 60 s. Try: Win key, Win+A, Win+N.");
     if crate::hide_for(
         &Win32Shell,
         &taskbar_marker(dir),
@@ -603,7 +603,7 @@ fn hide(dir: &Path) -> Result<(), String> {
     ) {
         Ok(())
     } else {
-        Err("Görev çubuğu geri getirilemedi: 'notch-probe restore' yaz ya da Explorer'ı yeniden başlat.".into())
+        Err("Could not restore the taskbar: run 'notch-probe restore' or restart Explorer.".into())
     }
 }
 
@@ -635,25 +635,25 @@ unsafe extern "system" fn island_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lpar
         WM_LBUTTONDOWN => {
             let p = lparam_point(lparam);
             log(&format!(
-                "Adaya tıklama geldi ({}), mod {}. Öndeki uygulama: {}.",
-                if inside(boxr, p) { "kutunun içi" } else { "SAYDAM ALAN: tıklama alttaki pencereye GEÇMEDİ" },
+                "Click on the island ({}), mode {}. Foreground app: {}.",
+                if inside(boxr, p) { "inside the box" } else { "TRANSPARENT AREA: the click did NOT pass through to the window below" },
                 ISLAND_MODE.with(Cell::get),
                 foreground_exe()
             ));
             LRESULT(0)
         }
         WM_MOUSEACTIVATE => {
-            log("WM_MOUSEACTIVATE geldi (Windows adayı etkinleştirmek istiyor mu, bakılıyor).");
+            log("WM_MOUSEACTIVATE arrived (checking whether Windows wants to activate the island).");
             // SAFETY: default handling (WS_EX_NOACTIVATE is the thing under test, not this answer).
             unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
         }
         WM_ACTIVATE => {
             log(&format!(
-                "Ada {}.",
+                "Island {}.",
                 if wparam.0 & 0xFFFF == 0 {
-                    "odağı bıraktı"
+                    "released focus"
                 } else {
-                    "ODAK ALDI (öndeki pencere odağını kaybetti)"
+                    "TOOK FOCUS (the foreground window lost focus)"
                 }
             ));
             LRESULT(0)
@@ -672,7 +672,7 @@ unsafe extern "system" fn island_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lpar
                 FillRect(dc, &b, inner);
                 SetBkMode(dc, TRANSPARENT);
                 SetTextColor(dc, COLORREF(0x00FF_FFFF));
-                let mut label: Vec<u16> = "Kutu: buraya tıkla".encode_utf16().collect();
+                let mut label: Vec<u16> = "Box: click here".encode_utf16().collect();
                 DrawTextW(dc, &mut label, &mut b, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
                 SetTextColor(dc, COLORREF(0x0000_0000));
                 let mut top = RECT { bottom: b.top, ..rc };
@@ -703,7 +703,7 @@ fn island() -> Result<(), String> {
     let hwnd = create(
         WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST,
         class,
-        "Mod 1 (ilk 30 sn): HTTRANSPARENT. Gri alana tıkla: alttaki pencere tıklamayı alıyor mu?",
+        "Mode 1 (first 30 s): HTTRANSPARENT. Click the grey area: does the window below get the click?",
         WS_POPUP,
         RECT { left, top, right: left + w, bottom: top + h },
     )?;
@@ -712,16 +712,16 @@ fn island() -> Result<(), String> {
         SetLayeredWindowAttributes(hwnd, COLORREF(0), 200, LWA_ALPHA).map_err(|e| e.to_string())?;
         let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
     }
-    log(&format!("Örnek ada açıldı (WS_EX_NOACTIVATE, hep üstte). Öndeki uygulama: {}.", foreground_exe()));
-    log("Mod 1: saydam (gri) alan WM_NCHITTEST -> HTTRANSPARENT ile geçiriliyor.");
+    log(&format!("Sample island opened (WS_EX_NOACTIVATE, always on top). Foreground app: {}.", foreground_exe()));
+    log("Mode 1: the transparent (grey) area is passed through with WM_NCHITTEST -> HTTRANSPARENT.");
     let mut toggles = 0u32;
     let mut transparent = false;
     pump(deadline, Duration::from_millis(16), || {
         if ISLAND_MODE.with(Cell::get) == 1 {
             if half.left(Instant::now()).is_none() {
                 ISLAND_MODE.with(|c| c.set(2));
-                set_label(hwnd, "Mod 2 (son 30 sn): imleç izleme + WS_EX_TRANSPARENT. Gri alana yine tıkla.");
-                log("Mod 2: imleç 60 Hz izleniyor; kutunun dışında WS_EX_TRANSPARENT açılıyor.");
+                set_label(hwnd, "Mode 2 (last 30 s): cursor tracking + WS_EX_TRANSPARENT. Click the grey area again.");
+                log("Mode 2: the cursor is tracked at 60 Hz; WS_EX_TRANSPARENT is turned on outside the box.");
             }
             return;
         }
@@ -743,7 +743,7 @@ fn island() -> Result<(), String> {
     });
     destroy(hwnd);
     log(&format!(
-        "60 sn doldu, ada kapandı. Mod 2'de tıklama geçirme {toggles} kez açılıp kapandı. Öndeki uygulama: {}.",
+        "60 s are up, island closed. In mode 2 click-through toggled {toggles} times. Foreground app: {}.",
         foreground_exe()
     ));
     Ok(())
@@ -755,16 +755,16 @@ fn notification_state() -> String {
     // SAFETY: no arguments.
     match unsafe { SHQueryUserNotificationState() } {
         Ok(s) => match s.0 {
-            1 => "QUNS_NOT_PRESENT (ekran koruyucu / kilit)".into(),
-            2 => "QUNS_BUSY (tam ekran uygulama)".into(),
-            3 => "QUNS_RUNNING_D3D_FULL_SCREEN (ÖZEL TAM EKRAN oyun)".into(),
-            4 => "QUNS_PRESENTATION_MODE (sunum)".into(),
-            5 => "QUNS_ACCEPTS_NOTIFICATIONS (normal masaüstü)".into(),
+            1 => "QUNS_NOT_PRESENT (screensaver / lock)".into(),
+            2 => "QUNS_BUSY (fullscreen app)".into(),
+            3 => "QUNS_RUNNING_D3D_FULL_SCREEN (EXCLUSIVE FULLSCREEN game)".into(),
+            4 => "QUNS_PRESENTATION_MODE (presentation)".into(),
+            5 => "QUNS_ACCEPTS_NOTIFICATIONS (normal desktop)".into(),
             6 => "QUNS_QUIET_TIME".into(),
-            7 => "QUNS_APP (Mağaza uygulaması tam ekran)".into(),
-            other => format!("bilinmeyen durum {other}"),
+            7 => "QUNS_APP (Store app fullscreen)".into(),
+            other => format!("unknown state {other}"),
         },
-        Err(error) => format!("okunamadı ({error})"),
+        Err(error) => format!("could not be read ({error})"),
     }
 }
 
@@ -776,18 +776,18 @@ fn topmost() -> Result<(), String> {
     let hwnd = create(
         WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE,
         class,
-        "Notch deneme: 4 sn hep üstte şerit",
+        "Notch trial: 4 s always-on-top strip",
         WS_POPUP,
         r,
     )?;
     for round in 1..=3 {
-        log(&format!("Tur {round}/3: 15 sn içinde oyuna geç. Şerit 15 sn sonra 4 sn görünecek."));
+        log(&format!("Round {round}/3: switch to the game within 15 s. The strip will show for 4 s after 15 s."));
         for left in [15, 10, 5] {
-            log(&format!("  {left} sn..."));
+            log(&format!("  {left} s..."));
             wait(Duration::from_secs(5));
         }
         log(&format!(
-            "  Şerit gösteriliyor. Windows'a göre şu an: {}. Öndeki uygulama: {}.",
+            "  Strip shown. According to Windows right now: {}. Foreground app: {}.",
             notification_state(),
             foreground_exe()
         ));
@@ -806,7 +806,7 @@ fn topmost() -> Result<(), String> {
         wait(Duration::from_secs(4));
         // SAFETY: our own window.
         let _ = unsafe { ShowWindow(hwnd, SW_HIDE) };
-        log(&format!("  Şerit gizlendi. Şimdi: {}. Öndeki uygulama: {}.", notification_state(), foreground_exe()));
+        log(&format!("  Strip hidden. Now: {}. Foreground app: {}.", notification_state(), foreground_exe()));
     }
     destroy(hwnd);
     Ok(())
@@ -823,15 +823,15 @@ unsafe extern "system" fn kb_hook(code: i32, wparam: WPARAM, lparam: LPARAM) -> 
         // SAFETY: for HC_ACTION, lParam points to a KBDLLHOOKSTRUCT (WH_KEYBOARD_LL contract).
         let k = unsafe { &*(lparam.0 as *const KBDLLHOOKSTRUCT) };
         let name = match k.vkCode {
-            0xAD => Some("Sessiz"),
-            0xAE => Some("Ses azalt"),
-            0xAF => Some("Ses artır"),
+            0xAD => Some("Mute"),
+            0xAE => Some("Volume down"),
+            0xAF => Some("Volume up"),
             _ => None,
         };
         if let Some(name) = name {
             if matches!(wparam.0 as u32, WM_KEYDOWN | WM_SYSKEYDOWN) {
                 SWALLOWED.with(|c| c.set(c.get() + 1));
-                log(&format!("Ses tuşu yakalandı ve yutuldu: {name}. Windows'un ses göstergesi çıktı mı?"));
+                log(&format!("Volume key captured and swallowed: {name}. Did the Windows volume overlay appear?"));
             }
             return LRESULT(1);
         }
@@ -844,12 +844,12 @@ fn volkeys() -> Result<(), String> {
     let deadline = Deadline::after(Instant::now(), HOLD);
     // SAFETY: a low-level hook on this thread, which pumps messages below; removed before returning.
     let hook = unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(kb_hook), Some(instance()?), 0) }
-        .map_err(|e| format!("Klavye kancası kurulamadı: {e}"))?;
-    log("Ses tuşları 60 sn yakalanıyor (yalnız Sessiz / Ses azalt / Ses artır; başka tuşa dokunulmuyor). Ses bu sürede değişmez.");
+        .map_err(|e| format!("Could not set up the keyboard hook: {e}"))?;
+    log("Volume keys are captured for 60 s (only Mute / Volume down / Volume up; no other key is touched). The volume does not change meanwhile.");
     pump(deadline, Duration::from_millis(250), || {});
     // SAFETY: the hook installed above.
     let _ = unsafe { UnhookWindowsHookEx(hook) };
-    log(&format!("60 sn doldu, kanca kaldırıldı. {} ses tuşu basışı yutuldu.", SWALLOWED.with(Cell::get)));
+    log(&format!("60 s are up, hook removed. {} volume key presses were swallowed.", SWALLOWED.with(Cell::get)));
     Ok(())
 }
 
@@ -867,11 +867,11 @@ fn exclude() -> Result<(), String> {
     let hwnd = create(
         WINDOW_EX_STYLE(0),
         class,
-        "ŞU AN: GÖRÜNÜR (ekran paylaşımında görünmeli)",
+        "NOW: VISIBLE (should show in screen sharing)",
         WS_OVERLAPPEDWINDOW | WS_VISIBLE,
         RECT { left, top, right: left + w, bottom: top + h },
     )?;
-    log("Örnek pencere açıldı. Bayrak 5 sn'de bir açılıp kapanacak.");
+    log("Sample window opened. The flag will toggle every 5 s.");
     let mut hidden = false;
     let mut next = Instant::now() + Duration::from_secs(5);
     pump(deadline, Duration::from_millis(100), || {
@@ -889,23 +889,23 @@ fn exclude() -> Result<(), String> {
         set_label(
             hwnd,
             if hidden {
-                "ŞU AN: YAKALAMADAN GİZLİ (paylaşımda görünmemeli)"
+                "NOW: HIDDEN FROM CAPTURE (should not show in sharing)"
             } else {
-                "ŞU AN: GÖRÜNÜR (ekran paylaşımında görünmeli)"
+                "NOW: VISIBLE (should show in screen sharing)"
             },
         );
         log(&format!(
-            "WDA_EXCLUDEFROMCAPTURE {}: {}; Windows'un okuduğu değer {:#x}.",
-            if hidden { "AÇILDI" } else { "kapandı" },
+            "WDA_EXCLUDEFROMCAPTURE {}: {}; the value Windows read back is {:#x}.",
+            if hidden { "TURNED ON" } else { "turned off" },
             match result {
-                Ok(()) => "kabul".to_string(),
-                Err(error) => format!("RET ({error})"),
+                Ok(()) => "accepted".to_string(),
+                Err(error) => format!("REJECTED ({error})"),
             },
             now
         ));
     });
     destroy(hwnd);
-    log("60 sn doldu, pencere kapandı.");
+    log("60 s are up, window closed.");
     Ok(())
 }
 
@@ -937,7 +937,7 @@ fn uia_overflow(strip_bottom: i32) -> Result<(), String> {
         CUIAutomation, IUIAutomation, IUIAutomationInvokePattern, TreeScope_Descendants, UIA_ButtonControlTypeId,
         UIA_InvokePatternId,
     };
-    let tray = Win32Shell::tray().ok_or("Explorer'ın görev çubuğu bulunamadı")?;
+    let tray = Win32Shell::tray().ok_or("Explorer's taskbar was not found")?;
     let e = |error: windows::core::Error| error.to_string();
     // SAFETY: COM on this (window) thread, then plain UIA client calls on live objects.
     unsafe {
@@ -949,7 +949,7 @@ fn uia_overflow(strip_bottom: i32) -> Result<(), String> {
             .FindAll(TreeScope_Descendants, &uia.CreateTrueCondition().map_err(e)?)
             .map_err(e)?;
         let n = all.Length().map_err(e)?;
-        log(&format!("UIA: görev çubuğunda {n} öğe. Düğmeler:"));
+        log(&format!("UIA: {n} items in the taskbar. Buttons:"));
         let mut chosen = None;
         for i in 0..n {
             let Ok(el) = all.GetElement(i) else { continue };
@@ -961,24 +961,24 @@ fn uia_overflow(strip_bottom: i32) -> Result<(), String> {
             let class = el.CurrentClassName().map(|b| b.to_string()).unwrap_or_default();
             let hit = crate::looks_like_chevron(&name, &id);
             log(&format!(
-                "  düğme: ad='{name}' kimlik='{id}' sınıf='{class}'{}",
-                if hit && chosen.is_none() { "  <- ok düğmesi sayıldı" } else { "" }
+                "  button: name='{name}' id='{id}' class='{class}'{}",
+                if hit && chosen.is_none() { "  <- counted as the arrow button" } else { "" }
             ));
             if hit && chosen.is_none() {
                 chosen = Some(el);
             }
         }
         let Some(button) = chosen else {
-            return Err("Gizli simgeler ok düğmesi UIA'da bulunamadı (çubuk gizliyken görünmüyor olabilir).".into());
+            return Err("The hidden-icons arrow button was not found in UIA (it may be invisible while the bar is hidden).".into());
         };
         let before = top_windows();
         let invoked =
             button.GetCurrentPatternAs::<IUIAutomationInvokePattern>(UIA_InvokePatternId).and_then(|p| p.Invoke());
         log(&format!(
-            "Ok düğmesine UIA ile basıldı: {}",
+            "The arrow button was pressed through UIA: {}",
             match &invoked {
-                Ok(()) => "kabul".to_string(),
-                Err(error) => format!("RET ({error})"),
+                Ok(()) => "accepted".to_string(),
+                Err(error) => format!("REJECTED ({error})"),
             }
         ));
         wait(Duration::from_millis(1200));
@@ -991,12 +991,12 @@ fn uia_overflow(strip_bottom: i32) -> Result<(), String> {
             }
         }
         if panels.is_empty() {
-            log("Basıştan sonra yeni bir panel penceresi görünmedi: panel çubuk gizliyken açılmıyor olabilir.");
+            log("No new panel window appeared after the press: the panel may not open while the bar is hidden.");
         }
         for h in panels {
             let Some(r) = window_rect(h) else { continue };
             log(&format!(
-                "Yeni pencere: sınıf '{}', yer ({},{})-({},{}). Şeridin altına (y={strip_bottom}) taşınıyor.",
+                "New window: class '{}', place ({},{})-({},{}). Moving it below the strip (y={strip_bottom}).",
                 class_name(h),
                 r.left,
                 r.top,
@@ -1007,18 +1007,18 @@ fn uia_overflow(strip_bottom: i32) -> Result<(), String> {
             log(&format!(
                 "  SetWindowPos: {}",
                 match &moved {
-                    Ok(()) => "kabul".to_string(),
-                    Err(error) => format!("RET ({error})"),
+                    Ok(()) => "accepted".to_string(),
+                    Err(error) => format!("REJECTED ({error})"),
                 }
             ));
             wait(Duration::from_millis(1000));
             match window_rect(h) {
                 Some(after) if !IsWindowVisible(h).as_bool() => {
-                    log(&format!("  1 sn sonra: panel KAPANDI (yer {},{}).", after.left, after.top))
+                    log(&format!("  After 1 s: the panel CLOSED (place {},{}).", after.left, after.top))
                 }
-                Some(after) if after.top == strip_bottom => log("  1 sn sonra: panel taşındığı yerde DURUYOR."),
-                Some(after) => log(&format!("  1 sn sonra: Explorer paneli GERİ ÇEKTİ (y={}).", after.top)),
-                None => log("  1 sn sonra: pencere artık yok."),
+                Some(after) if after.top == strip_bottom => log("  After 1 s: the panel STAYS where it was moved."),
+                Some(after) => log(&format!("  After 1 s: Explorer MOVED THE PANEL BACK (y={}).", after.top)),
+                None => log("  After 1 s: the window is gone."),
             }
         }
     }
@@ -1049,7 +1049,7 @@ fn record(msg: crate::TrayMsg) {
         match (msg.message, at) {
             (0 | 1, None) => {
                 let exe = exe_of_pid(pid_of(hwnd));
-                log(&format!("Tepsi aynası: simge eklendi: {exe} (ipucu: '{}').", msg.tip.as_deref().unwrap_or("")));
+                log(&format!("Tray mirror: icon added: {exe} (tip: '{}').", msg.tip.as_deref().unwrap_or("")));
                 icons.push(Icon {
                     hwnd: msg.hwnd,
                     uid: msg.uid,
@@ -1069,7 +1069,7 @@ fn record(msg: crate::TrayMsg) {
                 }
             }
             (2, Some(i)) => {
-                log(&format!("Tepsi aynası: simge kaldırıldı: {}.", icons[i].exe));
+                log(&format!("Tray mirror: icon removed: {}.", icons[i].exe));
                 icons.remove(i);
                 ICONS_DIRTY.with(|d| d.set(true));
             }
@@ -1124,10 +1124,10 @@ fn click_icon(index: usize) {
                 })
             };
             log(&format!(
-                "Tepsi aynası: {} simgesine sağ tık gönderildi (sürüm {}): {}. Uygulamanın kendi menüsü açıldı mı?",
+                "Tray mirror: right-click sent to the {} icon (version {}): {}. Did the app's own menu open?",
                 icon.exe,
                 icon.version,
-                if posted { "iletildi" } else { "İLETİLEMEDİ" }
+                if posted { "delivered" } else { "NOT DELIVERED" }
             ));
         }
     });
@@ -1181,7 +1181,7 @@ fn mirror(deadline: Deadline, dpi: u32) -> Result<(), String> {
     let list = create(
         WS_EX_TOPMOST,
         w!("NotchProbeTrayList"),
-        "Tepsi aynası (deneme): bir düğmeye tıkla = o simgeye sağ tık",
+        "Tray mirror (trial): click a button = right-click that icon",
         WS_OVERLAPPEDWINDOW | WS_VISIBLE,
         RECT { left: s(100), top: s(100), right: s(580), bottom: s(640) },
     )?;
@@ -1193,13 +1193,13 @@ fn mirror(deadline: Deadline, dpi: u32) -> Result<(), String> {
     // SAFETY: a lookup by class; compared, not used.
     let first = unsafe { FindWindowW(w!("Shell_TrayWnd"), PCWSTR::null()) }.ok();
     log(&format!(
-        "Tepsi aynası açıldı. FindWindow(Shell_TrayWnd) artık bizim pencereyi mi buluyor: {}.",
-        if first == Some(fake) { "EVET" } else { "hayır (Explorer'ınki önde)" }
+        "Tray mirror opened. Does FindWindow(Shell_TrayWnd) now find our window: {}.",
+        if first == Some(fake) { "YES" } else { "no (Explorer's is first)" }
     ));
     // SAFETY: a registered message broadcast without pointers; posted, so a hung app cannot block us.
     let created = unsafe { RegisterWindowMessageW(w!("TaskbarCreated")) };
     let _ = unsafe { PostMessageW(Some(HWND_BROADCAST), created, WPARAM(0), LPARAM(0)) };
-    log("TaskbarCreated yayını gönderildi: uygulamalar simgelerini yeniden ekliyor (bize gelir, Explorer'a iletilir).");
+    log("TaskbarCreated broadcast sent: apps are re-adding their icons (they come to us and are forwarded to Explorer).");
     let mut buttons = vec![];
     let mut next_raise = Instant::now();
     pump(deadline, Duration::from_millis(200), || {
@@ -1217,9 +1217,9 @@ fn mirror(deadline: Deadline, dpi: u32) -> Result<(), String> {
     let _ = unsafe { PostMessageW(Some(HWND_BROADCAST), created, WPARAM(0), LPARAM(0)) };
     let names = ICONS.with(|icons| icons.borrow().iter().map(|i| i.exe.clone()).collect::<Vec<_>>().join(", "));
     log(&format!(
-        "Tepsi aynası kapandı ({} ileti geldi). Görülen simgeler: {}. TaskbarCreated yeniden yayınlandı.",
+        "Tray mirror closed ({} messages arrived). Icons seen: {}. TaskbarCreated was broadcast again.",
         MESSAGES.with(Cell::get),
-        if names.is_empty() { "yok".to_string() } else { names }
+        if names.is_empty() { "none".to_string() } else { names }
     ));
     Ok(())
 }
@@ -1229,16 +1229,16 @@ fn tray(dir: &Path) -> Result<(), String> {
     let phase_a = Deadline::after(Instant::now(), Duration::from_secs(25));
     let m = primary()?;
     let marker = taskbar_marker(dir);
-    log("Bölüm A (25 sn): görev çubuğu gizleniyor, gizli simgeler paneli UIA ile açılıp şeridin altına taşınacak.");
+    log("Part A (25 s): the taskbar is hidden; the hidden-icons panel is opened through UIA and moved below the strip.");
     {
         let _ops = ops();
         if let Err(error) = taskbar::enable(&Win32Shell, &marker, true) {
-            log(&format!("Gizleme başarısız: {error}"));
+            log(&format!("Hiding failed: {error}"));
         }
     }
     wait(Duration::from_millis(1500));
     if let Err(error) = uia_overflow(m.rect.top + strip_height(m.dpi)) {
-        log(&format!("Panel denemesi: {error}"));
+        log(&format!("Panel trial: {error}"));
     }
     let mut next = Instant::now();
     pump(phase_a, Duration::from_millis(200), || {
@@ -1256,8 +1256,8 @@ fn tray(dir: &Path) -> Result<(), String> {
             return Ok(());
         }
         let back = taskbar::restore(&Win32Shell, &marker);
-        log(&format!("Bölüm A bitti: görev çubuğu geri {}.", if back { "getirildi" } else { "GETİRİLEMEDİ" }));
+        log(&format!("Part A finished: taskbar {}.", if back { "restored" } else { "NOT RESTORED" }));
     }
-    log("Bölüm B (35 sn): tepsi aynası. Açılan listede Discord, Steam, OneDrive görünüyor mu, düğmeye tıklayınca menüsü açılıyor mu?");
+    log("Part B (35 s): tray mirror. Do Discord, Steam, OneDrive show in the list, and does clicking a button open its menu?");
     mirror(deadline, m.dpi)
 }

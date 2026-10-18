@@ -1,4 +1,4 @@
-//! notch-probe: Peeka Dalga 0 deneme aracı.
+//! notch-probe: Peeka Wave 0 trial tool.
 //!
 //! Every state-changing command reverts by itself after `HOLD` (60 s). Before it changes anything it writes a marker
 //! under `%LOCALAPPDATA%\PeekaProbe\`; every start (any command, except the guard child) first restores whatever
@@ -57,29 +57,29 @@ impl Cmd {
     }
 }
 
-pub const USAGE: &str = "notch-probe <komut>
+pub const USAGE: &str = "notch-probe <command>
 
-  restore        Kalan her şeyi geri al (görev çubuğu görünür, AppBar kaldırılır, Wi-Fi/Bluetooth açılır)
-  appbar on|off  Her monitörde üstte 30 px şerit (AppBar). off: kalan şeridi kaldırır
-  guard          appbar on + bekçi süreç (ana süreç öldürülünce 30 px'i geri vermeyi dener)
-  hide on|off    Görev çubuğunu tamamen gizle (tam gizleme). off: geri getir
-  island         Ortada saydam örnek ada (tıklama geçirme ve odak denemesi)
-  tray           Gizli simgeler paneli denemesi + tepsi aynası
-  radios         Wi-Fi ve Bluetooth'u 5 sn kapatıp geri açar
-  topmost        Tam ekran oyun denemesi: 15 sn bekle, 4 sn hep üstte şerit (3 kez)
-  volkeys        Ses tuşlarını 60 sn yakalar
-  exclude        Ekran yakalamasından hariç tutulan örnek pencere (5 sn'de bir açılır/kapanır)
-  smtc           Çalan parçayı yazar (salt okuma)
-  dpapi          Sabit bir deneme metnini şifreleyip çözer
+  restore        Undo everything left over (taskbar visible, AppBar removed, Wi-Fi/Bluetooth on)
+  appbar on|off  A 30 px strip on top of every monitor (AppBar). off: removes a leftover strip
+  guard          appbar on + a guard process (tries to give the 30 px back when the main process is killed)
+  hide on|off    Hide the taskbar completely (full hide). off: bring it back
+  island         A transparent sample island in the middle (click-through and focus trial)
+  tray           Hidden-icons panel trial + tray mirror
+  radios         Turns Wi-Fi and Bluetooth off for 5 s and back on
+  topmost        Fullscreen game trial: wait 15 s, then an always-on-top strip for 4 s (3 times)
+  volkeys        Captures the volume keys for 60 s
+  exclude        A sample window excluded from screen capture (toggles every 5 s)
+  smtc           Prints the playing track (read-only)
+  dpapi          Encrypts and decrypts a fixed trial text
 
-Değiştiren her komut 60 sn sonra kendiliğinden geri alır. Ctrl+C de geri alır.
-Günlük ve işaret dosyaları: %LOCALAPPDATA%\\PeekaProbe\\";
+Every command that changes something undoes it by itself after 60 s. Ctrl+C undoes it too.
+Log and marker files: %LOCALAPPDATA%\\PeekaProbe\\";
 
 fn on_off(arg: Option<&str>, name: &str) -> Result<bool, String> {
     match arg {
         Some("on") => Ok(true),
         Some("off") => Ok(false),
-        _ => Err(format!("'{name}' için 'on' ya da 'off' yaz")),
+        _ => Err(format!("write 'on' or 'off' for '{name}'")),
     }
 }
 
@@ -100,8 +100,8 @@ pub fn parse(args: &[String]) -> Result<Cmd, String> {
         ["exclude"] => Cmd::Exclude,
         ["smtc"] => Cmd::Smtc,
         ["dpapi"] => Cmd::Dpapi,
-        [GUARD_CHILD_ARG, pid] => Cmd::GuardChild(pid.parse().map_err(|_| "bekçi: geçersiz pid".to_string())?),
-        _ => return Err(format!("Bilinmeyen komut: {}", words.join(" "))),
+        [GUARD_CHILD_ARG, pid] => Cmd::GuardChild(pid.parse().map_err(|_| "guard: invalid pid".to_string())?),
+        _ => return Err(format!("Unknown command: {}", words.join(" "))),
     };
     Ok(cmd)
 }
@@ -112,7 +112,7 @@ pub fn parse(args: &[String]) -> Result<Cmd, String> {
 pub fn data_dir() -> Result<PathBuf, String> {
     std::env::var_os("LOCALAPPDATA")
         .map(|base| PathBuf::from(base).join("PeekaProbe"))
-        .ok_or_else(|| "LOCALAPPDATA tanımlı değil".into())
+        .ok_or_else(|| "LOCALAPPDATA is not set".into())
 }
 
 pub fn taskbar_marker(dir: &Path) -> PathBuf {
@@ -176,7 +176,7 @@ pub(crate) fn ops() -> std::sync::MutexGuard<'static, ()> {
     OPS.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-/// `hide on`: tamamen gizle, re-hide every `step` until `hold` is over, then put the bar back. `now` and `sleep` are
+/// `hide on`: hide completely, re-hide every `step` until `hold` is over, then put the bar back. `now` and `sleep` are
 /// the clock (fakes in tests). The revert runs even when hiding failed half way.
 pub fn hide_for(
     shell: &dyn taskbar::Shell,
@@ -190,8 +190,8 @@ pub fn hide_for(
     {
         let _ops = ops();
         match taskbar::enable(shell, marker, true) {
-            Ok(()) => log("Görev çubuğu tamamen gizlendi (otomatik gizle + SW_HIDE). İşaret yazıldı."),
-            Err(error) => log(&format!("Gizleme başarısız: {error}")),
+            Ok(()) => log("Taskbar fully hidden (auto-hide + SW_HIDE). Marker written."),
+            Err(error) => log(&format!("Hiding failed: {error}")),
         }
     }
     let mut came_back = 0u32;
@@ -203,17 +203,17 @@ pub fn hide_for(
         }
         if shell.bars_visible() == Some(true) {
             came_back += 1;
-            log("Görev çubuğu yeniden göründü (Win tuşu, Explorer yeniden başlaması ya da yeni monitör); yeniden gizleniyor.");
+            log("The taskbar reappeared (Win key, Explorer restart or a new monitor); hiding it again.");
         }
         if let Err(error) = taskbar::rehide(shell, marker) {
-            log(&format!("Yeniden gizleme başarısız: {error}"));
+            log(&format!("Re-hiding failed: {error}"));
         }
     }
     let _ops = ops();
     let back = taskbar::restore(shell, marker);
     log(&format!(
-        "60 sn doldu. Görev çubuğu geri {}. Bu sürede {came_back} kez kendiliğinden göründü.",
-        if back { "getirildi" } else { "GETİRİLEMEDİ (notch-probe restore dene)" }
+        "60 s are up. Taskbar {}. It reappeared by itself {came_back} times meanwhile.",
+        if back { "restored" } else { "NOT RESTORED (try notch-probe restore)" }
     ));
     back
 }
@@ -234,7 +234,7 @@ pub struct AppBarMarker {
 }
 
 pub fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), String> {
-    let dir = path.parent().ok_or("İşaret klasörü yok")?;
+    let dir = path.parent().ok_or("No marker folder")?;
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     std::fs::write(path, serde_json::to_vec(value).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
@@ -252,9 +252,9 @@ pub fn restore_appbars(marker: &Path, mut remove: impl FnMut(isize) -> bool) -> 
     for bar in &m.appbars {
         let sent = remove(bar.hwnd);
         log(&format!(
-            "AppBar kaldırma (ABM_REMOVE) pencere {:#x}: {}",
+            "AppBar removal (ABM_REMOVE) window {:#x}: {}",
             bar.hwnd,
-            if sent { "gönderildi" } else { "gönderilemedi" }
+            if sent { "sent" } else { "could not be sent" }
         ));
     }
     let _ = std::fs::remove_file(marker);
@@ -272,13 +272,13 @@ pub fn still_reserved(bars: &[Bar], monitors: &[(i32, i32)]) -> bool {
 /// Returns the index of the step that worked, None = none did.
 pub fn run_steps(steps: &mut [(&str, &mut dyn FnMut())], reserved: &mut dyn FnMut() -> bool) -> Option<usize> {
     for (i, (name, step)) in steps.iter_mut().enumerate() {
-        log(&format!("Bekçi adım {}: {name}", i + 1));
+        log(&format!("Guard step {}: {name}", i + 1));
         step();
         if !reserved() {
-            log(&format!("Bekçi adım {} İŞE YARADI: üstteki 30 px serbest.", i + 1));
+            log(&format!("Guard step {} WORKED: the top 30 px are free.", i + 1));
             return Some(i);
         }
-        log(&format!("Bekçi adım {} sonrası 30 px hâlâ ayrılmış.", i + 1));
+        log(&format!("After guard step {} the 30 px are still reserved.", i + 1));
     }
     None
 }
@@ -288,6 +288,7 @@ pub fn run_steps(steps: &mut [(&str, &mut dyn FnMut())], reserved: &mut dyn FnMu
 /// Is this taskbar button the "show hidden icons" arrow? The name is localised (owner: Turkish), the id is not stable.
 pub fn looks_like_chevron(name: &str, automation_id: &str) -> bool {
     let (name, id) = (name.to_lowercase(), automation_id.to_lowercase());
+    // "gizli" is the button name on a Turkish Windows.
     ["gizli", "hidden"].iter().any(|w| name.contains(w)) || ["chevron", "overflow"].iter().any(|w| id.contains(w))
 }
 
@@ -350,12 +351,12 @@ pub fn restore_all(dir: &Path) {
         if tb.exists() {
             let ok = taskbar::restore(&taskbar::Win32Shell, &tb);
             log(&format!(
-                "Kalan görev çubuğu işareti bulundu: görev çubuğu {}.",
-                if ok { "geri getirildi" } else { "GETİRİLEMEDİ (Explorer çalışıyor mu?)" }
+                "Leftover taskbar marker found: taskbar {}.",
+                if ok { "restored" } else { "NOT RESTORED (is Explorer running?)" }
             ));
         }
         if let Some(n) = restore_appbars(&appbar_marker(dir), win::appbar_remove) {
-            log(&format!("Kalan AppBar işareti bulundu: {n} şerit için kaldırma gönderildi."));
+            log(&format!("Leftover AppBar marker found: removal sent for {n} strips."));
             win::log_work_areas();
         }
         let rm = radios_marker(dir);
@@ -399,7 +400,7 @@ pub fn run(args: &[String]) -> i32 {
     #[cfg(not(windows))]
     {
         let _ = cmd;
-        eprintln!("notch-probe yalnız Windows'ta çalışır.");
+        eprintln!("notch-probe only runs on Windows.");
         1
     }
 }
@@ -409,7 +410,7 @@ pub fn run(args: &[String]) -> i32 {
 pub(crate) fn on_ctrl(dir: &Path) {
     EXITING.store(true, Ordering::SeqCst);
     let _ops = ops();
-    log("Ctrl+C ya da pencere kapatma: her şey geri alınıyor.");
+    log("Ctrl+C or closing the window: everything is being undone.");
     restore_all(dir);
 }
 
@@ -610,8 +611,8 @@ mod tests {
     }
 
     #[test]
-    fn the_overflow_arrow_is_found_in_turkish_and_english() {
-        assert!(looks_like_chevron("Gizli simgeleri göster", ""));
+    fn the_overflow_arrow_is_found_by_name_or_id() {
+        assert!(looks_like_chevron("Show hidden icons", ""));
         assert!(looks_like_chevron("Show Hidden Icons", ""));
         assert!(looks_like_chevron("", "SystemTrayOverflowChevron"));
         assert!(!looks_like_chevron("Discord", "NotifyItemIcon"));
@@ -646,7 +647,7 @@ mod tests {
         let runs = Cell::new(0);
         let (mut a, mut b, mut c) =
             (|| runs.set(runs.get() + 1), || runs.set(runs.get() + 10), || panic!("never reached"));
-        let mut steps: [(&str, &mut dyn FnMut()); 3] = [("bir", &mut a), ("iki", &mut b), ("üç", &mut c)];
+        let mut steps: [(&str, &mut dyn FnMut()); 3] = [("one", &mut a), ("two", &mut b), ("three", &mut c)];
         let mut checks = 0;
         assert_eq!(
             run_steps(&mut steps, &mut || {
@@ -656,7 +657,7 @@ mod tests {
             Some(1)
         );
         assert_eq!(runs.get(), 11);
-        let mut none: [(&str, &mut dyn FnMut()); 1] = [("bir", &mut || {})];
+        let mut none: [(&str, &mut dyn FnMut()); 1] = [("one", &mut || {})];
         assert_eq!(run_steps(&mut none, &mut || true), None);
     }
 }

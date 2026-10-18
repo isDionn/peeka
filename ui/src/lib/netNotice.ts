@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import type { NetworkLevel } from "../bridge";
 
 export type NetNote = "lost" | "back";
-/** İnternet var mı: "none" ve "local" (ağ var, internet yok) yok sayılır; "unknown" karar vermez (null). */
+/** Is there internet: "none" and "local" (network but no internet) count as no; "unknown" doesn't decide (null). */
 export const netUp = (n: NetworkLevel | undefined): boolean | null => (n === undefined || n === "unknown" ? null : n === "internet" || n === "constrained");
 
 /**
- * Bağlantı koptu / geri geldi bildirimi (satır 28). Durum `holdMs` boyunca değişmeden kalırsa "oturmuş" sayılır: sallanan Wi-Fi tekrar bildirim açmaz.
- * İlk okuma sessizdir. Bildirim `showMs` sonra kalkar (`hold` iken kalkmaz); şeritteki ağ simgesi kalıcı bilgidir.
+ * Connection lost / back notice (row 28). A state counts as "settled" once it holds for `holdMs`: flaky Wi-Fi doesn't reopen the notice.
+ * The first reading is silent. The notice goes away after `showMs` (not while `hold`); the strip's network icon is the lasting info.
  */
 export function useNetNotice(network: NetworkLevel | undefined, hold = false, init: NetNote | null = null, holdMs = 3000, showMs = 4000) {
   const up = netUp(network);

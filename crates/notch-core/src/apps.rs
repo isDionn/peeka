@@ -30,7 +30,7 @@ pub struct RawWindow {
     /// Full exe path; empty when the process could not be opened (elevated, protected).
     pub exe_path: String,
     pub monitor: Option<usize>,
-    /// Notch cannot close it (`beyond_reach`): the strip menu offers "Görev Yöneticisi'ni aç" instead.
+    /// Notch cannot close it (`beyond_reach`): the strip menu offers "Open Task Manager" instead.
     pub elevated: bool,
 }
 
@@ -164,6 +164,7 @@ pub struct ListedApp {
 }
 
 /// Start Menu entries that are not apps.
+// Includes Turkish Start Menu words (kept on purpose: a Turkish Windows names its entries that way).
 const JUNK: [&str; 26] = [
     "uninstall",
     "kaldır",
@@ -287,7 +288,7 @@ pub fn activate(ctl: &dyn AppControl, items: &[AppItem], app_id: &str) -> Result
     }
 }
 
-/// "Pencereyi kapat" on one listed window.
+/// "Close window" on one listed window.
 pub fn close_window(ctl: &dyn AppControl, items: &[AppItem], hwnd: isize) -> Result<(), AppError> {
     if find_window(items, hwnd).ok_or(AppError::Unknown)?.1.elevated {
         return Err(AppError::Elevated);
@@ -295,7 +296,7 @@ pub fn close_window(ctl: &dyn AppControl, items: &[AppItem], hwnd: isize) -> Res
     ctl.close(hwnd).then_some(()).ok_or(AppError::Refused)
 }
 
-/// "Uygulamadan çık" (Wave 1): `WM_CLOSE` to every window of the app; no `TerminateProcess` yet.
+/// "Quit app" (Wave 1): `WM_CLOSE` to every window of the app; no `TerminateProcess` yet.
 pub fn close_app(ctl: &dyn AppControl, items: &[AppItem], app_id: &str) -> Result<(), AppError> {
     let windows = &item(items, app_id)?.windows;
     if windows.iter().any(|w| w.elevated) {
@@ -346,6 +347,7 @@ mod tests {
     #[test]
     fn start_list_launch_search_and_ids() {
         let apps = vec![
+            // Turkish dotted I on purpose: app names on a Turkish Windows must fold to plain `i` for search.
             ListedApp { app_id: "lnk:c:\\p\\İnkscape.lnk".into(), name: "İnkscape".into(), exe: None },
             ListedApp { app_id: "lnk:c:\\p\\Word.lnk".into(), name: "Word".into(), exe: Some("winword.exe".into()) },
         ];

@@ -204,7 +204,7 @@ mod tests {
     /// source (never compiled under `--lib`), like the lock test in `cmd`.
     #[test]
     fn layout_reuses_the_island_window_instead_of_rebuilding_it() {
-        let app = include_str!("../../../src-tauri/src/app.rs");
+        let app = include_str!("../../../crates/notch-app/src/app.rs");
         let at = app.find("fn build(").expect("fn build in app.rs");
         let body = &app[at..];
         let body = &body[body.find(" {\n").unwrap() + 3..];

@@ -1,4 +1,4 @@
 target/
-src-tauri/gen/
+crates/notch-app/gen/
 
 release/

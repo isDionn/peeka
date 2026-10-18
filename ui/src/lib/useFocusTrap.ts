@@ -5,7 +5,7 @@ const FOCUSABLE = 'a[href],button:not([disabled]):not([tabindex="-1"]),input:not
 export const focusables = (root: HTMLElement): HTMLElement[] =>
   [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((e) => !e.hasAttribute("disabled") && e.getAttribute("aria-hidden") !== "true");
 
-/** Kart davranışı: açılınca ilk denetime odak, Tab kartın içinde döner, Esc kapatır ve odak açan öğeye döner. Açan öğe sökülmüşse (çıkıntıdan açılan kart) klavye kullanılıyorsa `fallback` öğesine (F-08). */
+/** Card behavior: focus goes to the first control on open, Tab cycles inside the card, Esc closes and focus returns to the opener. If the opener is gone (a card opened from a peek) and the keyboard is in use, focus goes to `fallback` (F-08). */
 export function useFocusTrap(ref: React.RefObject<HTMLElement | null>, onClose: () => void, active = true, fallback?: () => HTMLElement | null) {
   const close = useRef(onClose);
   close.current = onClose;
@@ -30,7 +30,7 @@ export function useFocusTrap(ref: React.RefObject<HTMLElement | null>, onClose: 
       root.removeEventListener("keydown", onKey);
       if (opener?.isConnected) opener.focus();
       else if (fallback && document.documentElement.hasAttribute("data-kb") && (!document.activeElement || document.activeElement === document.body)) fallback()?.focus();
-      else if (!document.activeElement || document.activeElement === document.body) document.querySelector<HTMLElement>(".adaMerkez, header.cubuk button")?.focus(); // açan öğe sökülmüş (çıkıntı, dişli): odak gövdeye düşmesin (F-08)
+      else if (!document.activeElement || document.activeElement === document.body) document.querySelector<HTMLElement>(".islandCenter, header.bar button")?.focus(); // the opener is gone (peek, gear): don't let focus fall to body (F-08)
     };
   }, [ref, active]);
 }

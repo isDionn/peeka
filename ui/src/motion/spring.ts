@@ -1,63 +1,53 @@
-// Yay motoru (§0i madde 8): k = (2π / tepki)², c = 4π × sönüm / tepki, kare başına 8 alt adım. Maketteki `Yay` sınıfı.
-export interface SpringParams { tepki: number; sonum: number; eps?: number }
-export const YAY = {
-  kart: { tepki: 0.44, sonum: 0.78 },
-  hizli: { tepki: 0.32, sonum: 0.84 },
-  sag: { tepki: 0.4, sonum: 0.8 },
-  sekme: { tepki: 0.34, sonum: 0.82 },
-  sabit: { tepki: 0.38, sonum: 0.72 },
-  serit: { tepki: 0.42, sonum: 0.9 },
-  cizgi: { tepki: 0.6, sonum: 1, eps: 0.002 },
-  hov: { tepki: 0.3, sonum: 1, eps: 0.002 },
-} satisfies Record<string, SpringParams>;
+// Spring engine (§0i item 8): k = (2π / response)², c = 4π × damping / response, 8 substeps per frame. The mockup's `Yay` class.
+export interface SpringParams { response: number; damping: number; eps?: number }
 
-/** §0i yay tablosu, kullanım adlarıyla. `protrusion` çıkıntı ile kart aynı öğe olduğundan `card` ile aynı sayılardır. */
+/** §0i spring table by use. `protrusion` equals `card` because the peek and the card are the same element. */
 export const SPRINGS = {
-  card: YAY.kart,
-  protrusion: YAY.kart,
-  pill: YAY.sekme,
-  press: YAY.hov,
-  quick: YAY.hizli,
-  side: YAY.sag,
-  bar: YAY.serit,
-  line: YAY.cizgi,
-  fly: YAY.sabit,
+  card: { response: 0.44, damping: 0.78 },
+  protrusion: { response: 0.44, damping: 0.78 },
+  pill: { response: 0.34, damping: 0.82 },
+  press: { response: 0.3, damping: 1, eps: 0.002 },
+  quick: { response: 0.32, damping: 0.84 },
+  side: { response: 0.4, damping: 0.8 },
+  bar: { response: 0.42, damping: 0.9 },
+  line: { response: 0.6, damping: 1, eps: 0.002 },
+  fly: { response: 0.38, damping: 0.72 },
 } satisfies Record<string, SpringParams>;
 
 export class Spring {
   x: number; t: number; v = 0;
   constructor(x: number, public p: SpringParams) { this.x = this.t = x; }
   step(dt: number) {
-    const k = (2 * Math.PI / this.p.tepki) ** 2, c = 4 * Math.PI * this.p.sonum / this.p.tepki;
+    const k = (2 * Math.PI / this.p.response) ** 2, c = 4 * Math.PI * this.p.damping / this.p.response;
     this.v += (-k * (this.x - this.t) - c * this.v) * dt;
     this.x += this.v * dt;
   }
   get settled() { const e = this.p.eps ?? 0.05; return Math.abs(this.x - this.t) < e && Math.abs(this.v) < e * 4; }
   snap(x = this.t) { this.x = this.t = x; this.v = 0; }
-  /** Yeni hedef; o anki konum ve hız korunur (kesilebilir). */
+  /** New target; the current position and velocity carry over (interruptible). */
   retarget(t: number, p?: SpringParams) { this.t = t; if (p) this.p = p; }
 }
 
-/** Kareyi sabit ~0,5 ms'lik alt adımlarla ilerletir (en az 8; dt üst sınırı 1/30 sn). Alt adım Hz'den bağımsız: 60 ve 240 Hz aynı hareketi verir. */
+/** Advances a frame in fixed ~0.5 ms substeps (at least 8; dt capped at 1/30 s). Substeps don't depend on Hz: 60 and 240 Hz give the same motion. */
 export function advance(s: Spring, dt: number) {
   const d = Math.min(dt, 1 / 30), n = Math.max(8, Math.ceil(d * 1920)), h = d / n;
   for (let i = 0; i < n; i++) s.step(h);
   if (s.settled) s.snap();
 }
 
-/** Bir grup yayı tek rAF döngüsüyle sürer; yalnız bir yay hareket ederken çalışır. */
+/** Drives a group of springs with one rAF loop; runs only while a spring is moving. */
 export class SpringGroup {
   private raf = 0;
   private last = 0;
   constructor(readonly springs: Spring[], private onFrame: () => void) {}
   get moving() { return this.springs.some((s) => !s.settled); }
-  /** Bir kare ilerlet (rAF'siz de çağrılabilir: testler). Hareket sürüyorsa true. */
+  /** Advance one frame (callable without rAF: tests). true while still moving. */
   advance(dt: number) {
     for (const s of this.springs) advance(s, dt);
     this.onFrame();
     return this.moving;
   }
-  /** Döngüyü uyandır (hedef değişince). Zaten çalışıyorsa bir şey yapmaz. */
+  /** Wake the loop (when a target changes). Does nothing if already running. */
   kick() {
     if (this.raf) return;
     this.last = performance.now();

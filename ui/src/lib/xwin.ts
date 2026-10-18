@@ -1,28 +1,28 @@
 import { focusables } from "./useFocusTrap";
-// Şerit sayfası ile ada sayfası ayrı pencereler: aralarındaki tek yol aynı kökenli BroadcastChannel (centerClock.ts ile aynı yöntem).
-// Şerit -> ada: hangi panel açık (ortadaki kısa etiket), "ilk açılışı tekrar göster", "yanıt görünümünü aç" (bildirim aynasında asistan yanıtlasın). Kanal yoksa mesaj sessizce düşer.
-export type XMsg = { t: "panel"; panel: "search" | "settings" | "status" | "start" | "mt" | null } | { t: "firstrun" } | { t: "ask" } | { t: "open-panel"; panel: "aym" }
-  /** Şerit -> ada: bir şerit paneli açıldı (Ctrl+K, dişli, Başlat...). Ada açık kartını kapatır, böylece tek Esc üstteki yüzeyi kapatır. */
+// The strip page and the island page are separate windows: their only link is a same-origin BroadcastChannel (same method as centerClock.ts).
+// Strip -> island: which panel is open (short label in the middle), "show first run again", "open the reply view" (let the assistant reply in the notification mirror). Without a channel the message is silently dropped.
+export type XMsg = { t: "panel"; panel: "search" | "settings" | "status" | "start" | "cleanup" | null } | { t: "firstrun" } | { t: "ask" } | { t: "open-panel"; panel: "modules" }
+  /** Strip -> island: a strip panel opened (Ctrl+K, gear, Start...). The island closes its open card, so one Esc closes the top surface. */
   | { t: "panel-open"; panel: string }
-  /** Ada -> şerit: adanın içine tıklandı; açık şerit paneli kapanır. */
+  /** Island -> strip: a click inside the island; the open strip panel closes. */
   | { t: "island-click" }
-  /** Rust -> ada: saydam alana (kartın dışına) tıklandı; açık kart kapanır. */
+  /** Rust -> island: a click on the transparent area (outside the card); the open card closes. */
   | { t: "outside" }
-  /** Tab sırası pencereler arası (sekmeler -> ada -> sağ grup): şerit -> ada, odak adanın ilk (ya da `end` ise son) denetimine. */
+  /** Tab order across windows (tabs -> island -> right group): strip -> island, focus to the island's first (or, with `end`, last) control. */
   | { t: "to-island"; end?: boolean }
-  /** Ada -> şerit: odak sağ grubun ilk ya da sol grubun son denetimine. */
+  /** Island -> strip: focus to the first control of the right group or the last of the left group. */
   | { t: "to-strip"; side: "left" | "right" }
-  /** Ada -> şerit: hoş geldin kartı açık mı (açılışta, her değişimde ve "welcome?" sorusuna cevap). Açıkken kurulum sihirbazı bekler. */
+  /** Island -> strip: is the welcome card open (on launch, on every change and in reply to "welcome?"). While open the setup wizard waits. */
   | { t: "welcome"; open: boolean }
-  /** Şerit -> ada: hoş geldin kartı açık mı? */
+  /** Strip -> island: is the welcome card open? */
   | { t: "welcome?" };
 const NAME = "notch-xwin";
 
 export function sendX(m: XMsg) {
-  try { if (typeof BroadcastChannel === "undefined") return; const c = new BroadcastChannel(NAME); c.postMessage(m); c.close(); } catch { /* kanal yok */ }
+  try { if (typeof BroadcastChannel === "undefined") return; const c = new BroadcastChannel(NAME); c.postMessage(m); c.close(); } catch { /* no channel */ }
 }
 
-/** Dinleyici; dönen işlev kanalı kapatır. */
+/** Listener; the returned function closes the channel. */
 export function onX(cb: (m: XMsg) => void): () => void {
   let c: BroadcastChannel | null = null;
   try { c = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(NAME); } catch { return () => undefined; }
@@ -31,16 +31,16 @@ export function onX(cb: (m: XMsg) => void): () => void {
   return () => c.close();
 }
 
-/** Tab/Shift+Tab pencerenin son (ilk) denetiminden çıkıyor mu? Çıkıyorsa çağıran odağı öbür pencereye verir. */
+/** Is Tab/Shift+Tab leaving the window's last (first) control? If so the caller hands focus to the other window. */
 export const tabLeaves = (e: { key: string; shiftKey: boolean; defaultPrevented?: boolean }, list: HTMLElement[], active: Element | null) =>
   e.key === "Tab" && !e.defaultPrevented && list.length > 0 && active === list[e.shiftKey ? 0 : list.length - 1];
 
-/** Şerit denetimleri ortadaki boşluğun (`.bos`) solunda ve sağında. */
+/** Strip controls left and right of the middle gap (`.empty`). */
 export function stripSides(header: HTMLElement) {
-  const bos = header.querySelector(".bos"), all = focusables(header);
-  const left = all.filter((el) => !bos || !!(el.compareDocumentPosition(bos) & Node.DOCUMENT_POSITION_FOLLOWING));
+  const gap = header.querySelector(".empty"), all = focusables(header);
+  const left = all.filter((el) => !gap || !!(el.compareDocumentPosition(gap) & Node.DOCUMENT_POSITION_FOLLOWING));
   return { left, right: all.filter((el) => !left.includes(el)) };
 }
 
-/** Odak başka pencereden klavyeyle geldi: odak halkası görünsün. */
+/** Focus arrived from another window via keyboard: show the focus ring. */
 export const focusViaKeys = (el: HTMLElement | undefined) => { if (!el) return; document.documentElement.setAttribute("data-kb", ""); el.focus(); };

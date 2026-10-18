@@ -1,13 +1,12 @@
-//! The pano (clipboard history): text, images and file paths, 50 items / 24 h, pins; the
+//! The clipboard history: text, images and file paths, 50 items / 24 h, pins; the
 //! password class encrypted in its own file ([`vault`]). Pure: the Windows listener hands in a [`Copied`], the cipher
 //! is a port, time is a `now_ms` argument. Rules kept here so the tests can hold them:
-//! - a password item's text never leaves: not in [`Pano::list`], not in a [`Change`], not in [`Pano::plugin_items`]
-//!   (`clipboard.read`), not in `gecmis.json`, not in a share, a drag or a pin; only [`Pano::reveal`] and the
+//! - a password item's text never leaves: not in [`ClipHistory::list`], not in a [`Change`], not in [`ClipHistory::plugin_items`]
+//!   (`clipboard.read`), not in `history.json`, not in a share, a drag or a pin; only [`ClipHistory::reveal`] and the
 //!   copy-back payload hold it, as a [`Secret`] that zeroes itself, and both are refused while Notch is locked;
 //! - while locked no new password item is written;
 //! - a flagged (or sensitive-app) image or file copy is never stored; Notch's own write-back is never read back.
 //!
-//! Inspired by HeyyCzer/windows-dynamic-island (ideas only; no code copied).
 
 pub mod secret;
 pub mod vault;
@@ -24,7 +23,7 @@ use vault::{Meta, Protect, Secret, Vault};
 
 pub const MAX_ITEMS: usize = 50;
 pub const MAX_AGE_MS: u64 = 24 * 3600 * 1000;
-/// Settings › Pano: the password lifetime, minutes (60 at most and by default).
+/// Settings › Clipboard: the password lifetime, minutes (60 at most and by default).
 pub const PASSWORD_MINUTES: [u32; 4] = [5, 15, 30, 60];
 /// How long the eye button shows the value (the page applies at most this).
 pub const REVEAL_MS: u64 = 5000;
@@ -34,7 +33,7 @@ const MAX_TEXT: usize = 1_000_000;
 const VIEW_TEXT: usize = 4000;
 /// Inline in a one-shot share; longer goes to the share folder as a file.
 const SHARE_INLINE: usize = 256 * 1024;
-const CUT_NOTE: &str = "\n\n[Metin 256 KB'de kesildi; tamamı ekli dosyada.]";
+const CUT_NOTE: &str = "\n\n[Text cut at 256 KB; the full text is in the attached file.]";
 
 /// The first `SHARE_INLINE` bytes of a long text (on a char boundary, room left for the note) plus the note.
 fn head(text: &str) -> String {
@@ -123,7 +122,7 @@ impl Entry {
     }
 }
 
-/// Settings › Pano.
+/// Settings › Clipboard.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Config {
     pub history: bool,
@@ -209,7 +208,7 @@ pub enum ClipErr {
     Io,
     /// The file is gone (a copied file moved or deleted since).
     Missing,
-    /// A file Windows would run (`shelf::runnable`): "Aç" refuses it.
+    /// A file Windows would run (`shelf::runnable`): "Open" refuses it.
     Risky,
 }
 
@@ -220,12 +219,12 @@ pub enum Payload {
     Files(Vec<String>),
 }
 
-pub struct Pano {
+pub struct ClipHistory {
     dir: PathBuf,
     entries: Vec<Entry>,
     vault: Vault,
     cfg: Config,
-    /// False in demo mode (`Pano::demo`): text history in memory only; images and passwords (which need a file) are
+    /// False in demo mode (`ClipHistory::demo`): text history in memory only; images and passwords (which need a file) are
     /// not taken, pins and the vault are never written.
     persist: bool,
 }
@@ -255,16 +254,16 @@ pub fn data_url(png: &[u8]) -> String {
     format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png))
 }
 
-impl Pano {
+impl ClipHistory {
     fn history_path(dir: &Path) -> PathBuf {
-        dir.join("pano").join("gecmis.json")
+        dir.join("clipboard").join("history.json")
     }
 
     pub fn img_dir(dir: &Path) -> PathBuf {
-        dir.join("pano").join("img")
+        dir.join("clipboard").join("img")
     }
 
-    /// Pinned items from `gecmis.json`, the vault's live items, and the image folder emptied of everything else
+    /// Pinned items from `history.json`, the vault's live items, and the image folder emptied of everything else
     /// (unpinned history lives in memory only and starts empty).
     pub fn load(dir: PathBuf, cfg: Config, now_ms: u64) -> Self {
         let mut entries: Vec<Entry> = std::fs::read(Self::history_path(&dir))
@@ -357,7 +356,7 @@ impl Pano {
             Kind::Files { paths } => {
                 let first = paths.first().map(|p| p.rsplit(['\\', '/']).next().unwrap_or(p).to_string());
                 let sub = if paths.len() > 1 {
-                    format!("+{} dosya", paths.len() - 1)
+                    format!("+{} files", paths.len() - 1)
                 } else {
                     paths.first().and_then(|p| p.rsplit_once(['\\', '/'])).map_or(String::new(), |(d, _)| d.into())
                 };
@@ -547,7 +546,7 @@ impl Pano {
         gone.pop().map(|v| Change { reason: "removed", item: Some(v) }).ok_or(ClipErr::Unknown)
     }
 
-    /// "Hepsini sil" (the vault file goes too) or "Parolaları hepsini sil".
+    /// "Delete all" (the vault file goes too) or "Delete all passwords".
     pub fn clear(&mut self, passwords_only: bool) -> Change {
         self.remove_where(|e| !passwords_only || e.is_password());
         if self.persist {
@@ -559,7 +558,7 @@ impl Pano {
         Change { reason: "cleared", item: None }
     }
 
-    /// Settings › Pano changed: history off clears everything (vault included); a shorter password lifetime applies
+    /// Settings › Clipboard changed: history off clears everything (vault included); a shorter password lifetime applies
     /// to what is stored.
     pub fn set_config(&mut self, cfg: Config, now_ms: u64) -> Vec<Change> {
         let old = std::mem::replace(&mut self.cfg, cfg);
@@ -612,8 +611,8 @@ impl Pano {
         Some(Change { reason: "updated", item: Some(self.view(&self.entries[0])) })
     }
 
-    /// "Asistana sor": the item as one-shot attachments for the main assistant. Long text and images
-    /// go to the share folder (`paylasim\`, gone on `share.done` or after 10 minutes); files go as their paths.
+    /// "Ask assistant": the item as one-shot attachments for the main assistant. Long text and images
+    /// go to the share folder (`share\`, gone on `share.done` or after 10 minutes); files go as their paths.
     /// Long text ALSO goes inline, cut at 256 KB with a visible note, so an assistant that reads only `text` still
     /// gets it; any image goes as `screenshot` (the kind the assistant uploads as a picture).
     pub fn share(&self, id: &str) -> Result<Vec<Attachment>, ClipErr> {
@@ -675,7 +674,7 @@ impl Pano {
         }
     }
 
-    /// `clip_open`: the file for Windows's default app. An image is copied to `tmp` first (the pano's own PNG is
+    /// `clip_open`: the file for Windows's default app. An image is copied to `tmp` first (the clipboard's own PNG is
     /// deleted when the item expires, and a viewer would hold it open); a file item gives its first path that still
     /// exists. Never a password, never text, never while locked, never a file Windows would run.
     pub fn open_path(&self, id: &str, locked: bool, tmp: &Path) -> Result<PathBuf, ClipErr> {

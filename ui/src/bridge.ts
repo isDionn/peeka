@@ -1,285 +1,285 @@
-// Peeka arayüzünün arka uçla (Rust/Tauri) konuştuğu TEK yer. Komut ve olay adları burada, Rust ajanı buna uyar.
-// Tauri dışında (tarayıcı önizlemesi, testler) bridge.fake.ts devreye girer.
+// The ONLY place the Peeka UI talks to the back end (Rust/Tauri). Command and event names live here; the Rust side follows them.
+// Outside Tauri (browser preview, tests) bridge.fake.ts takes over.
 import { fakeBridge } from "./bridge.fake";
 import type { COMMAND_NAMES, EVENT_NAMES } from "./commands.generated";
 import type { PluginCommands, PluginEvents } from "./plugin-api";
 import type { PluginRef } from "./plugin-api";
 export * from "./plugin-api";
 
-/* ---------- veri tipleri ---------- */
-/** Bir monitörün şeridi. `id` Rust'ın verdiği kararlı kimlik; sayfa adresinde `?monitor=<id>` gelir. */
+/* ---------- data types ---------- */
+/** One monitor's strip. `id` is the stable id Rust gives; the page URL carries `?monitor=<id>`. */
 export interface MonitorInfo {
   id: string;
   primary: boolean;
   hasBattery: boolean;
-  /** Wi-Fi/Bluetooth düğmesi Windows.Devices.Radios'tan erişim reddi alırsa 'denied': düğme ms-settings açar. */
+  /** 'denied' when Windows.Devices.Radios refuses access to Wi-Fi/Bluetooth: the button opens ms-settings instead. */
   radios: "ok" | "denied";
-  /** Parlaklık denetlenebiliyor mu (masaüstü monitörlerinde çoğu zaman yok). */
+  /** Whether brightness can be controlled (usually not on desktop monitors). */
   brightness: boolean;
-  /** Başlat panelinde görünen hesap adı. */
+  /** Account name shown in the Start panel. */
   user: string;
-  /** Monitörün yenileme hızı (0 = Windows söylemedi). */
+  /** Monitor refresh rate (0 = Windows didn't say). */
   hz: number;
 }
-/** Tek renk simge: data URL (SVG ya da PNG). Arayüz yalnız alfa maskesi olarak boyar. */
-export interface AppRef { appId: string; name: string; icon: string; /** Dalga 5: renkli simge; Rust yalnız `colorIcons` açıkken gönderir. */ colorIcon?: string | null }
-export interface WindowInfo extends AppRef { hwnd: number; title: string; active: boolean; monitor: string; /** Yönetici (yükseltilmiş) pencere: Peeka kapatamaz, menü Görev Yöneticisi'ni önerir. */ elevated?: boolean }
+/** Monochrome icon: data URL (SVG or PNG). The UI paints it only as an alpha mask. */
+export interface AppRef { appId: string; name: string; icon: string; /** Wave 5: color icon; Rust sends it only while `colorIcons` is on. */ colorIcon?: string | null }
+export interface WindowInfo extends AppRef { hwnd: number; title: string; active: boolean; monitor: string; /** Elevated (admin) window: Peeka can't close it, the menu suggests Task Manager. */ elevated?: boolean }
 export type PinnedApp = AppRef;
-/** Açık/kapalı ve neye bağlı olduğu. `name` (Wi-Fi ağı, Bluetooth aygıtı) henüz okunmuyor: null gelir, arayüz "Açık" yazar. */
+/** On/off and what it's connected to. `name` (Wi-Fi network, Bluetooth device) isn't read yet: it comes as null and the UI shows "On". */
 export interface Radio { on: boolean; name: string | null }
-/** Bağlantı düzeyi (Windows'un söylediği; Wi-Fi mi kablo mu henüz bilinmiyor). */
+/** Connection level (as Windows reports it; Wi-Fi vs. cable isn't known yet). */
 export type NetworkLevel = "unknown" | "none" | "local" | "internet" | "constrained";
-/** Rust'taki tek `Status` tipi (notch-core status.rs). Windows'un veremediği her alan null: uydurma değer yok. */
+/** The single Rust `Status` type (notch-core status.rs). Every field Windows can't provide is null: no made-up values. */
 export interface Status {
-  volume: number | null; // 0..100, hoparlör yoksa null
+  volume: number | null; // 0..100, null without speakers
   muted: boolean;
-  brightness: number | null; // 0..100, denetlenemiyorsa null
-  wifi: Radio | null; // bu makinede o radyo yoksa null
+  brightness: number | null; // 0..100, null if not controllable
+  wifi: Radio | null; // null if this machine has no such radio
   bluetooth: Radio | null;
-  dnd: boolean; // Peeka'nın kendi Rahatsız etme kipi
-  /** Rahatsız etmenin biteceği saat ("18:00'e kadar"); Rust'ta bitiş saati yok, hep null (arayüz bitişsiz yazar). */
+  dnd: boolean; // Peeka's own Do Not Disturb mode
+  /** When Do Not Disturb ends ("until 6:00 PM"); Rust has no end time, so always null (the UI shows no end). */
   dndUntil: string | null;
   network: NetworkLevel;
-  battery: { percent: number | null; charging: boolean; /** Prizde (yüzdeyi 100'de charging false olur). */ plugged: boolean; remaining: string | null } | null; // pili olmayan makinede null
+  battery: { percent: number | null; charging: boolean; /** Plugged in (at 100% charging turns false). */ plugged: boolean; remaining: string | null } | null; // null on machines without a battery
 }
-/** Kısayol adları (Rust `ShortcutId`). */
+/** Shortcut names (Rust `ShortcutId`). */
 export type ShortcutId = "search" | "ask" | "focus_island" | "hide_island" | "emergency";
-/** Komut hatası (Rust `CmdError`): Tauri'de `call` bu dizeyle reddedilir. */
-/** `ignored`: ~300 ms korumasına takılan tıklama (istem açık kalır); `not_connected`: ana asistan bağlı değil. */
+/** Command error (Rust `CmdError`): in Tauri, `call` rejects with this string. */
+/** `ignored`: a click caught by the ~300 ms guard (the prompt stays open); `not_connected`: no main assistant connected. */
 export type CmdError = "unknown" | "refused" | "invalid" | "io" | "unsupported" | "denied" | "missing" | "not_yet" | "ignored" | "not_connected";
 export interface ShortcutException { appId: string; name: string; icon: string; keys: string }
 export interface Settings extends ClipSettings {
-  /** Boştaki maskot muziplikleri (45-90 dk'da bir, günde en çok 6). Varsayılan açık. */
+  /** Idle mascot pranks (once every 45-90 min, at most 6 a day). On by default. */
   mascotPranks: boolean;
-  /** Maskot işi bitince kutlar (varsayılan açık; sayfa saatte en çok 3 uygular). */
+  /** The mascot celebrates finished jobs (on by default; the page applies it at most 3 times an hour). */
   celebrate: boolean;
-  /** İndirilenler klasörü izlenir ve biten dosya için `download_done` gelir (yalnız ad ve boyut; içerik okunmaz, eklentiye gitmez). Varsayılan açık. */
+  /** The Downloads folder is watched and `download_done` fires for finished files (name and size only; content isn't read and never goes to plugins). On by default. */
   watchDownloads: boolean;
-  /** Renkli uygulama simgeleri (karar 14: varsayılan kapalı, tek renk). */
+  /** Color app icons (decision 14: off by default, monochrome). */
   colorIcons: boolean;
-  /** Windows ile başlar (HKCU Run, varsayılan açık). */
+  /** Starts with Windows (HKCU Run, on by default). */
   autostart: boolean;
-  /** Windows görev çubuğunun durumu (burada salt okunur; `taskbar_set_mode` ile değişir): tamamen / otomatik / Windows'unki kalsın. */
+  /** Windows taskbar state (read-only here; changed with `taskbar_set_mode`): fully hidden / auto-hide / keep Windows' own. */
   taskbarHide: "full" | "auto" | "off";
   secondaryStrips: boolean;
   shortcuts: Record<ShortcutId, string>;
   shortcutExceptions: ShortcutException[];
-  /** Ses tuşları yutulur, yalnız Peeka'nın göstergesi çıkar. */
+  /** Volume keys are swallowed; only Peeka's indicator appears. */
   captureVolumeKeys: boolean;
-  /** Basit uyarı HTTP uyarlayıcısı, varsayılan kapalı. */
+  /** Simple HTTP alert adapter, off by default. */
   alertsApi: boolean;
-  /** `notch --demo`: hiçbir şey kaydedilmez; şeritte "Demo" rozeti, bazı komutlar `unsupported`. Dosyada hiç yok. */
+  /** `notch --demo`: nothing is saved; the strip shows a "Demo" badge and some commands return `unsupported`. Never in the file. */
   demo?: boolean;
 }
-/** `paint`: görünür ama tıklanmaz (gölge, balon); Rust pencere bölgesini buna da açar. */
+/** `paint`: visible but not clickable (shadow, bubble); Rust opens the window region for it too. */
 export interface Rect { x: number; y: number; w: number; h: number; paint?: true }
 export type PowerAction = "lock" | "sleep" | "restart" | "shutdown";
-/** Çalan parça (Rust `notch_core::media::Media`). Konum `positionAt` (Unix ms) anındaki değerdir: arayüz çalarken ileri taşır. `durationMs` 0 = oynatıcı süre vermiyor. */
+/** Now playing (Rust `notch_core::media::Media`). The position is the value at `positionAt` (Unix ms): the UI advances it while playing. `durationMs` 0 = the player gives no duration. */
 export interface Media {
-  title: string; artist: string; album: string; /** "Spotify", "Chrome" */ app: string; /** Kapak data URL'si ya da null. */ art: string | null;
+  title: string; artist: string; album: string; /** "Spotify", "Chrome" */ app: string; /** Cover data URL or null. */ art: string | null;
   playing: boolean; positionMs: number; positionAt: number; durationMs: number; canNext: boolean; canPrevious: boolean; canSeek: boolean;
 }
-/** Peeka'nın uyarı listesi satırı (Rust `notch_core::alerts::Alert`). Metin düz metindir; bağlantı yalnız `open_alert` ile açılır. */
+/** A row in Peeka's alert list (Rust `notch_core::alerts::Alert`). Text is plain; links open only through `open_alert`. */
 export interface Alert {
   id: string; title: string; subtitle: string | null; icon: string | null; color: string | null; progress: number | null;
-  priority: number; /** http/https bağlantısı ya da `"task_manager"` (Rust Görev Yöneticisi'ni kendi yolundan açar). */ action: string | null; style: "standard" | "level"; expand: boolean; kind: "alert" | "approval";
-  source: string; /** Unix ms; null = kaldırılana dek durur. */ expiresAt: number | null; /** Unix ms. */ updatedAt: number;
-  /** Rust henüz göndermiyor (eklenti dalgası): "Gözden geçir" isteyen eklentinin onay kartı içeriği. */
+  priority: number; /** http/https link or `"task_manager"` (Rust opens Task Manager its own way). */ action: string | null; style: "standard" | "level"; expand: boolean; kind: "alert" | "approval";
+  source: string; /** Unix ms; null = stays until removed. */ expiresAt: number | null; /** Unix ms. */ updatedAt: number;
+  /** Not sent by Rust yet (plugin wave): approval card content for a plugin that asks for "Review". */
   review?: { title: string; detail: string; items: { name: string; size: string }[] } | null;
 }
-/** `list_alerts` ve `alerts_changed` yükü (Rust `AlertsView`): sıralı liste, adayı şimdi açabilecek tek uyarı, gizli şeridi indirme süresi. */
+/** Payload of `list_alerts` and `alerts_changed` (Rust `AlertsView`): sorted list, the one alert that may open the island now, and how long to bring down a hidden strip. */
 export interface AlertsView { items: Alert[]; top: string | null; dropStripMs: number | null }
-/** Sistem izleme ölçümü (Rust `SysmonTick`); okunamayan alan null (uydurma yok). Bellek bayt, ağ bayt/sn. */
-export interface SysmonTick { cpu: number | null; gpu: number | null; memUsed: number | null; memTotal: number | null; down: number | null; up: number | null; /** En çok işlemci kullanan program (exe adı, ".exe" yok; aynı programın bütün işlemleri toplanır); ilk ölçüme kadar ya da kimse %1'i geçmiyorsa null. Kart açıkken ~10 sn'de bir yenilenir. */ topCpu: string | null }
-/** Ses tuşu ya da ses değişimi: yalnız bizim ses göstergesi. */
+/** System monitor sample (Rust `SysmonTick`); unreadable fields are null (nothing made up). Memory in bytes, network in bytes/s. */
+export interface SysmonTick { cpu: number | null; gpu: number | null; memUsed: number | null; memTotal: number | null; down: number | null; up: number | null; /** Program using the most CPU (exe name without ".exe"; all processes of a program are summed); null until the first sample or if nothing passes 1%. Refreshed every ~10 s while the card is open. */ topCpu: string | null }
+/** Volume key or volume change: our own volume indicator only. */
 export interface VolumeOsd { percent: number; muted: boolean; device?: string | null }
 
-/* ---------- arama ---------- */
+/* ---------- search ---------- */
 export type SearchKind = "app" | "window" | "file" | "setting" | "plugin";
-/** `app`/`window`: `icon` tek renk data URL. Diğer türlerde `icon` boş gelir (arayüz türe göre simge seçer). `plugin`: `plugin` + `group` ("Notlar") ad ön ekiyle çizilir. Boş sorguda Rust "son kullanılanlar"ı karışık türlerde döner. */
+/** `app`/`window`: `icon` is a monochrome data URL. Other kinds send an empty `icon` (the UI picks one by kind). `plugin`: drawn with a `plugin` + `group` ("Notes") name prefix. On an empty query Rust returns mixed-kind "recents". */
 export interface SearchResult {
   id: string; kind: SearchKind; title: string; subtitle: string | null; appId: string; icon: string; hwnd: number | null;
   plugin?: PluginRef | null; group?: string | null;
 }
 export interface SearchIndexState { files: "on" | "off" }
 
-/* ---------- pano ---------- */
+/* ---------- clipboard ---------- */
 export type ClipHint = "link" | "color" | "command";
-interface ClipBase { id: string; createdAt: number; pinned: boolean; /** Kaynak uygulama adı. */ source: string | null }
-/** Metin, görsel ya da dosya. `text`: metin değeri ya da dosya adı; görselde null. `thumb`: görsel küçük resmi (data URL). */
+interface ClipBase { id: string; createdAt: number; pinned: boolean; /** Source app name. */ source: string | null }
+/** Text, image or file. `text`: the text value or file name; null for images. `thumb`: image thumbnail (data URL). */
 export interface ClipPlain extends ClipBase {
   kind: "text" | "image" | "file"; text: string | null; hint?: ClipHint | null; sub: string | null; thumb: string | null;
-  /** Win+Shift+S ile alınan ekran alıntısı. */ screenshot: boolean; /** Dosya yerinde yok: satır soluk. */ missing?: boolean;
+  /** Screen snip taken with Win+Shift+S. */ screenshot: boolean; /** File no longer exists: row is dimmed. */ missing?: boolean;
 }
-/** Parola sınıfı: içerik hiçbir listede, olayda ya da günlükte yok. `expiresAt` (Unix ms) ömrün bitişi. */
+/** Password class: content is in no list, event or log. `expiresAt` (Unix ms) is when it expires. */
 export interface ClipPassword extends ClipBase { kind: "password"; expiresAt: number }
 export type ClipItem = ClipPlain | ClipPassword;
 export type ClipChange = { reason: "added" | "removed" | "updated" | "expired" | "cleared"; item: ClipItem | null };
-export interface ClipReveal { text: string; /** Rust'ın verdiği gösterme süresi; arayüz en çok 5000 ms uygular. */ ttlMs: number }
+export interface ClipReveal { text: string; /** Reveal duration given by Rust; the UI caps it at 5000 ms. */ ttlMs: number }
 export interface LockState { locked: boolean; reason: "windows" | "manual" | "plugin" | null }
-/** Ayarlar › Pano (Settings'e eklenir). */
+/** Settings › Clipboard (merged into Settings). */
 export interface ClipSettings { clipHistory: boolean; clipMedia: boolean; clipPasswordMin: 5 | 15 | 30 | 60 }
 
-/* ---------- zamanlayıcı (Peeka'nın kendi zamanlayıcısı; maket zam) ---------- */
+/* ---------- timer (Peeka's own timer; mockup zam) ---------- */
 export interface TimerState {
   label: string;
-  /** Toplam süre (sn). */ totalS: number;
-  /** Kalan süre (sn); duraklatılmışsa dondu. */ remainingS: number;
+  /** Total duration (s). */ totalS: number;
+  /** Remaining (s); frozen while paused. */ remainingS: number;
   running: boolean;
-  /** Rust'ın durumu yazdığı an (Unix ms): arayüz çalarken kalanı bu andan geriye sayar. */ at: number;
+  /** When Rust wrote the state (Unix ms): while running, the UI counts down from this moment. */ at: number;
 }
 export type TimerAction = "pause" | "resume" | "add5" | "stop";
 
-/* ---------- raf (maket g0, g) ---------- */
+/* ---------- shelf (mockup g0, g) ---------- */
 export interface ShelfItem { id: string; name: string; sub: string; kind: "pdf" | "video" | "sheet" | "image" | "other" }
 
-/* ---------- Bluetooth kulaklık (maket bt): kutu pili yok ---------- */
+/* ---------- Bluetooth earbuds (mockup bt): no case battery ---------- */
 export interface DownloadDone { id: string; name: string; size: number }
 export interface FullscreenScreens { island: boolean; strips: string[] }
 export interface ApprovalBadge { monitor: string; count: number }
 export interface CpuHigh { app: string | null }
 export interface MusicStopped { name: string; app: string | null }
-export interface BluetoothEvent { name: string; /** 0..100; cihaz bildirmiyorsa null (yalnız "bağlandı"). */ battery: number | null }
+export interface BluetoothEvent { name: string; /** 0..100; null if the device doesn't report it (just "connected"). */ battery: number | null }
 
-/* ---------- mikrofon ve kamera gizlilik noktası ---------- */
+/* ---------- mic and camera privacy dot ---------- */
 export interface PrivacyState { mic: string[]; camera: string[] }
 
-/* ---------- girdi (maskot muzipliği ve göz takibi) ---------- */
+/* ---------- input (mascot pranks and eye tracking) ---------- */
 export interface InputTick {
   lastInputAgoMs: number; cursor: { x: number; y: number } | null;
-  /** Windows sunum modu (QUNS_PRESENTATION_MODE): muziplik yok. */ presentation?: boolean;
-  /** Windows meşgul (QUNS_BUSY, tam ekran D3D ya da Store uygulaması): muziplik yok. */ busy?: boolean;
+  /** Windows presentation mode (QUNS_PRESENTATION_MODE): no pranks. */ presentation?: boolean;
+  /** Windows busy (QUNS_BUSY, fullscreen D3D or Store app): no pranks. */ busy?: boolean;
 }
 
 
-/* ---------- Dalga 6: tepsi listesi, Windows bildirim aynası ---------- */
-export interface TrayIcon { id: string; name: string; exe: string; promoted: boolean; /** PNG data URL (alfa tek renk boyanır); "" = yok. */ icon: string }
+/* ---------- Wave 6: tray list, Windows notification mirror ---------- */
+export interface TrayIcon { id: string; name: string; exe: string; promoted: boolean; /** PNG data URL (alpha painted monochrome); "" = none. */ icon: string }
 export type MirrorBlocker = "dev_mode_off" | "not_registered" | "access_denied";
 export interface MirrorState { devMode: boolean; registered: boolean; access: string; enabled: boolean; on: boolean; blocker: MirrorBlocker | null }
-/** Windows bildirimi. Kart yalnız sağ üstte; şerit dalgası yok (`ripple` hep false); `tile` alfa maskesi, `tileMono` hep true. */
-export interface Notice { id: string; app: string; title: string; body: string | null; tile: string; tileMono: boolean; ripple: boolean; openLabel: string; canOpen: boolean; at: number; /** Bildirimde tek kullanımlık doğrulama kodu var ("Kodu kopyala" göster; Rust her zaman gönderir, eski sahtelerde yoktur). Kodun kendisi sayfaya AYRI bir alan olarak gelmez; yalnız `notif_copy_code` panoya koyar. Bildirim aynası varsayılan kapalıdır; kapalıyken hiç bildirim, dolayısıyla hiç kod yoktur. */ hasCode?: boolean }
-/** `quiet`: rahatsız etme / tam ekran / sunum: hiçbir kart kendiliğinden açılmaz. */
+/** Windows notification. Card only in the top right; no strip ripple (`ripple` always false); `tile` is an alpha mask, `tileMono` always true. */
+export interface Notice { id: string; app: string; title: string; body: string | null; tile: string; tileMono: boolean; ripple: boolean; openLabel: string; canOpen: boolean; at: number; /** The notification has a one-time verification code (show "Copy code"; Rust always sends this, old fakes don't). The code itself never reaches the page as a SEPARATE field; only `notif_copy_code` puts it on the clipboard. The notification mirror is off by default; while off there are no notifications, and so no codes. */ hasCode?: boolean }
+/** `quiet`: do not disturb / fullscreen / presentation: no card opens by itself. */
 export interface MirrorView { items: Notice[]; quiet: boolean }
 
-/* ---------- Sadakat 3 (Rust `fidelity.rs`, `plugins/host/assistant.rs`) ---------- */
+/* ---------- Fidelity 3 (Rust `fidelity.rs`, `plugins/host/assistant.rs`) ---------- */
 export type RecentKind = "pdf" | "video" | "sheet" | "image" | "other" | "app";
-/** Başlat "Önerilenler": son kullanılan dosyalar (Windows Son Kullanılanlar). `sub`: "Az önce", "3 sa önce", "Dün". Rust uygulama satırı göndermez. */
+/** Start "Recommended": recently used files (Windows Recent). `sub`: "Just now", "3h ago", "Yesterday". Rust sends no app rows. */
 export interface RecentItem { id: string; name: string; sub: string; kind: RecentKind; icon?: string }
-/** Ana asistanın durum kartındaki sayılar. `memory`: "Notlar" sayısı; `approvals`: "Onay bekliyor" sayısı (Rust hep gönderir, eski köprüde 0). */
+/** Counts on the main assistant's status card. `memory`: "Notes" count; `approvals`: "Waiting for approval" count (Rust always sends it, 0 on the old bridge). */
 export interface AssistantCounts { jobs: number; memory: number; approvals?: number }
-/** Claude Code hook köprüsü (ana asistanın bildirdiği). `lastEventAgoS`: son olaydan beri sn, hiç olay yoksa null. */
+/** Claude Code hook bridge (as reported by the main assistant). `lastEventAgoS`: seconds since the last event, null if none yet. */
 export interface BridgeState { installed: boolean; healthy: boolean; lastEventAgoS: number | null }
-/** İzin geçmişi satırı (yeniden eskiye): kim hangi kapsamı ne zaman aldı ya da bıraktı. `at` Unix ms. */
+/** Permission history row (newest first): who got or gave up which scope, and when. `at` is Unix ms. */
 export interface PermissionEvent { at: number; plugin: string; scope: string; granted: boolean }
-/** `open_tray` sonucu + renkli simge (`colorIcons` açıkken). Rust rozet sayısı VERMEZ: `badge` yoksa rozet çizilmez. */
+/** `open_tray` result + color icon (while `colorIcons` is on). Rust gives NO badge count: without `badge` no badge is drawn. */
 export interface TrayIconX extends TrayIcon { badge?: number; colorIcon?: string | null }
-/** `start`: ISO zaman (gün boyu satırda yok); `link`: yalnız toplantı konaklarında https (Rust süzer). İkisi de eski köprüde yok. */
+/** `start`: ISO time (absent on all-day rows); `link`: https only on meeting hosts (Rust filters). Both absent on the old bridge. */
 export interface CalendarNext { detail: string | null; next: { time: string; title: string; source: string; start?: string; link?: string }[] }
 export interface ShelfSuggestion { id: string; text: string }
-/** Ctrl+Space eklerinin türleri; sayfa yalnız türü gönderir, yolu Rust çözer. `window_image` Rust'ta `not_yet`. */
+/** Ctrl+Space attachment kinds; the page sends only the kind, Rust resolves the path. `window_image` is `not_yet` in Rust. */
 export type ComposerKind = "window_image" | "screen_image" | "file" | "clipboard_link" | "shelf";
 export interface Attached { kind: ComposerKind; label: string }
 
-/* ---------- komutlar: Rust'ta #[tauri::command] adı = anahtar ---------- */
+/* ---------- commands: Rust #[tauri::command] name = key ---------- */
 export interface Commands {
   get_monitor: { args: { monitor: string }; ret: MonitorInfo };
   list_windows: { args: { monitor: string }; ret: WindowInfo[] };
   get_pins: { args: void; ret: PinnedApp[] };
-  /** Sabit uygulamaların sırası; sabitle / kaldır / sürükle-sırala hepsi bunu çağırır. */
+  /** Order of pinned apps; pin / unpin / drag-reorder all call this. */
   set_pins: { args: { appIds: string[] }; ret: PinnedApp[] };
   activate_window: { args: { hwnd: number }; ret: void };
   close_window: { args: { hwnd: number }; ret: void };
   new_window: { args: { appId: string }; ret: void };
   launch_app: { args: { appId: string }; ret: void };
   list_apps: { args: void; ret: AppRef[] };
-  /** Dalga 4: dosya, ayar ve eklenti sonuçları da gelir, boş sorgu = son kullanılanlar (wave4-api.ts). */
+  /** Wave 4: file, setting and plugin results too; empty query = recents (wave4-api.ts). */
   search: { args: { query: string }; ret: SearchResult[] };
-  /** Arama sonucunu aç: uygulamayı başlat ya da pencereyi öne getir. */
+  /** Open a search result: launch the app or bring the window forward. */
   open_result: { args: { id: string }; ret: void };
   get_status: { args: void; ret: Status };
   set_volume: { args: { value: number }; ret: void };
   set_brightness: { args: { value: number }; ret: void };
-  /** Erişim reddi `denied` hatasıyla döner: arayüz o zaman ms-settings sayfasını açar. */
+  /** Access refusal returns a `denied` error: the UI then opens the ms-settings page. */
   set_radio: { args: { kind: "wifi" | "bluetooth"; on: boolean }; ret: void };
   set_dnd: { args: { on: boolean }; ret: void };
-  /** Windows ayarları bağlantısı. Rust yalnız sabit listeyi kabul eder: ms-settings:, :network-wifi, :bluetooth, :quiethours. */
+  /** Windows settings link. Rust accepts only a fixed list: ms-settings:, :network-wifi, :bluetooth, :quiethours. */
   open_windows_settings: { args: { uri: string }; ret: void };
-  /** Gizli simgeler oku: salt okunur tepsi listesi (Dalga 0 test 4 yedeği). */
+  /** Read hidden icons: read-only tray list (fallback for Wave 0 test 4). */
   open_tray: { args: { monitor: string }; ret: TrayIcon[] };
   power: { args: { action: PowerAction }; ret: void };
   restore_taskbar: { args: void; ret: void };
-  /** Peeka'dan çık (arayüz kendi onay sorusunu sorduktan sonra). */
+  /** Quit Peeka (after the UI asks its own confirmation). */
   quit: { args: void; ret: void };
   get_settings: { args: void; ret: Settings };
   set_settings: { args: { patch: Partial<Settings> }; ret: { ok: boolean; error: string | null } };
-  /** Tıklanabilir dikdörtgenler (pencere içi CSS piksel). Dışı tıklamayı alttaki pencereye geçirir. Şerit ve ada sayfaları ortak kullanır. */
+  /** Clickable rectangles (CSS pixels inside the window). Clicks outside pass through to the window below. Shared by the strip and island pages. */
   report_hit_rects: { args: { page: "strip" | "island"; monitor: string; rects: Rect[] }; ret: void };
   get_media: { args: void; ret: Media | null };
-  /** `seek` için `positionMs` gerekir. */
+  /** `seek` needs `positionMs`. */
   media_control: { args: { action: "play_pause" | "next" | "previous" | "seek"; positionMs?: number }; ret: void };
-  /** Öncelik yüksekten düşüğe, eşitte yeni önce (Rust sıralar; arayüz yine de sıralar). */
+  /** Highest priority first, newest first on ties (Rust sorts; the UI sorts anyway). */
   list_alerts: { args: void; ret: AlertsView };
   dismiss_alert: { args: { id: string }; ret: void };
-  /** Uyarının `action` bağlantısını (yalnız kontrol edilmiş http/https) Rust açar. */
+  /** Rust opens the alert's `action` link (checked http/https only). */
   open_alert: { args: { id: string }; ret: void };
   clear_alerts: { args: void; ret: void };
-  /** Sistem izleme kartı açılınca başlar, kapanınca durur; ölçümler `sysmon_tick` olayıyla gelir. */
+  /** Starts when the system monitor card opens and stops when it closes; samples arrive via the `sysmon_tick` event. */
   sysmon_start: { args: void; ret: void };
   sysmon_stop: { args: void; ret: void };
-  /** Görev çubuğu kipi elle (acil kısayolun "kapalı"sını da kaldırır). Arayüzde düğmesi henüz yok. */
+  /** Manual taskbar mode (also clears the emergency shortcut's "off"). No button in the UI yet. */
   taskbar_set_mode: { args: { mode: "full" | "auto" | "off" }; ret: void };
-  /* Dalga 4: arama, pano, kilit */
+  /* Wave 4: search, clipboard, lock */
   search_index_state: { args: void; ret: SearchIndexState };
-  /** Arama sonucunu aç (uygulama, pencere, dosya, ayar, eklenti sonucu; Rust türü kimlikten bilir). */
+  /** Open a search result (app, window, file, setting, plugin; Rust knows the kind from the id). */
   search_open: { args: { id: string }; ret: void };
-  /** "Asistana sor": ana asistan bağlı değilse `not_connected`. Rust ada kartında Ctrl+Space sohbetini bu metinle açar. */
+  /** "Ask the assistant": `not_connected` if no main assistant. Rust opens the Ctrl+Space chat on the island card with this text. */
   search_ask: { args: { query: string }; ret: { turn: number } };
   clip_list: { args: void; ret: ClipItem[] };
-  /** Geri kopyala. Parolada göstermeden çalışır; Peeka panoya "izleme dışı" işaretleriyle koyar. Kilitliyken `denied`. */
+  /** Copy back. Works on passwords without revealing them; Peeka puts it on the clipboard with "don't track" flags. `denied` while locked. */
   clip_copy: { args: { id: string }; ret: void };
   clip_pin: { args: { id: string; on: boolean }; ret: void };
   clip_delete: { args: { id: string }; ret: void };
-  /** `passwords: true` = yalnız parolalar (Ayarlar › Pano "Parolaları hepsini sil"); alansız ya da false = her şey ("Hepsini sil"). */
+  /** `passwords: true` = passwords only (Settings › Clipboard "Delete all passwords"); missing or false = everything ("Delete all"). */
   clip_clear: { args: { passwords?: boolean }; ret: void };
-  /** Parola düz metni, en çok 5 sn için. Kilitliyken `denied`. */
+  /** Password plain text, for at most 5 s. `denied` while locked. */
   clip_reveal: { args: { id: string }; ret: ClipReveal };
-  /** Tek seferlik paylaşım: ana asistana. Parolada `denied`, bağlı değilse `not_connected`. */
+  /** One-time share with the main assistant. `denied` for passwords, `not_connected` if not connected. */
   clip_share: { args: { id: string }; ret: void };
-  /** Ekran alıntısını Windows'un düzenleyicisinde aç. */
+  /** Open a screen snip in the Windows editor. */
   clip_edit: { args: { id: string }; ret: void };
-  /** Dışarı sürükleme başlat (Windows'un yerel sürükleme resmi, görsel ve dosyada). */
+  /** Start a drag out (Windows' native drag image, for images and files). */
   clip_drag: { args: { id: string }; ret: void };
-  /** Görsel ya da dosya parçasını varsayılan uygulamayla aç (görsel geçici kopyadan). Kilitliyken, parolada ve çalıştırılabilir dosyada `denied`; dosya yoksa `missing`; metinde `invalid`. */
+  /** Open an image or file item with its default app (images from a temp copy). `denied` while locked, for passwords and executables; `missing` if the file is gone; `invalid` for text. */
   clip_open: { args: { id: string }; ret: void };
-  /** Görsel ya da dosya parçasını rafa koy (`shelf_changed` gelir). Kilitliyken ve parolada `denied`, metinde `invalid`. */
+  /** Put an image or file item on the shelf (`shelf_changed` fires). `denied` while locked and for passwords, `invalid` for text. */
   clip_to_shelf: { args: { id: string }; ret: void };
-  /** Görsel parçanın büyük önizlemesi: PNG data URL, uzun kenar en çok 1024 px (küçükse olduğu gibi). Kilitliyken `denied`, görsel değilse `invalid`. */
+  /** Large preview of an image item: PNG data URL, long edge at most 1024 px (as is if smaller). `denied` while locked, `invalid` if not an image. */
   clip_preview: { args: { id: string }; ret: string };
-  /** Biten indirmeyi varsayılan uygulamayla aç. Kilitliyken ve çalıştırılabilir dosyada (exe, bat, ps1, lnk...) `denied`; Rust'ın bildirmediği kimlik ya da dosya silinmişse `missing`. */
+  /** Open a finished download with its default app. `denied` while locked and for executables (exe, bat, ps1, lnk...); `missing` for an id Rust never reported or a deleted file. */
   download_open: { args: { id: string }; ret: void };
-  /** Biten indirmeyi Gezgin'de seçili göster. Kilitliyken `denied`, kimlik/dosya yoksa `missing`. */
+  /** Show a finished download selected in Explorer. `denied` while locked, `missing` if the id/file is gone. */
   download_show_in_folder: { args: { id: string }; ret: void };
-  /** Pano kartı ya da Pano sekmesi görünür/kapalı: Rust ada penceresine `WDA_EXCLUDEFROMCAPTURE`ı açar, kapanınca kaldırır. Sayfa `on: true` cevabını ilk kareden ÖNCE bekler; dönen değer: ada şimdi yakalamadan hariç mi. `false`, hata ya da cevapsızlık = hariç değil: sayfa kartı çizer ama parola satırlarını HİÇ çizmez (güvenli taraf). */
+  /** Clipboard card or Clipboard tab visible/closed: Rust turns on `WDA_EXCLUDEFROMCAPTURE` for the island window and removes it on close. The page waits for the `on: true` reply BEFORE the first frame; the return value says whether the island is now excluded from capture. `false`, an error or no reply = not excluded: the page draws the card but NEVER draws password rows (safe side). */
   clip_visible: { args: { on: boolean }; ret: boolean };
   lock_state: { args: void; ret: LockState };
   lock_now: { args: void; ret: void };
-  /** Sahibin Peeka'da kilit kartındaki "Kilidi aç" tıklaması: "Kilitle" ve eklenti kilidini kaldırır; Windows kilidi Windows açılınca kalkar. */
+  /** The owner's "Unlock" click on Peeka's lock card: clears "Lock" and the plugin lock; the Windows lock lifts when Windows unlocks. */
   lock_release: { args: void; ret: void };
-  /* Dalga 5 */
-  /** Pencerenin anlık görüntüsü (PrintWindow, PW_RENDERFULLCONTENT) PNG data URL olarak; simge durumundaki pencere için önbellek. */
+  /* Wave 5 */
+  /** Window snapshot (PrintWindow, PW_RENDERFULLCONTENT) as a PNG data URL; cached for minimized windows. */
   window_preview: { args: { hwnd: number }; ret: string };
-  /** Windows paylaşım penceresini aç (Yakın paylaşım ayrı yok). Rafta dosya kimliğiyle. */
+  /** Open the Windows share sheet (no separate Nearby Share). With a file id on the shelf. */
   share_open: { args: { id: string }; ret: void };
   shelf_list: { args: void; ret: ShelfItem[] };
-  /** Raftaki dosyayı ana asistana sor (tek seferlik paylaşım); bağlı değilse `not_connected`. */
+  /** Ask the main assistant about a shelf file (one-time share); `not_connected` if not connected. */
   shelf_ask: { args: { id: string }; ret: void };
   timer_get: { args: void; ret: TimerState | null };
   timer_control: { args: { action: TimerAction }; ret: void };
   privacy_get: { args: void; ret: PrivacyState };
-  /* Dalga 6 */
-  /** Yeni zamanlayıcı (çalıyorsa yerini alır). 0 sn ya da 24 saat üstü `invalid`. */
+  /* Wave 6 */
+  /** New timer (replaces a running one). 0 s or over 24 hours is `invalid`. */
   timer_start: { args: { label: string; seconds: number }; ret: TimerState };
-  /** Tepsi listesi (Dalga 0 test 4 gelene dek yedek). */
+  /** Tray list (fallback until Wave 0 test 4 lands). */
   tray_open: { args: { id: string }; ret: void };
   mirror_state: { args: void; ret: MirrorState };
   mirror_enable: { args: void; ret: MirrorState };
@@ -287,64 +287,64 @@ export interface Commands {
   mirror_list: { args: void; ret: MirrorView };
   mirror_dismiss: { args: { id: string }; ret: void };
   mirror_open_app: { args: { id: string }; ret: void };
-  /** "Asistan yanıtlasın": yalnız ana asistana, tek seferlik. Kilitliyken `denied`, asistan yoksa `not_connected`. */
+  /** "Let the assistant reply": main assistant only, one-time. `denied` while locked, `not_connected` without an assistant. */
   mirror_ask: { args: { id: string }; ret: { turn: number } };
-  /** "Kodu kopyala": bildirimdeki tek kullanımlık kodu panoya koyar (parolayla aynı "geçmişe/buluta/izlemeye girme" işaretleriyle, Peeka'nın kendi panosuna girmez); 60 sn sonra pano hâlâ o kodu tutuyorsa silinir. Kilitliyken `denied`; kimlik ya da kod yoksa `missing`. Kod sayfaya dönmez, günlüğe yazılmaz. */
+  /** "Copy code": puts the notification's one-time code on the clipboard (with the same "no history/cloud/tracking" flags as passwords; it doesn't enter Peeka's own clipboard); cleared after 60 s if the clipboard still holds that code. `denied` while locked; `missing` without an id or code. The code never returns to the page and is never logged. */
   notif_copy_code: { args: { id: string }; ret: void };
-  /* Sadakat 3 */
-  /** Başlat "Önerilenler" (en çok 8; sayfa 4 gösterir). */
+  /* Fidelity 3 */
+  /** Start "Recommended" (at most 8; the page shows 4). */
   recent_files: { args: void; ret: RecentItem[] };
   open_recent: { args: { id: string }; ret: void };
-  /** Başlat sabitleri. Windows 11 listeyi okutmaz: Rust hep BOŞ döner, boş = sayfa kendi listesine (şerit sabitleri + uygulamalar) düşer. */
+  /** Start pins. Windows 11 doesn't expose the list: Rust always returns EMPTY, and empty = the page falls back to its own list (strip pins + apps). */
   start_pins: { args: void; ret: AppRef[] };
-  /** Windows Başlat menüsünü aç (Win tuşu). */
+  /** Open the Windows Start menu (Win key). */
   open_start_menu: { args: void; ret: void };
-  /** "Uygulamadan çık": o uygulamanın bütün pencerelerine kapat gönderir (zorla öldürmez). */
+  /** "Quit app": sends close to all of that app's windows (never force-kills). */
   quit_app: { args: { appId: string }; ret: void };
-  /** Adayı 1 saat gizle (`on: true`) ya da geri getir. */
+  /** Hide the island for 1 hour (`on: true`) or bring it back. */
   island_hide: { args: { on: boolean }; ret: void };
   island_hidden: { args: void; ret: boolean };
-  /** `open_tray` + renkli simge; rozet sayısı yok. */
+  /** `open_tray` + color icon; no badge count. */
   tray_icons: { args: { monitor: string }; ret: TrayIconX[] };
-  /** Ana asistanın son bildirdiği sayılar; ondan önce `not_yet`. */
+  /** Latest counts reported by the main assistant; `not_yet` before that. */
   assistant_counts: { args: void; ret: AssistantCounts };
   assistant_open: { args: { kind: "approval" | "jobs" | "memory" }; ret: void };
   calendar_next: { args: void; ret: CalendarNext };
   claude_bridge_state: { args: void; ret: BridgeState };
-  /** Ayarlar'daki "Kur": Peeka'nın kendi Claude Code kancası (`peeka.exe --cc-hook`) settings.json'a birleştirilir; yalnız elle tıklanınca, demo kipinde `refused`. Hata nedeni `notch://notice` ile gelir. */
+  /** "Install" in Settings: Peeka's own Claude Code hook (`peeka.exe --cc-hook`) is merged into settings.json; only on a manual click, `refused` in demo mode. The failure reason arrives via `notch://notice`. */
   claude_bridge_install: { args: void; ret: BridgeState };
-  /** "Kaldır": yalnız Peeka'nın kendi girdileri gider. */
+  /** "Remove": only Peeka's own entries go. */
   claude_bridge_remove: { args: void; ret: BridgeState };
   permission_history: { args: void; ret: PermissionEvent[] };
-  /** Ana asistan ilk bağlandı mı (hayatta bir kez); `first_connect_ack` ile söner. */
+  /** Whether the main assistant has connected for the first time (once ever); cleared by `first_connect_ack`. */
   first_connect_get: { args: void; ret: boolean };
   first_connect_ack: { args: void; ret: void };
-  /** Raftaki dosya için ana asistanın önerisi; öneri yoksa (ya da 3 sn içinde gelmezse) null. */
+  /** The main assistant's suggestion for a shelf file; null if there is none (or it doesn't arrive within 3 s). */
   shelf_suggest: { args: { id: string }; ret: ShelfSuggestion | null };
-  /** "Notlara ekle": raftaki dosyayı ana asistana verir (tek seferlik). */
+  /** "Add to Notes": hands the shelf file to the main assistant (one-time). */
   shelf_memory: { args: { id: string }; ret: void };
-  /** "Başlat": Rust ana asistanın manifestindeki `launch` exe'sini açar (yalnız sahibin tıklamasıyla); ana asistan, `launch` ya da dosya yoksa `missing`. */
+  /** "Launch": Rust opens the `launch` exe from the main assistant's manifest (only on the owner's click); `missing` without a main assistant, `launch` or file. */
   assistant_start: { args: void; ret: void };
-  /** Rust'ın `composer_submit`te kabul ettiği ek türleri. */
+  /** Attachment kinds Rust accepts in `composer_submit`. */
   composer_kinds: { args: void; ret: ComposerKind[] };
-  /** "Terminali aç": satırın `session` kimliğiyle Claude Code'un terminal penceresini öne getirir. Hata: `unknown` | `not_connected` | `missing` | `refused` | `unsupported` (demo). */
+  /** "Open terminal": brings Claude Code's terminal window forward using the row's `session` id. Errors: `unknown` | `not_connected` | `missing` | `refused` | `unsupported` (demo). */
   cc_focus_terminal: { args: { sessionId: string }; ret: void };
-  /** Yönetici pencere menüsü ve uyarı düğmesi: Görev Yöneticisi'ni açar. */
+  /** Elevated window menu and alert button: opens Task Manager. */
   open_task_manager: { args: void; ret: void };
-  /** Tab sırası pencereler arası: yalnız odak zaten bir Peeka penceresindeyken verilir (başka uygulamadan odak çalınmaz); aksi `refused`. Ada son denetimden çıkınca `monitor` şeridine. */
+  /** Tab order across windows: granted only while focus is already in a Peeka window (focus is never stolen from another app); otherwise `refused`. When the island leaves its last control, to the `monitor` strip. */
   focus_strip: { args: { monitor: string }; ret: void };
-  /** Şerit Tab ile geri verince ada penceresine (tek, tüm ekranlar için) odak. */
+  /** When the strip hands focus back with Tab, focus goes to the island window (one for all screens). */
   focus_island: { args: void; ret: void };
-  /** Yazı yazılan panel (Ara, Sor kutusu) açılınca `on` true: pencere klavye odağını yalnız şimdi alabilir; kapanınca false: odak önceki uygulamaya geri verilir. `label` = "island" | "strip-<monitor>". Hata `unknown` (başka etiket/pencere yok) ya da `refused`. */
+  /** `on` true when a typing panel (Search, Ask box) opens: only now may the window take keyboard focus; false on close: focus returns to the previous app. `label` = "island" | "strip-<monitor>". Errors: `unknown` (no other label/window) or `refused`. */
   typing_focus: { args: { label: string; on: boolean }; ret: void };
-  /** Ekran görüntüsü al; iptal = null. */
+  /** Take a screenshot; cancel = null. */
   composer_scan: { args: void; ret: Attached | null };
-  /** Dosya seçici; iptal = null. */
+  /** File picker; cancel = null. */
   composer_attach_file: { args: void; ret: Attached | null };
 }
 export type CommandName = keyof Commands;
-// Rust'ın listesiyle (commands.generated.ts) birebir: biri eksik ya da fazlaysa tsc burada durur. Eklenti komut ve olayları
-// (plugin-api.ts) da Rust'ta (Dalga 3), denetim ikisini birlikte kapsar.
+// Must match Rust's list (commands.generated.ts) exactly: tsc stops here if one is missing or extra. Plugin commands and
+// events (plugin-api.ts) are in Rust too (Wave 3); the check covers both.
 type GeneratedName = (typeof COMMAND_NAMES)[number];
 const _sameCommands: [Exclude<keyof AllCommands, GeneratedName>, Exclude<GeneratedName, keyof AllCommands>] extends [never, never] ? true : never = true;
 void _sameCommands;
@@ -356,60 +356,60 @@ export type AllEvents = Events & PluginEvents;
 type ArgsOf<K extends keyof AllCommands> = AllCommands[K]["args"];
 export type CallArgs<K extends keyof AllCommands> = ArgsOf<K> extends void ? [] : [args: ArgsOf<K>];
 
-/* ---------- olaylar: Rust emit adı = anahtar ---------- */
+/* ---------- events: Rust emit name = key ---------- */
 export interface Events {
   windows_changed: { monitor: string };
   pins_changed: null;
   status_changed: Status;
   settings_changed: Settings;
-  /** Genel kısayol basıldı; `monitor` imlecin olduğu ekran, yalnız o ekranın şeridi tepki verir. */
+  /** Global shortcut pressed; `monitor` is the screen with the cursor, only that screen's strip reacts. */
   shortcut: { name: Exclude<ShortcutId, "emergency">; monitor: string };
   media_changed: Media | null;
   alerts_changed: AlertsView;
   sysmon_tick: SysmonTick;
   volume_osd: VolumeOsd;
-  /** Şeritler tam ekran yüzünden gizli mi (Rust). */
+  /** Whether the strips are hidden because of fullscreen (Rust). */
   "notch://fullscreen": boolean;
-  /** Rust'tan kısa düz metin bildirimi. */
+  /** Short plain-text notice from Rust. */
   "notch://notice": string;
-  /** Şeridin dışında fare basıldı (gerçek pencere): basılan şeridin monitörü, "" = şerit değil. */
+  /** Mouse pressed outside the strip (real window): monitor of the pressed strip, "" = not a strip. */
   "notch://outside_press": string;
-  /* Dalga 4 */
+  /* Wave 4 */
   clip_changed: ClipChange;
   lock_changed: LockState;
-  /* Dalga 5 */
-  /** Pil/şarj/bluetooth için ayrı olay yok: şarj ve düşük pil `status_changed`ten türer. */
+  /* Wave 5 */
+  /** No separate battery/charging/bluetooth event: charging and low battery derive from `status_changed`. */
   bluetooth_connected: BluetoothEvent;
-  /** Kulaklık ayrıldı ve çalan müzik duraklatıldı ("Müzik durdu" + "Devam": `media_control` play_pause). `app`: çalar uygulama adı, bilinmiyorsa null. Müzik hoparlörden çalmaya devam ediyorsa gelmez. */
+  /** Headphones disconnected and playing music was paused ("Music stopped" + "Resume": `media_control` play_pause). `app`: player app name, null if unknown. Doesn't fire if music keeps playing from the speakers. */
   music_stopped: MusicStopped;
-  /** İşlemci en az 60 sn boyunca %95 ve üstünde kaldı (arka planda 15 sn'de bir tek ucuz okuma; ölçülen maliyet ~%0,001 çekirdek). `app`: en çok kullanan programın exe adı (".exe" yok), belli değilse null. 10 dk'da en çok bir kez. */
+  /** CPU stayed at 95% or more for at least 60 s (one cheap background read every 15 s; measured cost ~0.001% of a core). `app`: exe name of the top program (no ".exe"), null if unclear. At most once every 10 min. */
   cpu_high: CpuHigh;
-  /** Tam ekran uygulamanın neyi gizlediği, monitör bazında (39): ikinci ekrandaki tam ekran video yalnız o ekranın şeridini gizler, ana ada susmaz. `island`: ada gizli mi (`notch://fullscreen` ile aynı değer); `strips`: gizlenen şeritlerin monitör numaraları. Şerit sayfası kendi monitörünü bu listeden okuyabilir. */
+  /** What a fullscreen app hides, per monitor (39): a fullscreen video on the second screen hides only that screen's strip, the main island stays. `island`: whether the island is hidden (same value as `notch://fullscreen`); `strips`: monitor ids of hidden strips. A strip page can read its own monitor from this list. */
   fullscreen_screens: FullscreenScreens;
-  /** Bir onay beklerken fare başka bir monitördeyse (40): o monitörün ikincil şeridinde "N onay" rozeti (ada penceresi yalnız birincil ekranda kalır; kartı o ekranda açmak bu olayda yok, arayüz işi). `null` = rozet yok. Şeridi olmayan ya da tam ekranla gizlenmiş monitörde gelmez. */
+  /** While an approval waits and the mouse is on another monitor (40): an "N approvals" badge on that monitor's secondary strip (the island window stays on the primary screen only; opening the card on that screen isn't part of this event, it's UI work). `null` = no badge. Doesn't fire for a monitor without a strip or one hidden by fullscreen. */
   approval_badge: ApprovalBadge | null;
-  /** İndirilenler klasöründe yeni bir dosya bitti (boyutu iki bakışta aynı kaldı; .crdownload/.part/.tmp sayılmaz). Yol yok: `id` ile `download_open` / `download_show_in_folder`. `watchDownloads` kapalıyken ve kilitliyken gelmez. */
+  /** A new file finished in Downloads (size unchanged across two looks; .crdownload/.part/.tmp don't count). No path: use `id` with `download_open` / `download_show_in_folder`. Doesn't fire while `watchDownloads` is off or while locked. */
   download_done: DownloadDone;
   privacy_changed: PrivacyState;
   input_tick: InputTick;
   timer_changed: TimerState | null;
   shelf_changed: null;
-  /** Sürüklenen dosya adaya geldi / gitti (Windows sürükleme olayı Rust'ta); açıkken raf çıkıntısı iki bırakma hedefini gösterir. */
+  /** A dragged file reached / left the island (Windows drag event in Rust); while on, the shelf peek shows two drop targets. */
   shelf_drag: boolean;
   notifications_changed: MirrorView;
-  /* Sadakat 3 */
+  /* Fidelity 3 */
   island_hidden_changed: boolean;
-  /** Pano sürüklemesi bitti (bırakıldı ya da vazgeçildi): kaynak küçük resim yeniden açılır. */
+  /** Clipboard drag ended (dropped or cancelled): the source thumbnail shows again. */
   clip_drag_end: null;
-  /** Ana asistan ilk kez bağlandı. */
+  /** The main assistant connected for the first time. */
   first_connect: null;
-  /** İş bitti (`celebrate` açıkken; şeritte maskot zıplar, saatte en çok 3). */
-  job_done: { title: string; took: string; /** Süre sn olarak (2 dakika kuralı için); ana asistan göndermediyse null. */ seconds?: number | null };
-  /** Ana asistanın çevrimdışı kipi. */
+  /** Job done (while `celebrate` is on; the mascot hops on the strip, at most 3 times an hour). */
+  job_done: { title: string; took: string; /** Duration in seconds (for the 2-minute rule); null if the main assistant didn't send it. */ seconds?: number | null };
+  /** The main assistant's offline mode. */
   assistant_offline: boolean;
-  /** Toplantı var mı (ana asistan `meeting.set`): maskot muzipliği susar. */
+  /** Whether there's a meeting (main assistant `meeting.set`): mascot pranks go quiet. */
   meeting_changed: boolean;
-  /** Ana asistanın `cc.event`i: bir Claude Code kanca olayı (maskot halini sürer). `tool` araç adı, `reason` hata sınıfı; serbest metin yok. */
+  /** The main assistant's `cc.event`: a Claude Code hook event (drives the mascot state). `tool` is the tool name, `reason` the error class; no free text. */
   cc_event: { kind: string; tool?: string | null; reason?: string | null; sid?: string | null };
 }
 export type EventName = keyof Events;
@@ -417,11 +417,11 @@ export type EventName = keyof Events;
 export interface Bridge {
   call<K extends keyof AllCommands>(cmd: K, ...args: CallArgs<K>): Promise<AllCommands[K]["ret"]>;
   on<E extends keyof AllEvents>(evt: E, cb: (payload: AllEvents[E]) => void): Promise<() => void>;
-  /** Saat: gerçekte `new Date()`, sahtede önizleme için dondurulabilir. */
+  /** Clock: `new Date()` for real; the fake can freeze it for previews. */
   now(): Date;
 }
 
-/* ---------- gerçek (Tauri) uygulaması ---------- */
+/* ---------- real (Tauri) app ---------- */
 const tauriBridge: Bridge = {
   async call(cmd, ...args) {
     const { invoke } = await import("@tauri-apps/api/core");
@@ -436,7 +436,7 @@ const tauriBridge: Bridge = {
 
 export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 const base: Bridge = inTauri ? tauriBridge : fakeBridge;
-/** Demo kipinde `unsupported` dönen her komut için ada kısa uyarı çıkarır ("Demo kipinde yok"). */
+/** For every command that returns `unsupported` in demo mode, the island shows a short notice ("Not available in demo mode"). */
 export const UNSUPPORTED_EVENT = "notch-unsupported";
 export const bridge: Bridge = {
   ...base,

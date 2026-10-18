@@ -21,9 +21,9 @@ const MAX_ROWS: usize = 50;
 const MAX_BUTTONS: usize = 4;
 /// The mascot states Notch draws (Wave 5 sprites); anything else is ignored.
 pub const MASCOT_STATES: [&str; 8] =
-    ["bosta", "dinliyor", "konusuyor", "dusunuyor", "mutlu", "yorgun", "saskin", "dikkat"];
+    ["drowsy", "listening", "speaking", "thinking", "happy", "tired", "surprised", "attention"];
 /// Icon names the page draws as the main assistant's face (Fidelity.tsx `AlertCenter`): only the main assistant may send them.
-pub const FACE_ICONS: [&str; 2] = ["yorgun", "dikkat"];
+pub const FACE_ICONS: [&str; 2] = ["tired", "attention"];
 /// The tab / summary-row glyph names the page draws (Plugin.tsx `GLYPHS`); nothing else is a glyph.
 pub const GLYPHS: [&str; 7] = ["ghost", "terminal", "users", "pointer", "brain", "list", "shield"];
 /// Fields that would carry markup, a link or a picture: a message with any of them anywhere is refused.
@@ -60,7 +60,7 @@ pub fn no_markup_fields(v: &Value) -> Result<(), Bad> {
     match v {
         Value::Object(o) => {
             if let Some(k) = o.keys().find(|k| FORBIDDEN_FIELDS.contains(&k.as_str())) {
-                return Err(format!("'{k}' alanı yok: eklenti bağlantı, HTML ya da görsel simge gönderemez"));
+                return Err(format!("'{k}' is not allowed: a plugin cannot send links, HTML or image icons"));
             }
             o.values().try_for_each(no_markup_fields)
         }
@@ -118,11 +118,11 @@ fn get<'a>(o: &'a Map<String, Value>, k: &str) -> &'a Value {
 }
 
 fn obj(v: &Value) -> Result<&Map<String, Value>, Bad> {
-    v.as_object().ok_or_else(|| "nesne bekleniyor".to_string())
+    v.as_object().ok_or_else(|| "expected an object".to_string())
 }
 
 fn need(o: &Map<String, Value>, k: &str, limit: usize) -> Result<String, Bad> {
-    display(get(o, k), limit).ok_or_else(|| format!("'{k}' gerekli (düz metin)"))
+    display(get(o, k), limit).ok_or_else(|| format!("'{k}' is required (plain text)"))
 }
 
 /// Optional text: absent/null = None, present but empty after cleaning = None too.
@@ -134,7 +134,7 @@ fn opt(o: &Map<String, Value>, k: &str, limit: usize) -> Option<String> {
 fn flag(o: &Map<String, Value>, k: &str) -> Result<bool, Bad> {
     match get(o, k) {
         Value::Null => Ok(false),
-        v => v.as_bool().ok_or_else(|| format!("'{k}' true/false olmalı")),
+        v => v.as_bool().ok_or_else(|| format!("'{k}' must be true/false")),
     }
 }
 
@@ -143,14 +143,14 @@ fn opt_text(o: &Map<String, Value>, k: &str, limit: usize) -> Result<Option<Stri
     match get(o, k) {
         Value::Null => Ok(None),
         v if v.is_string() => Ok(display(v, limit)),
-        _ => Err(format!("'{k}' düz metin olmalı")),
+        _ => Err(format!("'{k}' must be plain text")),
     }
 }
 
 /// `icon` plus the face names (`FACE_ICONS`), which only the main assistant may use.
 pub fn face_or_icon(v: &Value, main: bool) -> Result<String, Bad> {
     match v.as_str().filter(|s| FACE_ICONS.contains(s)) {
-        Some(_) if !main => Err("icon: yorgun/dikkat yalnız ana asistanın".into()),
+        Some(_) if !main => Err("icon: tired/attention is for the main assistant only".into()),
         Some(f) => Ok(f.into()),
         None => icon(v),
     }
@@ -162,7 +162,7 @@ pub fn icon(v: &Value) -> Result<String, Bad> {
         let n = s.chars().count();
         ICONS.contains(s) || n == 1 || (n == 2 && s.ends_with('\u{FE0F}'))
     });
-    ok.map(str::to_string).ok_or_else(|| "icon: yalnız Peeka simge adı ya da tek karakter".into())
+    ok.map(str::to_string).ok_or_else(|| "icon: only a Peeka icon name or a single character".into())
 }
 
 /// `started_at`: an ISO 8601 time as text (the page parses it); only digits and `-:.TZ+`, at most 35 chars.
@@ -170,7 +170,7 @@ fn iso(v: &Value) -> Result<String, Bad> {
     v.as_str()
         .filter(|s| (10..=35).contains(&s.len()) && s.chars().all(|c| c.is_ascii_digit() || "-:.TZ+".contains(c)))
         .map(str::to_string)
-        .ok_or_else(|| "started_at: ISO 8601 zaman bekleniyor".into())
+        .ok_or_else(|| "started_at: an ISO 8601 time is expected".into())
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
@@ -193,10 +193,10 @@ fn buttons(v: &Value, max: usize) -> Result<Vec<Button>, Bad> {
     let list = match v {
         Value::Null => return Ok(vec![]),
         Value::Array(a) => a,
-        _ => return Err("düğmeler bir liste olmalı".into()),
+        _ => return Err("buttons must be a list".into()),
     };
     if list.len() > max {
-        return Err(format!("en çok {max} düğme"));
+        return Err(format!("at most {max} buttons"));
     }
     list.iter().map(button).collect()
 }
@@ -323,7 +323,7 @@ pub struct Row {
     pub sub: Option<String>,
     pub value: Option<String>,
     pub state: Option<String>,
-    /// A Claude Code session id (`session_window::valid_session`): the page shows "Terminali aç" and calls
+    /// A Claude Code session id (`session_window::valid_session`): the page shows "Open terminal" and calls
     /// `cc_focus_terminal {sessionId}`; Notch resolves it only through the main assistant's `cc.sessions.set`.
     pub session: Option<String>,
 }
@@ -379,30 +379,30 @@ pub struct Kv {
 const STATES: [&str; 6] = ["idle", "info", "attention", "done", "danger", "tired"];
 
 fn rows<T>(v: &Value, f: impl Fn(&Map<String, Value>) -> Result<T, Bad>) -> Result<Vec<T>, Bad> {
-    let a = v.as_array().ok_or("rows bir liste olmalı")?;
+    let a = v.as_array().ok_or("rows must be a list")?;
     if a.len() > MAX_ROWS {
-        return Err(format!("en çok {MAX_ROWS} satır"));
+        return Err(format!("at most {MAX_ROWS} rows"));
     }
     a.iter().map(|r| f(obj(r)?)).collect()
 }
 
 fn image(v: &Value) -> Result<String, Bad> {
     let s = v.as_str().ok_or("image.data gerekli")?;
-    let (head, b64) = s.split_once(',').ok_or("image: data: URL bekleniyor")?;
+    let (head, b64) = s.split_once(',').ok_or("image: expected a data: URL")?;
     let png = head == "data:image/png;base64";
     if !png && head != "data:image/jpeg;base64" {
-        return Err("image: yalnız PNG ya da JPEG".into());
+        return Err("image: PNG or JPEG only".into());
     }
-    let bytes = base64::engine::general_purpose::STANDARD.decode(b64).map_err(|_| "image: base64 bozuk")?;
+    let bytes = base64::engine::general_purpose::STANDARD.decode(b64).map_err(|_| "image: bad base64")?;
     let magic_ok = if png { bytes.starts_with(b"\x89PNG\r\n\x1a\n") } else { bytes.starts_with(&[0xFF, 0xD8, 0xFF]) };
     if bytes.len() > MAX_IMAGE || !magic_ok {
-        return Err("image: en çok 256 KB, gerçek PNG/JPEG".into());
+        return Err("image: 256 KB at most, a real PNG/JPEG".into());
     }
     Ok(s.to_string())
 }
 
 fn percent(v: &Value, k: &str) -> Result<f64, Bad> {
-    let f = v.as_f64().filter(|f| f.is_finite()).ok_or_else(|| format!("{k}: 0..100 sayı"))?;
+    let f = v.as_f64().filter(|f| f.is_finite()).ok_or_else(|| format!("{k}: a number 0..100"))?;
     Ok(f.clamp(0.0, 100.0) / 100.0)
 }
 
@@ -452,8 +452,8 @@ pub struct Tab {
     pub id: String,
     pub title: String,
     pub icon: Option<String>,
-    /// Also drawn on the "Genel" page (plugin-api.ts `TabExt`).
-    pub genel: bool,
+    /// Also drawn on the "General" page (plugin-api.ts `TabExt`).
+    pub general: bool,
     pub blocks: Vec<Block>,
 }
 
@@ -474,7 +474,7 @@ pub struct SummaryRow {
 pub struct Module {
     pub plugin: PluginRef,
     pub tabs: Vec<Tab>,
-    /// The "Genel" page's lines (at most 3).
+    /// The "General" page's lines (at most 3).
     pub summary: Vec<SummaryRow>,
     pub updated_at: u64,
     /// Blocks of an unknown type that were left out (the host logs the count, never the content).
@@ -487,16 +487,16 @@ pub fn module(p: &Value, from: Who, plugin_id: &str, now: u64) -> Result<Module,
     let o = obj(p)?;
     let tabs = get(o, "tabs").as_array().map(Vec::as_slice).unwrap_or_default();
     if tabs.len() > MAX_TABS {
-        return Err(format!("en çok {MAX_TABS} sekme"));
+        return Err(format!("at most {MAX_TABS} tabs"));
     }
     let mut skipped = 0;
     let mut out = vec![];
     for t in tabs {
         let t = obj(t)?;
         let title = need(t, "title", 24)?;
-        let raw = get(t, "blocks").as_array().ok_or("blocks bir liste olmalı")?;
+        let raw = get(t, "blocks").as_array().ok_or("blocks must be a list")?;
         if raw.len() > MAX_BLOCKS {
-            return Err(format!("sekme başına en çok {MAX_BLOCKS} blok"));
+            return Err(format!("at most {MAX_BLOCKS} blocks per tab"));
         }
         let mut blocks = vec![];
         for b in raw {
@@ -514,13 +514,13 @@ pub fn module(p: &Value, from: Who, plugin_id: &str, now: u64) -> Result<Module,
                 i => Some(icon(i)?),
             },
             title,
-            genel: flag(t, "genel")?,
+            general: flag(t, "general")?,
             blocks,
         });
     }
     let summary = get(o, "summary").as_array().map(Vec::as_slice).unwrap_or_default();
     if summary.len() > MAX_SUMMARY {
-        return Err(format!("en çok {MAX_SUMMARY} özet satırı"));
+        return Err(format!("at most {MAX_SUMMARY} summary rows"));
     }
     let mut rows = vec![];
     for s in summary {
@@ -547,8 +547,8 @@ fn summary_row(r: &Map<String, Value>) -> Result<Option<SummaryRow>, Bad> {
         Value::Null => Ok(None),
         v => v.as_str().filter(|s| allowed.contains(s)).map(|s| Some(s.to_string())).ok_or_else(|| err.to_string()),
     };
-    let icon = pick("icon", &GLYPHS, "özet icon: ghost|terminal|users|pointer|brain|list|shield")?;
-    let state = pick("state", &STATES, "özet state: idle|info|attention|done|danger|tired")?;
+    let icon = pick("icon", &GLYPHS, "summary icon: ghost|terminal|users|pointer|brain|list|shield")?;
+    let state = pick("state", &STATES, "summary state: idle|info|attention|done|danger|tired")?;
     let action = match get(r, "action") {
         Value::Null => None,
         a => Some(button(a)?),
@@ -573,7 +573,7 @@ fn session(r: &Map<String, Value>) -> Result<Option<String>, Bad> {
             .as_str()
             .filter(|s| crate::session_window::valid_session(s))
             .map(|s| Some(s.to_string()))
-            .ok_or_else(|| "session: harf, rakam, - ve _ (en çok 128)".into()),
+            .ok_or_else(|| "session: letters, digits, - and _ (128 at most)".into()),
     }
 }
 
@@ -607,7 +607,7 @@ pub enum Opt {
 pub struct Choice {
     pub id: String,
     pub label: String,
-    /// The preselected "önerilen" choice (plugin-api.ts `ChoiceExt`).
+    /// The preselected "recommended" choice (plugin-api.ts `ChoiceExt`).
     pub recommended: bool,
 }
 
@@ -633,8 +633,8 @@ pub struct Approval {
     pub always_label: Option<String>,
     pub choices: Vec<Choice>,
     pub free_text: bool,
-    /// A free-text box from a plugin that is NOT the main assistant: the card must show "Bu soru <plugin.name>
-    /// eklentisinden; buraya şifre yazma" above the box (M-2: a plugin may phish for a token there).
+    /// A free-text box from a plugin that is NOT the main assistant: the card must show "This question is from <plugin.name>
+    /// plugin; do not type passwords here" above the box (M-2: a plugin may phish for a token there).
     pub free_text_warning: bool,
     /// What the protrusion row may show: at high risk only "details".
     pub protrusion_actions: Vec<&'static str>,
@@ -666,10 +666,10 @@ pub fn approval(p: &Value, from: Who, plugin_id: &str, now: u64) -> Result<Appro
     };
     let (command, cwd, path) = (code(o, "command", 4_000), code(o, "cwd", 1_024), code(o, "path", 1_024));
     if kind == ApprovalKind::Command && (command.is_none() || cwd.is_none()) {
-        return Err("kind=command için command ve cwd gerekli".into());
+        return Err("kind=command needs command and cwd".into());
     }
     if kind == ApprovalKind::File && path.is_none() {
-        return Err("kind=file için path gerekli".into());
+        return Err("kind=file needs path".into());
     }
     let mut options = vec![];
     match get(o, "options") {
@@ -687,14 +687,14 @@ pub fn approval(p: &Value, from: Who, plugin_id: &str, now: u64) -> Result<Appro
                 }
             }
         }
-        _ => return Err("options bir liste olmalı".into()),
+        _ => return Err("options must be a list".into()),
     }
     let always_label = opt(o, "always_label", 80);
     if options.contains(&Opt::Always) && always_label.is_none() {
-        return Err("'always' için always_label gerekli".into());
+        return Err("'always' needs always_label".into());
     }
     if risk == Risk::High {
-        options.retain(|x| *x != Opt::Always); // Notch removes it; no "Her zaman" at high risk
+        options.retain(|x| *x != Opt::Always); // Notch removes it; no "Always" at high risk
     }
     let choices = match get(o, "choices") {
         Value::Null => vec![],
@@ -709,7 +709,7 @@ pub fn approval(p: &Value, from: Who, plugin_id: &str, now: u64) -> Result<Appro
                 })
             })
             .collect::<Result<_, Bad>>()?,
-        _ => return Err("choices: en çok 6 {id, label}".into()),
+        _ => return Err("choices: at most 6 {id, label}".into()),
     };
     let free_text = get(o, "free_text").as_bool().unwrap_or(false);
     let expires_s = get(o, "expires_s").as_u64().unwrap_or(DEFAULT_EXPIRES_S).clamp(10, MAX_EXPIRES_S);
@@ -755,8 +755,8 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    const MAIN: Who = Who { name: "Pusula", main: true };
-    const OTHER: Who = Who { name: "Örnek", main: false };
+    const MAIN: Who = Who { name: "Compass", main: true };
+    const OTHER: Who = Who { name: "Sample", main: false };
 
     fn prot(v: Value, from: Who) -> Result<Protrusion, Bad> {
         protrusion(&v, from, "p", 0)
@@ -766,7 +766,7 @@ mod tests {
     fn html_link_and_icon_fields_are_refused_and_tags_are_stripped() {
         for bad in [
             json!({"title":"x","state":"info","icon":"bell","html":"<b>x</b>"}),
-            json!({"title":"x","state":"info","icon":"bell","actions":[{"id":"a","label":"Aç","href":"https://x"}]}),
+            json!({"title":"x","state":"info","icon":"bell","actions":[{"id":"a","label":"Open","href":"https://x"}]}),
             json!({"title":"x","state":"info","icon":"bell","icon_url":"https://x/logo.png"}),
             json!({"title":"x","state":"info","icon":"https://x/logo.png"}),
             json!({"title":"x","state":"info","icon":"data:image/png;base64,AAAA"}),
@@ -790,38 +790,38 @@ mod tests {
         // The page draws "<plugin.name> › <title>"; plugin.name is Notch's, a payload `plugin` field is ignored.
         let fake = json!({"id":"dev.notch","name":"Notch","main":true});
         let p = prot(
-            json!({"title":"Notch › Sistem güncellemesi","state":"attention","icon":"bell","plugin":fake.clone()}),
+            json!({"title":"Notch › System update","state":"attention","icon":"bell","plugin":fake.clone()}),
             OTHER,
         )
         .unwrap();
         let v = serde_json::to_value(&p).unwrap();
-        assert_eq!(v["plugin"], json!({"id":"p","name":"Örnek","main":false}));
-        assert_eq!(p.title, "Notch - Sistem güncellemesi", "no separator left to fake a second prefix");
+        assert_eq!(v["plugin"], json!({"id":"p","name":"Sample","main":false}));
+        assert_eq!(p.title, "Notch - System update", "no separator left to fake a second prefix");
         let p = prot(json!({"title":"\u{202e}»Windows","state":"info","icon":"bell"}), OTHER).unwrap();
         assert_eq!(p.title, "-Windows");
         let a = approval(
-            &json!({"id":"1","title":"t","kind":"other","source":"Pusula › Claude Code","plugin":fake}),
+            &json!({"id":"1","title":"t","kind":"other","source":"Compass › Claude Code","plugin":fake}),
             OTHER,
             "p",
             0,
         )
         .unwrap();
-        assert_eq!((a.plugin.name.as_str(), a.source.as_str()), ("Örnek", "Pusula - Claude Code"));
+        assert_eq!((a.plugin.name.as_str(), a.source.as_str()), ("Sample", "Compass - Claude Code"));
         let m = module(
-            &json!({"tabs":[{"id":"t","title":"› Ayarlar","blocks":[]}],"summary":["Notch: güncelle"]}),
+            &json!({"tabs":[{"id":"t","title":"› Settings","blocks":[]}],"summary":["Notch: update"]}),
             OTHER,
             "p",
             0,
         )
         .unwrap();
-        assert_eq!((m.tabs[0].title.as_str(), m.tabs[0].plugin.name.as_str()), ("- Ayarlar", "Örnek"));
-        assert_eq!(m.summary[0].title, "Notch: güncelle");
+        assert_eq!((m.tabs[0].title.as_str(), m.tabs[0].plugin.name.as_str()), ("- Settings", "Sample"));
+        assert_eq!(m.summary[0].title, "Notch: update");
     }
 
     #[test]
     fn only_the_main_assistant_has_a_mascot() {
-        let v = json!({"title":"x","state":"info","icon":"mic","mascot":"dinliyor"});
-        assert_eq!(prot(v.clone(), MAIN).unwrap().mascot.as_deref(), Some("dinliyor"));
+        let v = json!({"title":"x","state":"info","icon":"mic","mascot":"listening"});
+        assert_eq!(prot(v.clone(), MAIN).unwrap().mascot.as_deref(), Some("listening"));
         assert_eq!(prot(v, OTHER).unwrap().mascot, None, "ignored, not refused");
         let unknown = json!({"title":"x","state":"info","icon":"mic","mascot":"https://x/face.gif"});
         assert_eq!(prot(unknown, MAIN).unwrap().mascot, None);
@@ -830,7 +830,7 @@ mod tests {
     #[test]
     fn protrusion_shape_limits() {
         let ok = json!({"title":"x","state":"info","icon":"bell","progress":4,"timer":{"started_at":"2026-10-16T14:32:00Z"},
-                        "actions":[{"id":"a","label":"Aç","style":"primary"},{"id":"b","label":"Sil","style":"#f00"}]});
+                        "actions":[{"id":"a","label":"Open","style":"primary"},{"id":"b","label":"Delete","style":"#f00"}]});
         let p = prot(ok, OTHER).unwrap();
         assert_eq!((p.progress, p.actions[1].style), (Some(1.0), ButtonStyle::Default), "colour is not free");
         assert!(prot(json!({"title":"x","state":"purple","icon":"bell"}), OTHER).is_err());
@@ -867,15 +867,15 @@ mod tests {
 
     #[test]
     fn approval_risk_missing_or_unknown_is_high_and_high_has_no_always_and_details_only() {
-        let base = json!({"id":"ap-1","source":"Claude Code","title":"Komut çalıştırmak istiyor","kind":"command",
+        let base = json!({"id":"ap-1","source":"Claude Code","title":"Wants to run a command","kind":"command",
                           "command":"rm -rf build","cwd":"C:\\proje","options":["allow","always","deny"],
-                          "always_label":"Bu klasörde"});
+                          "always_label":"In this folder"});
         for risk in [Value::Null, json!("medium"), json!("LOW"), json!(0)] {
             let mut v = base.clone();
             v["risk"] = risk.clone();
             let a = approval(&v, MAIN, "p", 0).unwrap();
             assert_eq!(a.risk, Risk::High, "{risk}");
-            assert_eq!(a.options, [Opt::Allow, Opt::Deny], "no 'Her zaman' at high risk");
+            assert_eq!(a.options, [Opt::Allow, Opt::Deny], "no 'Always' at high risk");
             assert_eq!((a.protrusion_actions.as_slice(), a.always_label.as_ref()), (["details"].as_slice(), None));
         }
         let mut low = base.clone();
@@ -900,14 +900,14 @@ mod tests {
     #[test]
     fn sadakat_fields_pass_through_typed_and_capped() {
         // approvals.prompt: choices[].recommended, short_title (≤ 24).
-        let base = json!({"id":"1","title":"t","kind":"question","short_title":"Bir soru var, cevaplar mısın lütfen",
+        let base = json!({"id":"1","title":"t","kind":"question","short_title":"I have a question, could you answer please",
                           "choices":[{"id":"a","label":"A","recommended":true},{"id":"b","label":"B"}]});
         let a = approval(&base, MAIN, "p", 0).unwrap();
         assert_eq!((a.choices[0].recommended, a.choices[1].recommended), (true, false));
         assert_eq!(a.short_title.as_deref().map(|s| s.chars().count()), Some(24), "cut at 24");
         let v = serde_json::to_value(&a).unwrap();
         assert_eq!((v["shortTitle"].is_string(), &v["choices"][0]["recommended"]), (true, &json!(true)));
-        for (k, bad) in [("short_title", json!(5)), ("choices", json!([{"id":"a","label":"A","recommended":"evet"}]))] {
+        for (k, bad) in [("short_title", json!(5)), ("choices", json!([{"id":"a","label":"A","recommended":"yes"}]))] {
             let mut x = base.clone();
             x[k] = bad;
             assert!(approval(&x, MAIN, "p", 0).is_err(), "{k}");
@@ -915,11 +915,11 @@ mod tests {
         // island.protrusion: transcript {stream_id} like live_text, note (≤ 40).
         let p = prot(
             json!({"title":"x","state":"info","icon":"mic","transcript":{"stream_id":"v1"},
-                            "note":"taslak hazır <b>!</b>"}),
+                            "note":"draft ready <b>!</b>"}),
             MAIN,
         )
         .unwrap();
-        assert_eq!((p.transcript.unwrap().stream_id.as_str(), p.note.as_deref()), ("p:v1", Some("taslak hazır !")));
+        assert_eq!((p.transcript.unwrap().stream_id.as_str(), p.note.as_deref()), ("p:v1", Some("draft ready !")));
         assert_eq!(
             prot(json!({"title":"x","state":"info","icon":"mic","note":"n".repeat(99)}), MAIN)
                 .unwrap()
@@ -931,22 +931,22 @@ mod tests {
         assert!(prot(json!({"title":"x","state":"info","icon":"mic","transcript":{}}), MAIN).is_err(), "stream_id");
         assert!(prot(json!({"title":"x","state":"info","icon":"mic","transcript":"v1"}), MAIN).is_err());
         assert!(prot(json!({"title":"x","state":"info","icon":"mic","note":7}), MAIN).is_err());
-        // card.module: tab genel, summary icon / state / action.
+        // card.module: tab general, summary icon / state / action.
         let m = |v: Value| module(&v, OTHER, "p", 0);
-        let tab = json!({"id":"cc","title":"Claude Code","icon":"terminal","genel":true,"blocks":[]});
+        let tab = json!({"id":"cc","title":"Claude Code","icon":"terminal","general":true,"blocks":[]});
         let row =
-            json!({"title":"Oturum","icon":"terminal","state":"attention","action":{"id":"dur","label":"Durdur"}});
-        let got = m(json!({"tabs":[tab.clone()],"summary":[row.clone(),"düz satır"]})).unwrap();
-        assert!(got.tabs[0].genel && got.tabs[0].icon.as_deref() == Some("terminal"));
+            json!({"title":"Session","icon":"terminal","state":"attention","action":{"id":"stop","label":"Stop"}});
+        let got = m(json!({"tabs":[tab.clone()],"summary":[row.clone(),"plain row"]})).unwrap();
+        assert!(got.tabs[0].general && got.tabs[0].icon.as_deref() == Some("terminal"));
         let r = &got.summary[0];
         assert_eq!(
             (r.icon.as_deref(), r.state.as_deref(), r.action.as_ref().map(|b| b.id.as_str())),
-            (Some("terminal"), Some("attention"), Some("dur"))
+            (Some("terminal"), Some("attention"), Some("stop"))
         );
-        assert_eq!((got.summary[1].title.as_str(), got.summary[1].icon.as_ref()), ("düz satır", None));
+        assert_eq!((got.summary[1].title.as_str(), got.summary[1].icon.as_ref()), ("plain row", None));
         let mut t = tab.clone();
-        t["genel"] = json!("evet");
-        assert!(m(json!({"tabs":[t]})).is_err(), "genel is a bool");
+        t["general"] = json!("yes");
+        assert!(m(json!({"tabs":[t]})).is_err(), "general is a bool");
         for (k, bad) in [
             ("icon", json!("rocket")),
             ("icon", json!("https://x/i.png")),
@@ -965,28 +965,28 @@ mod tests {
     fn an_unknown_block_drops_only_itself_and_meter_is_bounded() {
         let blocks = |b: Value| module(&json!({"tabs":[{"id":"t","title":"T","blocks":b}]}), OTHER, "p", 0);
         let m =
-            blocks(json!([{"type":"text","text":"kalır"},{"type":"chart","data":[1,2]},{"type":"heading","text":"h"}]))
+            blocks(json!([{"type":"text","text":"stays"},{"type":"chart","data":[1,2]},{"type":"heading","text":"h"}]))
                 .unwrap();
         assert_eq!((m.tabs[0].blocks.len(), m.skipped), (2, 1), "the card stays, one block goes");
         assert!(blocks(json!([{"type":"text"}])).is_err(), "a known type with bad fields still refuses");
         let meter = |v: Value| blocks(json!([v])).map(|m| m.tabs[0].blocks[0].clone());
         let got = meter(
-            json!({"type":"meter","label":"5 saatlik","value":42,"reset_note":"14:30'da sıfırlanır","threshold":80}),
+            json!({"type":"meter","label":"5-hour","value":42,"reset_note":"resets at 14:30","threshold":80}),
         )
         .unwrap();
         assert_eq!(
             got,
             Block::Meter {
-                label: "5 saatlik".into(),
+                label: "5-hour".into(),
                 value: 0.42,
-                note: Some("14:30'da sıfırlanır".into()),
+                note: Some("resets at 14:30".into()),
                 mark: Some(0.8)
             }
         );
         let v = serde_json::to_value(&got).unwrap();
         assert_eq!(
             v,
-            json!({"type":"meter","label":"5 saatlik","value":0.42,"note":"14:30'da sıfırlanır","mark":0.8}),
+            json!({"type":"meter","label":"5-hour","value":0.42,"note":"resets at 14:30","mark":0.8}),
             "the page's MeterBlock"
         );
         let at = |value: Value, threshold: Value| match meter(
@@ -1011,11 +1011,11 @@ mod tests {
             assert_eq!(prot(v.clone(), MAIN).unwrap().icon, f);
             assert!(prot(v, OTHER).is_err(), "{f}: refused for a non-main plugin");
         }
-        let v = json!({"title":"x","state":"attention","icon":"warning","mascot":"dikkat"});
-        assert_eq!(prot(v.clone(), MAIN).unwrap().mascot.as_deref(), Some("dikkat"));
+        let v = json!({"title":"x","state":"attention","icon":"warning","mascot":"attention"});
+        assert_eq!(prot(v.clone(), MAIN).unwrap().mascot.as_deref(), Some("attention"));
         assert_eq!(prot(v, OTHER).unwrap().mascot, None);
         assert!(
-            prot(json!({"title":"x","state":"info","icon":"saskin"}), MAIN).is_err(),
+            prot(json!({"title":"x","state":"info","icon":"surprised"}), MAIN).is_err(),
             "a mascot state is not an icon"
         );
         for i in ["ticket", "video"] {

@@ -6,7 +6,7 @@ import { advance, Spring, SPRINGS } from "../spring";
 const run = (s: Spring, sec: number, dt = 1 / 60) => { for (let t = 0; t < sec; t += dt) advance(s, dt); };
 
 describe("Spring", () => {
-  it("hedefe yakınsar ve durgunlaşır", () => {
+  it("converges on the target and settles", () => {
     const s = new Spring(0, SPRINGS.card);
     s.retarget(100);
     run(s, 3);
@@ -16,8 +16,8 @@ describe("Spring", () => {
     expect(s.v).toBe(0);
   });
 
-  it("0,78 sönümle hafif aşar, sönüm 1'de aşmaz", () => {
-    const a = new Spring(0, SPRINGS.card), b = new Spring(0, { tepki: 0.44, sonum: 1 });
+  it("overshoots slightly at damping 0.78, doesn't at damping 1", () => {
+    const a = new Spring(0, SPRINGS.card), b = new Spring(0, { response: 0.44, damping: 1 });
     a.retarget(100); b.retarget(100);
     let ma = 0, mb = 0;
     for (let t = 0; t < 2; t += 1 / 120) { advance(a, 1 / 120); advance(b, 1 / 120); ma = Math.max(ma, a.x); mb = Math.max(mb, b.x); }
@@ -25,7 +25,7 @@ describe("Spring", () => {
     expect(mb).toBeLessThanOrEqual(100.01);
   });
 
-  it("hareket ederken hedef değişince konum ve hız korunur (sıçrama yok)", () => {
+  it("position and velocity are kept when the target changes mid-motion (no jump)", () => {
     const s = new Spring(0, SPRINGS.card);
     s.retarget(100);
     run(s, 0.15);
@@ -35,13 +35,13 @@ describe("Spring", () => {
     expect(s.x).toBe(x);
     expect(s.v).toBe(v);
     advance(s, 1 / 240);
-    expect(Math.abs(s.x - x)).toBeLessThan(v / 240 + 1); // hızla devam eder, atlamaz
+    expect(Math.abs(s.x - x)).toBeLessThan(v / 240 + 1); // carries on with its velocity, doesn't skip
     run(s, 3);
     expect(s.settled).toBe(true);
     expect(Math.abs(s.x)).toBeLessThan(0.05);
   });
 
-  it("geri dönüşte hız bir anda sıfırlanmaz: önce ileri sürer, sonra döner", () => {
+  it("on reversal the velocity isn't zeroed at once: it first carries forward, then turns back", () => {
     const s = new Spring(0, SPRINGS.card);
     s.retarget(100);
     run(s, 0.1);
@@ -64,13 +64,13 @@ describe("createShape", () => {
     return { host, body, sh, rects };
   };
 
-  it("kapalıyken boş dikdörtgen, gövde gizli", () => {
+  it("when closed, an empty rectangle and a hidden body", () => {
     const { body, sh } = setup();
     expect(sh.rect()).toEqual({ x: 300, y: 30, w: 0, h: 0 });
     expect(body.style.visibility).toBe("hidden");
   });
 
-  it("snap: ortalı dikdörtgen host konumuna göre doğru; clip-path ve onRect", () => {
+  it("snap: the centered rectangle is correct relative to the host position; clip-path and onRect", () => {
     const { body, sh, rects } = setup();
     sh.snap(400, 120);
     expect(sh.rect()).toEqual({ x: 100 + 100, y: 30, w: 400, h: 120 });
@@ -79,22 +79,22 @@ describe("createShape", () => {
     expect(body.style.visibility).toBe("visible");
   });
 
-  it("to: pencere sabit, dikdörtgen her karede değişir ve hedefte tam oturur", () => {
+  it("to: the window is fixed, the rectangle changes every frame and lands exactly on the target", () => {
     const { host, body, sh, rects } = setup();
     sh.to(300, 44);
-    expect(sh.rect().w).toBe(0); // henüz hareket yok
+    expect(sh.rect().w).toBe(0); // no motion yet
     let n = 0;
     while (sh.advance(1 / 60) && n++ < 600);
     expect(sh.rect()).toEqual({ x: 100 + 150, y: 30, w: 300, h: 44 });
     expect(rects.length).toBeGreaterThan(5);
     expect(rects.at(-1)).toEqual(sh.rect());
-    expect(host.style.width).toBe("600px"); // pencere/host hiç yeniden boyutlanmadı
+    expect(host.style.width).toBe("600px"); // the window/host was never resized
     expect(body.style.width).toBe("600px");
-    // ortada kalır: her ara dikdörtgen merkezi host merkezinde
+    // stays centered: every intermediate rectangle's center is at the host center
     for (const r of rects) if (r.w) expect(Math.abs(r.x + r.w / 2 - 400)).toBeLessThanOrEqual(1);
   });
 
-  it("yarıda yeni hedef: kart → çıkıntı geri dönüşü sıçramaz", () => {
+  it("new target midway: the card → peek return doesn't jump", () => {
     const { sh } = setup();
     sh.snap(300, 44);
     sh.to(560, 260);
@@ -108,7 +108,7 @@ describe("createShape", () => {
     expect(sh.rect().h).toBe(44);
   });
 
-  it("sağ çapa: sağ kenar host sağ kenarında", () => {
+  it("right anchor: the right edge sits on the host's right edge", () => {
     const host = document.createElement("div"), body = document.createElement("div");
     host.getBoundingClientRect = () => boxAt(0, 0, 400, 200);
     const sh = createShape(host, body, { maxW: 400, maxH: 200, anchor: "right" });
@@ -118,8 +118,8 @@ describe("createShape", () => {
 });
 
 describe("createFlight", () => {
-  it("öğeyi eski konumdan yeni konuma uçurur, bitince dönüşümü temizler", () => {
-    document.body.innerHTML = `<div id="a" data-paylas="t"></div>`;
+  it("flies the element from the old position to the new one, clears the transform when done", () => {
+    document.body.innerHTML = `<div id="a" data-share="t"></div>`;
     const el = document.getElementById("a")!;
     let pos = { left: 10, top: 5, height: 20 };
     el.getBoundingClientRect = () => {

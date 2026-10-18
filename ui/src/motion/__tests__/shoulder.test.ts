@@ -6,15 +6,15 @@ const st = (o: Partial<ShapeState> = {}): ShapeState => ({ w: 200, h: 40, tw: 40
 const mount = (sides?: "both" | "left" | "right") => { const c = document.createElement("div"); document.body.append(c); return { c, s: mountShoulders(c, { sides }) }; };
 afterEach(() => { document.body.innerHTML = ""; });
 
-describe("mountShoulders (sıvı omuz, gölge, hale)", () => {
-  it("both: hale, gölge ve iki omuz kurulur; left/right yalnız bir omuz", () => {
+describe("mountShoulders (liquid shoulder, shadow, halo)", () => {
+  it("both: halo, shadow and two shoulders are set up; left/right only one shoulder", () => {
     expect(mount().c.children).toHaveLength(4);
     const l = mount("left").c, r = mount("right").c;
     expect([...l.children].map((e) => e.className)).toEqual(["nm-halo", "nm-shadow", "nm-shoulder l"]);
     expect([...r.children].map((e) => e.className)).toEqual(["nm-halo", "nm-shadow", "nm-shoulder r"]);
   });
 
-  it("kare başına yalnız transform: gölge hedef boyutta çizilir, ölçekle küçülür; omuz gövdenin dışına f kadar taşar", () => {
+  it("only transform per frame: the shadow is drawn at the target size and shrinks via scale; the shoulder overhangs the body by f", () => {
     const { c, s } = mount();
     s.layer(st());
     const q = (sel: string) => c.querySelector<HTMLElement>(sel)!;
@@ -25,17 +25,17 @@ describe("mountShoulders (sıvı omuz, gölge, hale)", () => {
     expect(parseFloat(q(".nm-halo").style.width)).toBeCloseTo(440); // 400 * 1.1
     expect(q(".nm-shoulder.l").style.transform).toBe("translate(88px,0) scale(0.75)"); // offsetX - f, f/16
     expect(q(".nm-shoulder.r").style.transform).toBe("translate(300px,0) scale(0.75)"); // offsetX + w
-    // yalnız ölçü (yay) değişti: boyut yeniden yazılmaz, ölçek güncellenir
+    // only the measure (spring) changed: the size isn't rewritten, the scale is updated
     q(".nm-shadow").style.width = "1px";
     s.layer(st({ w: 400 }));
     expect(q(".nm-shadow").style.width).toBe("1px");
     expect(q(".nm-shadow").style.transform).toContain("scale(1,0.5)");
-    // hedef değişince bir kez yeniden boyutlanır
+    // resized once when the target changes
     s.layer(st({ w: 400, tw: 500 }));
     expect(q(".nm-shadow").style.width).toBe("500px");
   });
 
-  it("gizliyken omuzlar görünmez, gölge saydam; hedef 0 iken bölme hatası yok", () => {
+  it("when hidden the shoulders are invisible and the shadow transparent; no division error when the target is 0", () => {
     const { c, s } = mount();
     s.layer(st({ hidden: true, tw: 0, th: 0, w: 0, h: 0 }));
     expect(c.querySelector<HTMLElement>(".nm-shoulder.l")!.style.visibility).toBe("hidden");
@@ -45,7 +45,7 @@ describe("mountShoulders (sıvı omuz, gölge, hale)", () => {
     expect(c.querySelector<HTMLElement>(".nm-shoulder.r")!.style.visibility).toBe("visible");
   });
 
-  it("setAmbient: kapak rengi hale özelliğine yazılır, null haleyi söndürür; destroy hepsini kaldırır", () => {
+  it("setAmbient: the cover color is written to the halo property, null extinguishes the halo; destroy removes everything", () => {
     const { c, s } = mount();
     const halo = c.querySelector<HTMLElement>(".nm-halo")!;
     s.setAmbient("hsl(10 80% 60%)");

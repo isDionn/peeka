@@ -1,5 +1,5 @@
 //! Putting the Windows taskbar away and always getting it back: the decision logic, with its tests. The Win32 `Shell`, the guard process and the worker
-//! thread are in `notch-win::taskbar` and `src-tauri`.
+//! thread are in `notch-win::taskbar` and `crates/notch-app`.
 //!
 //! - "auto" (`HideMode::Auto`): Windows's own auto-hide (`ABM_SETSTATE`, `ABS_AUTOHIDE`).
 //! - "full" (`HideMode::Full`, default): auto-hide AND `SW_HIDE` on every taskbar. Auto-hide underneath frees the
@@ -71,7 +71,7 @@ pub fn want_of(mode: HideMode) -> u8 {
 }
 
 pub fn write_marker(marker: &Path, m: &Marker) -> Result<(), String> {
-    let dir = marker.parent().ok_or("İşaret klasörü yok")?;
+    let dir = marker.parent().ok_or("No marker folder")?;
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     std::fs::write(marker, serde_json::to_vec(m).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
@@ -84,7 +84,7 @@ pub fn read_marker(marker: &Path) -> Option<Marker> {
 /// from before Notch, and the current state may be Notch's own auto-hide. `full` marks it `hidden` before any bar
 /// goes. A marker that vanished meanwhile (an old guard restoring and deleting it) is written again at the end.
 pub fn enable(shell: &dyn Shell, marker: &Path, full: bool, appbars: &[isize]) -> Result<(), String> {
-    let now = shell.state().ok_or("Görev çubuğu bulunamadı")?;
+    let now = shell.state().ok_or("Taskbar not found")?;
     let bars = appbars.to_vec();
     let (m, fresh) = match read_marker(marker) {
         Some(m) if (m.hidden || !full) && m.appbars == bars => (m, false),
@@ -96,10 +96,10 @@ pub fn enable(shell: &dyn Shell, marker: &Path, full: bool, appbars: &[isize]) -
         write_marker(marker, &m)?;
     }
     if now & ABS_AUTOHIDE == 0 && !shell.set_state(now | ABS_AUTOHIDE) {
-        return Err("Görev çubuğu otomatik gizlenemedi".into());
+        return Err("Could not auto-hide the taskbar".into());
     }
     if full && !shell.show_bars(false) {
-        return Err("Görev çubuğu gizlenemedi".into());
+        return Err("Could not hide the taskbar".into());
     }
     if !marker.exists() {
         write_marker(marker, &m)?;
@@ -136,7 +136,7 @@ pub fn restore(shell: &dyn Shell, marker: &Path) -> bool {
 // TODO(Wave 0 test 2): whether step 2 frees the 30 px from ANOTHER process for a dead window, and whether steps
 // (3) a `WM_SETTINGCHANGE` / `SPI_SETWORKAREA` refresh and (4) a Windows notification "restart Explorer" are needed,
 // is only known after the owner's `probe guard` run. Fill in the order that worked there; until then only 1-2 run.
-/// The strips file is read too: it is written in every mode, so after a crash in "Windows görev çubuğu kalsın" (no
+/// The strips file is read too: it is written in every mode, so after a crash in "Leave the Windows taskbar alone" (no
 /// marker, the bar was never touched) the strips' 30 px are still freed and the taskbar is left as it is.
 pub fn crash_cleanup(shell: &dyn Shell, marker: &Path) -> bool {
     let mut appbars = read_marker(marker).map(|m| m.appbars).unwrap_or_default();
@@ -162,7 +162,7 @@ pub fn strips_path(marker: &Path) -> PathBuf {
 }
 
 pub fn write_strips(path: &Path, handles: &[isize]) -> Result<(), String> {
-    let dir = path.parent().ok_or("İşaret klasörü yok")?;
+    let dir = path.parent().ok_or("No marker folder")?;
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     std::fs::write(path, serde_json::to_vec(handles).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
@@ -216,7 +216,7 @@ pub fn stale(beat_ms: u64, now_ms: u64) -> bool {
 /// first - AUTO <-> FULL too, then the new style applies. A failed restore keeps `applied`, so the worker retries.
 pub fn switch(shell: &dyn Shell, marker: &Path, applied: u8, want: u8, appbars: &[isize]) -> u8 {
     if (matches!(want, OFF | FROZEN) || matches!(applied, AUTO | FULL)) && !restore(shell, marker) {
-        eprintln!("[taskbar] Görev çubuğu geri getirilemedi; tekrar denenecek");
+        eprintln!("[taskbar] Could not restore the taskbar; will retry");
         return applied;
     }
     if matches!(want, AUTO | FULL) {

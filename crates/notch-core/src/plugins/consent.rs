@@ -28,7 +28,7 @@ pub enum Signature {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct Client {
-    /// Full path from `GetNamedPipeClientProcessId` (spoofable: shown with "doğrulanmadı").
+    /// Full path from `GetNamedPipeClientProcessId` (spoofable: shown with "unverified").
     pub exe: Option<String>,
     pub signature: Signature,
 }
@@ -44,7 +44,7 @@ pub struct Consent {
     pub created: u64,
     pub displayed: Option<u64>,
     pub lookalike: Option<String>,
-    /// Same id paired before: its old scopes come pre-ticked, its old token stops working on "İzin ver".
+    /// Same id paired before: its old scopes come pre-ticked, its old token stops working on "Allow".
     pub previous: BTreeSet<Scope>,
 }
 
@@ -86,7 +86,7 @@ pub struct Program {
     pub path: String,
     /// The signer; None = unsigned or not checkable.
     pub signed_by: Option<String>,
-    /// signed | unsigned | unknown (extra: tells "İmzasız" from "could not check").
+    /// signed | unsigned | unknown (extra: tells "Unsigned" from "could not check").
     pub signature: &'static str,
 }
 
@@ -106,10 +106,10 @@ pub struct ConsentView {
     pub expires_at: u64,
     /// The initial-letter tile Notch draws (the plugin cannot send an icon).
     pub initial: String,
-    /// Same id paired before (its old token stops working on "İzin ver").
+    /// Same id paired before (its old token stops working on "Allow").
     pub repair: bool,
     pub lines: Vec<ScopeLine>,
-    /// Show "Ana asistan yapılsın mı?" (unticked): the plugin asked for composer.handler or voice.line.
+    /// Show "Make main assistant?" (unticked): the plugin asked for composer.handler or voice.line.
     pub ask_main: bool,
     pub guard_ms: u64,
 }
@@ -195,7 +195,7 @@ mod tests {
     use serde_json::json;
 
     fn consent(scopes: &[&str]) -> Consent {
-        let m = manifest::parse(&json!({"id":"com.example.a","name":"örnek","publisher":"x","version":"1","api":1,
+        let m = manifest::parse(&json!({"id":"com.example.a","name":"élan","publisher":"x","version":"1","api":1,
                                         "scopes":scopes}))
         .unwrap();
         Consent {
@@ -234,7 +234,7 @@ mod tests {
     fn high_risk_is_off_unless_ticked_and_nothing_unrequested_is_granted() {
         let mut c = consent(&["island.protrusion", "clipboard.read", "composer.handler"]);
         let v = c.view(0);
-        assert_eq!(v.initial, "Ö");
+        assert_eq!(v.initial, "É");
         assert!(v.ask_main);
         let ticked: Vec<_> = v.lines.iter().filter(|l| l.checked).map(|l| l.scope).collect();
         assert_eq!(ticked, [Scope::IslandProtrusion, Scope::ComposerHandler]);

@@ -1,4 +1,4 @@
-// E2E ortak yardımcılar: Vite'ı boş bir portta açar, headless Chromium başlatır. Masaüstü penceresi hiç açılmaz.
+// Shared E2E helpers: start Vite on a free port and launch headless Chromium. No desktop window ever opens.
 import { chromium } from "playwright";
 import { createServer as netServer } from "node:net";
 import { fileURLToPath } from "node:url";
@@ -19,7 +19,7 @@ export async function start() {
   return { base, browser, stop: async () => { await browser.close(); await server.close(); } };
 }
 
-/** Yeni sayfa açar; sayfa hatalarını toplar. `url` taban adrese göre. */
+/** Opens a new page and collects page errors. `url` is relative to the base address. */
 export async function open(env, url, size = { width: 1920, height: 1080 }) {
   const ctx = await env.browser.newContext({ viewport: size });
   const page = await ctx.newPage();
@@ -31,18 +31,18 @@ export async function open(env, url, size = { width: 1920, height: 1080 }) {
   return page;
 }
 
-/** `fn` doğru bir değer verene dek yoklar (uyku yok, koşul bekler). */
+/** Polls until `fn` returns a truthy value (no fixed sleep; waits on the condition). */
 export async function until(fn, msg, ms = 3000) {
   const t = Date.now();
   for (;;) {
     const v = await fn();
     if (v) return v;
-    if (Date.now() - t > ms) throw new Error("zaman aşımı: " + msg);
+    if (Date.now() - t > ms) throw new Error("timed out: " + msg);
     await new Promise((r) => setTimeout(r, 40));
   }
 }
 
-/** Yay animasyonları oturana dek bekler: `fn` çıktısı art arda 4 okumada aynı kalmalı. */
+/** Waits for spring animations to settle: the output of `fn` must stay the same over 4 consecutive reads. */
 export async function stable(fn, ms = 6000) {
   let last = "", n = 0;
   const t = Date.now();
@@ -53,19 +53,19 @@ export async function stable(fn, ms = 6000) {
     last = v;
     await new Promise((r) => setTimeout(r, 80));
   }
-  throw new Error("yerleşmedi");
+  throw new Error("did not settle");
 }
 
-/** Açık üst yüzeyler: açık şerit panelleri + adanın kartı. Çıkıntılar (grup) sayılmaz. */
+/** Open top surfaces: open strip panels + the island card. Peeks (group) don't count. */
 export const layers = (page) => page.evaluate(() => {
   const out = [];
   document.querySelectorAll("[data-panel]").forEach((e) => { if (e.getAttribute("aria-hidden") !== "true") out.push("panel:" + e.dataset.panel); });
-  const c = document.querySelector('#ada [role="dialog"]');
-  if (c) out.push("kart:" + c.getAttribute("aria-label"));
+  const c = document.querySelector('#island [role="dialog"]');
+  if (c) out.push("card:" + c.getAttribute("aria-label"));
   return out;
 });
 
-/** Sekme çubuğundaki her sekmenin kutusu. */
+/** The box of every tab in a tab bar. */
 export const tabRects = (page, bar) => page.evaluate((b) => [...document.querySelectorAll(`[role="tablist"][aria-label="${b}"] [role="tab"]`)].map((e) => {
   const r = e.getBoundingClientRect();
   return { k: e.getAttribute("aria-label"), x: r.x, y: r.y, w: r.width, h: r.height };
@@ -73,13 +73,13 @@ export const tabRects = (page, bar) => page.evaluate((b) => [...document.querySe
 
 export const frame = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 
-/** Kutu farkı (px): a ve b aynı anahtarlı listeler; `skip` anahtarı atlanır, `keys` karşılaştırılan alanlar. */
+/** Box difference (px): a and b are lists with the same keys; the `skip` key is ignored, `keys` are the compared fields. */
 export function boxDiff(a, b, skip, keys = ["x", "y", "w", "h"]) {
   const out = [];
   for (const o of a) {
     if (o.k === skip) continue;
     const n = b.find((q) => q.k === o.k);
-    if (!n) { out.push(`${o.k}: kayboldu`); continue; }
+    if (!n) { out.push(`${o.k}: disappeared`); continue; }
     for (const f of keys) if (Math.abs(o[f] - n[f]) > 1) out.push(`${o.k}.${f}: ${o[f].toFixed(1)} -> ${n[f].toFixed(1)}`);
   }
   return out;

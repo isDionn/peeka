@@ -4,7 +4,7 @@ import { fakeBridge } from "../bridge.fake";
 import { Island } from "../components/Island";
 import { Shell } from "../components/Shell";
 
-// jsdom ölçü vermez: [data-hit] öğelerine satır içi stilden (yoksa 100x30) boyut veren getBoundingClientRect
+// jsdom gives no measurements: getBoundingClientRect that sizes [data-hit] elements from the inline style (else 100x30)
 const rectOf = (el: HTMLElement) => ({ left: 10, top: 5, width: parseFloat(el.style.width) || (el.dataset.hit !== undefined ? 100 : 0), height: parseFloat(el.style.height) || 30 }) as DOMRect;
 const proto = HTMLElement.prototype;
 const saved = { h: Object.getOwnPropertyDescriptor(proto, "offsetHeight"), w: Object.getOwnPropertyDescriptor(proto, "offsetWidth") };
@@ -22,23 +22,23 @@ afterEach(() => {
 });
 const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 80)); });
 
-describe("ada: tıklanabilir dikdörtgenler", () => {
-  it("şekil değişince report_hit_rects yeni dikdörtgenlerle çağrılır", async () => {
+describe("island: clickable rects", () => {
+  it("report_hit_rects is called with the new rects when the shape changes", async () => {
     const spy = vi.spyOn(fakeBridge, "call");
     render(<Island monitor="m1" init={{ view: null }} />);
     await settle();
     const first = spy.mock.calls.filter((c) => c[0] === "report_hit_rects").length;
     expect(first).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("button", { name: /Kartı aç/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Open card/ }));
     await settle();
     const calls = spy.mock.calls.filter((c) => c[0] === "report_hit_rects");
     expect(calls.length).toBeGreaterThan(first);
     const last = calls.at(-1)![1] as { page: string; rects: unknown[] };
     expect(last.page).toBe("island");
-    expect(last.rects.length).toBeGreaterThanOrEqual(2); // ortadaki düğme + şekil kutusu
-    expect(last.rects.some((r) => (r as { paint?: boolean }).paint)).toBe(true); // gölge payı: pencere bölgesi kartın gölgesini kesmez
+    expect(last.rects.length).toBeGreaterThanOrEqual(2); // the middle button + the shape box
+    expect(last.rects.some((r) => (r as { paint?: boolean }).paint)).toBe(true); // shadow margin: the window region does not clip the card's shadow
   });
-  it("kart yokken gölge dikdörtgeni raporlanmaz, düğme tıklanabilir kalır", async () => {
+  it("no shadow rect is reported without a card, the button stays clickable", async () => {
     const spy = vi.spyOn(fakeBridge, "call");
     render(<Island monitor="m1" init={{ view: null }} />);
     await settle();
@@ -48,89 +48,89 @@ describe("ada: tıklanabilir dikdörtgenler", () => {
   });
 });
 
-describe("ada: klavye ve odak", () => {
-  it("kart açılınca odak karta girer; Esc kapatır ve odak ortadaki düğmeye döner", async () => {
+describe("island: keyboard and focus", () => {
+  it("when a card opens focus enters it; Esc closes it and focus returns to the middle button", async () => {
     render(<Island monitor="m1" init={{ view: null }} />);
     await settle();
-    const opener = screen.getByRole("button", { name: /Kartı aç/ });
+    const opener = screen.getByRole("button", { name: /Open card/ });
     opener.focus();
     fireEvent.click(opener);
     await settle();
-    const dlg = screen.getByRole("dialog", { name: /^Modüller/ });
+    const dlg = screen.getByRole("dialog", { name: /^Modules/ });
     expect(dlg.contains(document.activeElement)).toBe(true);
     fireEvent.keyDown(dlg, { key: "Escape" });
     await settle();
-    expect(screen.queryByRole("dialog", { name: /^Modüller/ })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: /^Modules/ })).toBeNull();
     expect(document.activeElement).toBe(opener);
   });
-  it("Esc bir adım geri: çalar, müzik çıkıntısı, dinlenme", async () => {
+  it("Esc goes back one step: player, music peek, rest", async () => {
     render(<Island monitor="m1" init={{ view: "music-card" }} />);
     await settle();
-    fireEvent.keyDown(screen.getByRole("dialog", { name: "Müzik" }), { key: "Escape" });
+    fireEvent.keyDown(screen.getByRole("dialog", { name: "Music" }), { key: "Escape" });
     await settle();
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByRole("group", { name: "Müzik" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Music" })).toBeTruthy();
     fireEvent.keyDown(document, { key: "Escape" });
     await settle();
-    expect(screen.queryByRole("group", { name: "Müzik" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Music" })).toBeNull();
   });
-  it("müzik çalarken ortaya tıklamak Modüller'i Müzik sekmesinde açar; Genel'e geçilir; Esc kapatır", async () => {
+  it("clicking the center while music plays opens Modules on the Music tab; switching to General; Esc closes", async () => {
     render(<Island monitor="m1" init={{ view: null, autoMusic: true, pin: true }} />);
     await settle();
-    fireEvent.click(document.querySelector("button.adaMerkez") as HTMLElement);
+    fireEvent.click(document.querySelector("button.islandCenter") as HTMLElement);
     await settle();
-    expect(screen.getByRole("dialog", { name: /^Modüller/ })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "Müzik" }).getAttribute("aria-selected")).toBe("true");
-    fireEvent.click(screen.getByRole("tab", { name: "Genel" }));
+    expect(screen.getByRole("dialog", { name: /^Modules/ })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Music" }).getAttribute("aria-selected")).toBe("true");
+    fireEvent.click(screen.getByRole("tab", { name: "General" }));
     await settle();
-    expect(screen.getByRole("tab", { name: "Genel" }).getAttribute("aria-selected")).toBe("true");
-    fireEvent.keyDown(screen.getByRole("dialog", { name: /^Modüller/ }), { key: "Escape" });
+    expect(screen.getByRole("tab", { name: "General" }).getAttribute("aria-selected")).toBe("true");
+    fireEvent.keyDown(screen.getByRole("dialog", { name: /^Modules/ }), { key: "Escape" });
     await settle();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
-  it("Ctrl+Shift+Enter kendiliğinden çıkan çıkıntıya odak verir; Ctrl+Space Pusula bağlı değil kartını açar", async () => {
+  it("Ctrl+Shift+Enter focuses a self-appearing peek; Ctrl+Space opens the Compass-not-connected card", async () => {
     render(<Island monitor="m1" init={{ view: null, pin: true, osd: { percent: 40, muted: false, device: null } }} />);
     await settle();
-    expect(document.activeElement === document.body).toBe(true); // çıkıntı odağı çalmaz
+    expect(document.activeElement === document.body).toBe(true); // a peek does not steal focus
     await act(async () => { fakeBridge.emit("shortcut", { name: "focus_island", monitor: "m1" }); });
-    expect(screen.getByRole("group", { name: "Ses" }).contains(document.activeElement) || document.activeElement?.className === "adaMerkez").toBe(true);
+    expect(screen.getByRole("group", { name: "Volume" }).contains(document.activeElement) || document.activeElement?.className === "islandCenter").toBe(true);
     await act(async () => { fakeBridge.emit("shortcut", { name: "ask", monitor: "m1" }); });
     await settle();
-    expect(screen.getByRole("dialog", { name: "Pusula bağlı değil" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Compass isn't connected" })).toBeTruthy();
   });
-  it("Sistem kartı açılınca sysmon başlar, kapanınca durur", async () => {
+  it("sysmon starts when the System card opens and stops when it closes", async () => {
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
     expect(fakeBridge.sysmonOn).toBe(true);
-    fireEvent.keyDown(screen.getByRole("dialog", { name: /^Modüller/ }), { key: "Escape" });
+    fireEvent.keyDown(screen.getByRole("dialog", { name: /^Modules/ }), { key: "Escape" });
     await settle();
     expect(fakeBridge.sysmonOn).toBe(false);
   });
 });
 
-describe("bildirim listesi", () => {
-  it("saate tıklayınca açılır, odak karta girer; Esc ile odak saat düğmesine döner", async () => {
+describe("notification list", () => {
+  it("opens on clicking the clock, focus enters the card; Esc returns focus to the clock button", async () => {
     render(<Shell monitor="m1" />);
     await settle();
-    const clock = await screen.findByRole("button", { name: /Bildirimler$/ });
+    const clock = await screen.findByRole("button", { name: /Notifications$/ });
     clock.focus();
     fireEvent.click(clock);
     await settle();
-    const dlg = screen.getByRole("dialog", { name: "Bildirimler" });
+    const dlg = screen.getByRole("dialog", { name: "Notifications" });
     expect(dlg.contains(document.activeElement)).toBe(true);
-    expect(screen.getByText("Disk %91 dolu")).toBeTruthy();
+    expect(screen.getByText("Disk 91% full")).toBeTruthy();
     fireEvent.keyDown(dlg, { key: "Escape" });
     await settle();
     expect(document.activeElement).toBe(clock);
   });
-  it("Gözden geçir onay kartını açar", async () => {
+  it("Review opens the approval card", async () => {
     render(<Shell monitor="m1" />);
     await settle();
-    fireEvent.click(await screen.findByRole("button", { name: /Bildirimler$/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Notifications$/ }));
     await settle();
-    fireEvent.click(screen.getByRole("button", { name: "Gözden geçir" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
     await settle();
-    expect(screen.getByRole("dialog", { name: "Temizlik onayı" })).toBeTruthy();
-    expect(screen.getByText("Geçici dosyaları sileyim mi?")).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Cleanup approval" })).toBeTruthy();
+    expect(screen.getByText("Delete temporary files?")).toBeTruthy();
   });
 });

@@ -1,5 +1,5 @@
-//! Capture exclusion while the pano is on screen: the island window gets `WDA_EXCLUDEFROMCAPTURE`
-//! when the clipboard card or the Modules' Pano tab opens and `WDA_NONE` once the last of them has closed. The page
+//! Capture exclusion while the clipboard is on screen: the island window gets `WDA_EXCLUDEFROMCAPTURE`
+//! when the clipboard card or the Modules' Clipboard tab opens and `WDA_NONE` once the last of them has closed. The page
 //! calls `clip_visible {on: true}` and awaits it before it draws the card (the flag is set before the call returns),
 //! and `{on: false}` after the card is gone. A counter, not a bool: the card and the tab can both be open.
 
@@ -15,14 +15,14 @@ pub struct CaptureGuard {
 }
 
 impl CaptureGuard {
-    /// One pano view is about to draw. The flag goes on with the first one; returns whether it is on.
+    /// One clipboard view is about to draw. The flag goes on with the first one; returns whether it is on.
     pub fn open(&mut self, a: &dyn Affinity) -> bool {
         self.open = self.open.saturating_add(1);
         // Re-applied on every open: a window rebuilt meanwhile (monitor change) starts at WDA_NONE.
         a.exclude(true)
     }
 
-    /// One pano view has closed. The flag goes off only when none is left; a close with none open is ignored.
+    /// One clipboard view has closed. The flag goes off only when none is left; a close with none open is ignored.
     pub fn close(&mut self, a: &dyn Affinity) {
         if self.open == 0 {
             return;
@@ -62,7 +62,7 @@ mod tests {
             frames.push(a.0.borrow().last().copied());
         }
         assert_eq!(frames, [Some("exclude")], "excluded before the first frame");
-        g.open(&a); // the Pano tab too
+        g.open(&a); // the Clipboard tab too
         g.close(&a);
         assert_eq!(a.0.borrow().last(), Some(&"exclude"), "one view still open: still excluded");
         g.close(&a);

@@ -12,7 +12,7 @@
   <img alt="Rust" src="https://img.shields.io/badge/Rust-stable-000000?logo=rust&logoColor=white">
   <img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white">
   <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black">
-  <img alt="Status: early, 0.1.0" src="https://img.shields.io/badge/status-early%20(0.1.0)-orange">
+  <img alt="Status: early, 0.2.0" src="https://img.shields.io/badge/status-early%20(0.2.0)-orange">
 </p>
 
 <p>
@@ -80,12 +80,10 @@ Plugins may use their own internet connection; Peeka cannot control that, and th
 
 ## ⬇️ Download
 
-Grab `peeka.exe` from the [latest release](https://github.com/isDionn/peeka/releases/latest) and run it. There is no installer; it is a single portable exe for Windows 10/11 (WebView2 is already part of Windows 11).
+From the [latest release](https://github.com/isDionn/peeka/releases/latest), download **`Peeka-<version>-setup.exe`** (installer, adds a Start menu entry and an uninstaller) or **`peeka.exe`** (portable, just run it). Windows 10/11; WebView2 is already part of Windows 11.
 
 > [!NOTE]
 > The exe is not code-signed yet, so Windows SmartScreen may say "Windows protected your PC". Click **More info → Run anyway**. You can always [build it from source](#-build-from-source) instead.
-
-The interface is in Turkish for now.
 
 ## 📦 Build from source
 
@@ -133,17 +131,13 @@ The source code is MIT, see [`LICENSE`](LICENSE).
 
 The mascot is not: the ghost character and its artwork are © 2026 isDionn, all rights reserved; see [`MASCOT-LICENSE.md`](docs/MASCOT-LICENSE.md). Third-party notices: [`THIRD_PARTY_NOTICES.md`](docs/THIRD_PARTY_NOTICES.md).
 
-## 🙏 Acknowledgements
-
-Inspired by [HeyyCzer/windows-dynamic-island](https://github.com/HeyyCzer/windows-dynamic-island) (ideas only, no code copied). Parts adapted from [Louis-CFM/coucou](https://github.com/Louis-CFM/coucou) (MIT); see the notices file.
-
 ---
 
 ## 🇹🇷 Türkçe
 
 Peeka, Windows görev çubuğunun yerine geçen ince bir üst şerit ve ondan açılan "ada" (Dynamic Island benzeri) arayüzüdür. Şerit, ada, yan baloncuk, pano geçmişi, medya, bildirimler, zamanlayıcı, sistem durumu, hayalet maskot, Claude Code bağlayıcısı ve herkese açık eklenti API'si içerir.
 
-- **İndirme:** [Son sürümden](https://github.com/isDionn/peeka/releases/latest) `peeka.exe` dosyasını indirip çalıştırın. Exe henüz imzalı değil; SmartScreen uyarırsa **Ek bilgi → Yine de çalıştır**.
+- **İndirme:** [Son sürümden](https://github.com/isDionn/peeka/releases/latest) kurulum dosyasını (`Peeka-<sürüm>-setup.exe`) ya da taşınabilir `peeka.exe` dosyasını indirin. Exe henüz imzalı değil; SmartScreen uyarırsa **Ek bilgi → Yine de çalıştır**.
 - **Kaynaktan derleme:** Yukarıdaki adımlar. Gereksinim: WebView2'li Windows 10/11, Rust (MSVC), Node.js ve pnpm. Düz `cargo build` arayüzü gömmez, `custom-protocol` özelliği şarttır.
 - **Gizlilik:** Yerel çalışır, dışarıya kendi isteği yok, telemetri yok. Kilitte ve sunum modunda içerik yerine genel etiket görünür; parolalar bulanık durur; bildirimden kopyalanan tek kullanımlık kod 60 saniye sonra panodan silinir. Eklentiler her biri sizin onayınızla, kapsam kapsam bağlanır; kilitliyken eklentilere hiçbir şey gitmez.
 - **Eklentiler:** Sözleşme [`docs/plugin-api.md`](docs/plugin-api.md), örnekler [`sdk/README.md`](sdk/README.md).

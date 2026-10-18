@@ -1,5 +1,5 @@
 // Peeka — original implementation (MIT).
-//! "İndirme bitti" (scenario 29): the Downloads folder is listed every couple of seconds (names and sizes only, no file
+//! "Download finished" (scenario 29): the Downloads folder is listed every couple of seconds (names and sizes only, no file
 //! is ever opened or read) and a NEW file is announced once its size has stopped changing. A privacy surface: the
 //! owner can switch it off (`watchDownloads`), the event carries a name and a size and nothing else (never a path),
 //! it never goes to a plugin, and the folder path stays in Rust. Platform-free: the Windows side only lists.
@@ -101,20 +101,20 @@ mod tests {
     #[test]
     fn what_was_there_at_the_start_is_never_announced() {
         let mut d = Downloads::default();
-        assert!(d.step(&f(&[("eski.pdf", 10)])).is_empty());
-        assert!(d.step(&f(&[("eski.pdf", 10)])).is_empty());
-        assert!(d.step(&f(&[("eski.pdf", 10)])).is_empty());
+        assert!(d.step(&f(&[("old.pdf", 10)])).is_empty());
+        assert!(d.step(&f(&[("old.pdf", 10)])).is_empty());
+        assert!(d.step(&f(&[("old.pdf", 10)])).is_empty());
     }
 
     #[test]
     fn a_new_file_is_announced_once_after_its_size_held_still() {
         let mut d = Downloads::default();
         d.step(&f(&[]));
-        assert!(d.step(&f(&[("rapor.pdf", 500)])).is_empty(), "first sight");
-        let done = d.step(&f(&[("rapor.pdf", 500)]));
-        assert_eq!(done, [Done { id: "dl-1".into(), name: "rapor.pdf".into(), size: 500 }]);
-        assert!(d.step(&f(&[("rapor.pdf", 500)])).is_empty(), "only once");
-        assert_eq!(d.name("dl-1"), Some("rapor.pdf"));
+        assert!(d.step(&f(&[("report.pdf", 500)])).is_empty(), "first sight");
+        let done = d.step(&f(&[("report.pdf", 500)]));
+        assert_eq!(done, [Done { id: "dl-1".into(), name: "report.pdf".into(), size: 500 }]);
+        assert!(d.step(&f(&[("report.pdf", 500)])).is_empty(), "only once");
+        assert_eq!(d.name("dl-1"), Some("report.pdf"));
         assert_eq!(d.name("dl-9"), None, "an id Notch never announced");
     }
 
@@ -122,11 +122,11 @@ mod tests {
     fn a_growing_file_waits_and_a_zero_byte_file_never_counts() {
         let mut d = Downloads::default();
         d.step(&f(&[]));
-        assert!(d.step(&f(&[("film.mkv", 100)])).is_empty());
-        assert!(d.step(&f(&[("film.mkv", 900)])).is_empty(), "still growing");
-        let done = d.step(&f(&[("film.mkv", 900), ("bos.txt", 0)]));
-        assert_eq!(done.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), ["film.mkv"], "held still");
-        assert!(d.step(&f(&[("film.mkv", 900), ("bos.txt", 0)])).is_empty(), "an empty file is not a download");
+        assert!(d.step(&f(&[("movie.mkv", 100)])).is_empty());
+        assert!(d.step(&f(&[("movie.mkv", 900)])).is_empty(), "still growing");
+        let done = d.step(&f(&[("movie.mkv", 900), ("empty.txt", 0)]));
+        assert_eq!(done.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), ["movie.mkv"], "held still");
+        assert!(d.step(&f(&[("movie.mkv", 900), ("empty.txt", 0)])).is_empty(), "an empty file is not a download");
     }
 
     #[test]
@@ -135,7 +135,7 @@ mod tests {
         d.step(&f(&[]));
         for _ in 0..3 {
             assert!(d
-                .step(&f(&[("a.zip.crdownload", 5), ("b.part", 5), ("c.TMP", 5), (".gizli", 5), ("~$x.docx", 5)]))
+                .step(&f(&[("a.zip.crdownload", 5), ("b.part", 5), ("c.TMP", 5), (".hidden", 5), ("~$x.docx", 5)]))
                 .is_empty());
         }
         // Chrome renames the .crdownload to its final name.
@@ -185,14 +185,14 @@ mod tests {
             }
             v
         };
-        tmp.write("var.txt", b"x");
+        tmp.write("exists.txt", b"x");
         let mut d = Downloads::default();
         d.step(&list(&tmp));
-        tmp.write("yeni.zip", b"12345");
+        tmp.write("new.zip", b"12345");
         tmp.write("yeni2.zip.crdownload", b"123");
         assert!(d.step(&list(&tmp)).is_empty());
         let done = d.step(&list(&tmp));
         assert_eq!(done.len(), 1);
-        assert_eq!((done[0].name.as_str(), done[0].size), ("yeni.zip", 5));
+        assert_eq!((done[0].name.as_str(), done[0].size), ("new.zip", 5));
     }
 }

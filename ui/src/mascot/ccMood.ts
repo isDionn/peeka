@@ -1,13 +1,13 @@
-// Claude Code kancası olayı -> maskot hali (saf). Olay Peeka'ya ana asistanın `cc.event` çağrısıyla gelir (Rust: `cc_event`).
-// Gerekçe ve tablo: notch/docs/eklenti-api.md `cc.event`. Düşme süreleri: kanca bazen susar (kesilen tur Stop göndermez), yüz takılı kalmasın.
+// Claude Code hook event -> mascot mood (pure). The event reaches Peeka via the main assistant's `cc.event` call (Rust: `cc_event`).
+// Rationale and table: notch/docs/plugin-api.md `cc.event`. Drop timeouts: the hook sometimes goes quiet (an interrupted turn sends no Stop), so the face doesn't get stuck.
 import type { Mood } from "./moods";
 
-export interface CcEvent { kind: string; tool?: string | null; reason?: string | null; /** Oturum etiketi: Claude Code oturum kimliğinin tuzlu 8 onaltılık özeti (Rust). Ana asistan göndermezse yok. */ sid?: string | null }
+export interface CcEvent { kind: string; tool?: string | null; reason?: string | null; /** Session tag: a salted 8-hex-digit hash of the Claude Code session id (Rust). Absent if the main assistant doesn't send it. */ sid?: string | null }
 
 const SEARCH_TOOLS = /^(WebSearch|WebFetch|Grep|Glob)$|search/i;
 const QUESTION_TOOLS = /^(AskUserQuestion|ExitPlanMode)$/;
 
-/** Olayın istediği hal; null = değişiklik yok (örn. alt ajan bitti). `idle` = temizle. */
+/** The mood the event asks for; null = no change (e.g. a subagent finished). `idle` = clear. */
 export function ccMoodOf(e: CcEvent): Mood | null {
   switch (e.kind) {
     case "session_start": case "session_end": return "idle";
@@ -22,13 +22,13 @@ export function ccMoodOf(e: CcEvent): Mood | null {
   }
 }
 
-/** Hal ne kadar sürer, sonra idle (ms). Bitti 5 sn (sahip kararı); çalışma halleri 2 dk sessizlikten sonra düşer. */
+/** How long a mood lasts before idle (ms). Done 5 s (owner decision); working moods drop after 2 min of silence. */
 export const CC_HOLD_MS: Partial<Record<Mood, number>> = {
   done: 5_000, error: 5_000, ratelimit: 30_000, attention: 60_000, approval: 300_000, question: 300_000, thinking: 120_000, searching: 120_000,
 };
 
-/** Olayları hale çevirir, süre dolunca `set(null)` (idle'a dön). `set(null)` = Claude Code'dan kaynaklı hal yok. */
-// Sarmalama şart: `timer.clear(t)` this=timer ile çağrılınca tarayıcıda "Illegal invocation" verir (gerçek pencerede kanca olayları hata atıyordu).
+/** Turns events into moods, `set(null)` (back to idle) when time runs out. `set(null)` = no mood from Claude Code. */
+// The wrapping is required: calling `timer.clear(t)` with this=timer throws "Illegal invocation" in the browser (hook events were throwing in the real window).
 export function createCcMood(set: (m: Mood | null) => void, timer: { set: typeof setTimeout; clear: typeof clearTimeout } = { set: (f, ms) => setTimeout(f, ms), clear: (t) => clearTimeout(t) }) {
   let t: ReturnType<typeof setTimeout> | undefined;
   return {

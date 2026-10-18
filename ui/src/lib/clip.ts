@@ -1,43 +1,43 @@
-// Pano satırlarının saf kuralları (ADR-0063): süre biçimi, görsel güvenliği, dosya türü. Düz metin parola burada hiç geçmez.
+// Pure rules for clipboard rows (ADR-0063): time format, image safety, file kind. Plain-text passwords never pass through here.
 import type { ClipItem, ClipPlain } from "../bridge";
 
-/** Gösterme süresi üst sınırı (ADR-0063 §4): Rust daha uzun söylese de arayüz 5 sn'de gizler. */
+/** Reveal time cap (ADR-0063 §4): even if Rust says longer, the UI hides after 5 s. */
 export const REVEAL_MS = 5000;
 
-/** Listedeki göreli zaman: "şimdi", "5 dk", "3 sa", "2 g". */
+/** Relative time in the list: "now", "5m", "3h", "2d". */
 export function ago(createdAt: number, now: number): string {
   const m = Math.max(0, Math.floor((now - createdAt) / 60_000));
-  if (m < 1) return "şimdi";
-  if (m < 60) return `${m} dk`;
+  if (m < 1) return "now";
+  if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60);
-  return h < 24 ? `${h} sa` : `${Math.floor(h / 24)} g`;
+  return h < 24 ? `${h}h` : `${Math.floor(h / 24)}d`;
 }
 
-/** Parolanın kalan ömrü: 60 dk ve üstü "1 sa", sonra "40 dk" diye geri sayar, son dakika "1 dk'dan az". */
+/** A password's remaining life: 60 min and up is "1h", then it counts down as "40m", the last minute is "<1m". */
 export function left(expiresAt: number, now: number): string {
   const ms = expiresAt - now;
-  if (ms < 60_000) return "1 dk'dan az";
+  if (ms < 60_000) return "<1m";
   const m = Math.ceil(ms / 60_000);
-  return m >= 60 ? `${Math.ceil(m / 60)} sa` : `${m} dk`;
+  return m >= 60 ? `${Math.ceil(m / 60)}h` : `${m}m`;
 }
 
-/** Süresi dolmuş parola listede görünmez (Rust zaten siler; saat kayması için arayüz de eler). */
+/** An expired password isn't listed (Rust deletes it anyway; the UI filters too in case of clock drift). */
 export const alive = (c: ClipItem, now: number) => c.kind !== "password" || c.expiresAt > now;
 
-/** Küçük resim: yalnız base64 raster ya da SVG `data:` görsel, en çok ~256 KB; başka her şey null (dosya yolu, bağlantı gelmez). */
+/** Thumbnail: only a base64 raster or SVG `data:` image, at most ~256 KB; anything else is null (no file paths or links). */
 export const safeThumb = (src: unknown): string | null =>
   typeof src === "string" && src.length <= 350_000 && /^data:image\/(png|jpeg|webp|svg\+xml)[;,]/.test(src) ? src : null;
 
-/** `clip_preview` sonucu (Rust: en çok 1024 px PNG): küçük resimden büyük sınır, yine yalnız güvenli görsel türleri. */
+/** `clip_preview` result (Rust: PNG up to 1024 px): a larger cap than thumbnails, still only safe image types. */
 export const safePreview = (src: unknown): string | null =>
   typeof src === "string" && src.length <= 8_000_000 && /^data:image\/(png|jpeg|webp)[;,]/.test(src) ? src : null;
 
-/** Renk karesi yalnız tam #RRGGBB için (stile giden değer doğrulanır). */
+/** Color swatch only for an exact #RRGGBB (the value going into a style is validated). */
 export const hexOf = (c: ClipPlain): string | null => (c.hint === "color" && c.text && /^#[0-9a-fA-F]{6}$/.test(c.text) ? c.text : null);
 
 export type FileKind = "pdf" | "video" | "sheet" | "image" | "other";
 const EXT: Record<string, FileKind> = { pdf: "pdf", mp4: "video", mkv: "video", mov: "video", avi: "video", xlsx: "sheet", xls: "sheet", csv: "sheet", png: "image", jpg: "image", jpeg: "image", gif: "image", webp: "image" };
-export const fileKind = (name: string | null): FileKind => EXT[(name ?? "").toLocaleLowerCase("tr").split(".").pop() ?? ""] ?? "other";
+export const fileKind = (name: string | null): FileKind => EXT[(name ?? "").toLowerCase().split(".").pop() ?? ""] ?? "other";
 
-/** Parola satırı alt yazısı: kaynak uygulama (bilinmiyorsa "Parola yöneticisi"), şifreli, kalan süre. */
-export const passwordSub = (source: string | null, expiresAt: number, now: number) => `${(source ?? "").trim().slice(0, 40) || "Parola yöneticisi"} · şifreli · ${left(expiresAt, now)}`;
+/** Password row subtitle: source app ("Password manager" if unknown), encrypted, time left. */
+export const passwordSub = (source: string | null, expiresAt: number, now: number) => `${(source ?? "").trim().slice(0, 40) || "Password manager"} · encrypted · ${left(expiresAt, now)}`;

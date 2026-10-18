@@ -1,4 +1,4 @@
-/* Sıvı omuz, gölge ve hale (maket yon-3d-son.html, §0i madde 6 ve 9). Yalnız transform + opacity animasyonu. */
+/* Liquid shoulder, shadow and halo (mockup yon-3d-son.html, §0i items 6 and 9). Animates transform + opacity only. */
 @property --nm-amb { syntax: "<color>"; inherits: true; initial-value: #000000; }
 
 .nm-host { position: relative; overflow: visible; }
@@ -17,7 +17,7 @@
   box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.085), 0 1px 2px rgba(0, 0, 0, 0.18),
     0 10px 28px rgba(0, 0, 0, 0.24), 0 28px 72px rgba(0, 0, 0, 0.3);
 }
-/* 16 px'lik taban; ölçek f/16. İç bükey kıvrım: şerit rengi, çeyrek daire oyuk. */
+/* 16 px base; scale f/16. Concave curve: strip color, quarter-circle cutout. */
 .nm-shoulder { z-index: 4; width: 16px; height: 16px; will-change: transform; }
 .nm-shoulder.l { background: radial-gradient(circle at 0 100%, transparent 15.4px, var(--strip, #0a0a0b) 16px); }
 .nm-shoulder.r { background: radial-gradient(circle at 100% 100%, transparent 15.4px, var(--strip, #0a0a0b) 16px); }

@@ -23,26 +23,26 @@ afterEach(() => {
 });
 const settle = (ms = 60) => act(async () => { await new Promise((r) => setTimeout(r, ms)); });
 const logged = (cmd: string) => fakeBridge.log.filter((l) => l.cmd === cmd);
-const notice = { id: "win.1", app: "Teams", title: "Ayşe yazdı", body: "Toplantı 15:00'e alındı" };
+const notice = { id: "win.1", app: "Teams", title: "Alex wrote", body: "Meeting moved to 3 PM" };
 
-describe("zamanlayıcı başlat (Modüller)", () => {
-  it("dakika ve ad timer_start'a saniye olarak gider; geçersiz dakikada düğme kapalı", async () => {
+describe("start a timer (Modules)", () => {
+  it("minutes and name go to timer_start as seconds; the button is disabled on invalid minutes", async () => {
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
-    fireEvent.click(screen.getByRole("tab", { name: "Zamanlayıcı" })); // Zamanlayıcı kendi sekmesinde (maket j)
-    const go = screen.getByRole("button", { name: "Başlat" }) as HTMLButtonElement;
-    fireEvent.change(screen.getByLabelText("Dakika"), { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("tab", { name: "Timer" })); // the Timer is on its own tab (mockup j)
+    const go = screen.getByRole("button", { name: "Start" }) as HTMLButtonElement;
+    fireEvent.change(screen.getByLabelText("Minutes"), { target: { value: "0" } });
     expect(go.disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText("Dakika"), { target: { value: "5" } });
-    fireEvent.change(screen.getByLabelText("Zamanlayıcı adı"), { target: { value: " Çay " } });
+    fireEvent.change(screen.getByLabelText("Minutes"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Timer name"), { target: { value: " Tea " } });
     fireEvent.click(go);
     await settle();
-    expect(logged("timer_start")[0].args).toEqual({ label: "Çay", seconds: 300 });
+    expect(logged("timer_start")[0].args).toEqual({ label: "Tea", seconds: 300 });
     expect((await fakeBridge.call("timer_get"))?.totalS).toBe(300);
   });
 });
 
-describe("sunum modu ve meşgul (input_tick)", { timeout: 30_000 }, () => {
+describe("presentation mode and busy (input_tick)", { timeout: 30_000 }, () => {
   const run = async (tick: { presentation?: boolean; busy?: boolean }) => {
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
     vi.spyOn(Math, "random").mockReturnValue(0);
@@ -54,101 +54,101 @@ describe("sunum modu ve meşgul (input_tick)", { timeout: 30_000 }, () => {
     await act(async () => { vi.advanceTimersByTime(47 * 60_000); });
     return prank;
   };
-  it("sunum modunda muziplik oynamaz", async () => { expect((await run({ presentation: true })).mock.calls).toHaveLength(0); });
-  it("meşgulde muziplik oynamaz", async () => { expect((await run({ busy: true })).mock.calls).toHaveLength(0); });
-  it("ikisi de yokken oynar (kontrol)", async () => { expect((await run({})).mock.calls).toHaveLength(1); });
-  it("sunum modunda Bluetooth çıkıntısı kendiliğinden açılmaz", async () => {
+  it("the prank does not play in presentation mode", async () => { expect((await run({ presentation: true })).mock.calls).toHaveLength(0); });
+  it("the prank does not play while busy", async () => { expect((await run({ busy: true })).mock.calls).toHaveLength(0); });
+  it("plays when neither applies (control)", async () => { expect((await run({})).mock.calls).toHaveLength(1); });
+  it("in presentation mode the Bluetooth peek does not open on its own", async () => {
     render(<Island monitor="m1" init={{ view: null, pin: true }} />);
     await settle();
     act(() => fakeBridge.emit("input_tick", { lastInputAgoMs: 60_000, cursor: null, presentation: true }));
     act(() => fakeBridge.emit("bluetooth_connected", { name: "Buds Pro", battery: 80 }));
     await settle();
-    expect(document.body.textContent).not.toContain("Buds Pro bağlandı");
+    expect(document.body.textContent).not.toContain("Buds Pro connected");
   });
 });
 
-describe("tepsi listesi (ok düğmesi)", () => {
-  it("ok open_tray'den listeyi gösterir; satır tray_open çağırır ve paneli kapatır", async () => {
+describe("tray list (arrow button)", () => {
+  it("the arrow shows the list from open_tray; a row calls tray_open and closes the panel", async () => {
     render(<Shell monitor="m1" />);
     await settle();
-    fireEvent.click(screen.getByRole("button", { name: "Gizli simgeler" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hidden icons" }));
     await settle();
-    const d = screen.getByRole("dialog", { name: "Gizli simgeler", hidden: true });
-    expect([...within(d).getByRole("group", { name: "Gizli simgeler" }).querySelectorAll("button")].slice(0, 3).map((x) => x.getAttribute("aria-label"))).toEqual(["Discord, 3 yeni", "Steam", "OneDrive"]);
-    fireEvent.click(within(d).getByRole("group", { name: "Gizli simgeler" }).querySelectorAll("button")[1]);
+    const d = screen.getByRole("dialog", { name: "Hidden icons", hidden: true });
+    expect([...within(d).getByRole("group", { name: "Hidden icons" }).querySelectorAll("button")].slice(0, 3).map((x) => x.getAttribute("aria-label"))).toEqual(["Discord, 3 new", "Steam", "OneDrive"]);
+    fireEvent.click(within(d).getByRole("group", { name: "Hidden icons" }).querySelectorAll("button")[1]);
     await settle();
     expect(logged("tray_open")[0].args).toEqual({ id: "exe:c:/apps/steam.exe" });
     expect(d.getAttribute("aria-hidden")).toBe("true");
   });
 });
 
-describe("Windows bildirim aynası (Bildirimler)", () => {
-  it("kart uygulama, başlık, gövde ve iki düğmeyi çizer; kare tek renk (alfa maskesi), şerit dalgası yok", async () => {
+describe("Windows notification mirror (Notifications)", () => {
+  it("the card draws the app, title, body and two buttons; the tile is single-color (alpha mask), no strip ripple", async () => {
     fakeBridge.pushNotice({ ...notice, tile: "data:image/png;base64,AAAA" });
     render(<NotificationList onReview={() => undefined} />);
     await settle();
     const card = document.querySelector<HTMLElement>("[data-mirror='win.1']")!;
     expect(card.textContent).toContain("Teams");
-    expect(card.textContent).toContain("Toplantı 15:00'e alındı");
-    expect(within(card).getByRole("button", { name: "Uygulamayı aç" })).toBeTruthy();
-    expect(within(card).getByRole("button", { name: "Pusula yanıtlasın" })).toBeTruthy();
-    expect(card.querySelector(".uygIk.mono")!.getAttribute("style")).toContain("mask-image");
+    expect(card.textContent).toContain("Meeting moved to 3 PM");
+    expect(within(card).getByRole("button", { name: "Open app" })).toBeTruthy();
+    expect(within(card).getByRole("button", { name: "Reply with Compass" })).toBeTruthy();
+    expect(card.querySelector(".appIcon.mono")!.getAttribute("style")).toContain("mask-image");
   });
-  it("renkli simge ayarı açıkken de kare tek renk kalır; bozuk simge adresi maskeye girmez", async () => {
+  it("the tile stays single-color even with the color icon setting on; a malformed icon URL does not enter the mask", async () => {
     await fakeBridge.call("set_settings", { patch: { colorIcons: true } });
     fakeBridge.pushNotice({ ...notice, tile: 'https://evil/x.png");background:url(x' });
     render(<NotificationList onReview={() => undefined} />);
     await settle();
     const card = document.querySelector<HTMLElement>("[data-mirror='win.1']")!;
-    expect(card.querySelector(".uygIk")).toBeNull();
-    expect(card.querySelector(".uyg b")!.textContent).toBe("T");
+    expect(card.querySelector(".appIcon")).toBeNull();
+    expect(card.querySelector(".app b")!.textContent).toBe("T");
     expect(card.innerHTML).not.toContain("evil");
   });
-  it("canOpen yoksa 'Uygulamayı aç' yok; varsa mirror_open_app gider", async () => {
-    const a = render(<MirrorCard n={{ id: "x", app: "A", title: "t", body: null, tile: "", tileMono: true, ripple: false, openLabel: "Uygulamayı aç", canOpen: false, at: 0 }} />);
-    expect(within(a.container).queryByRole("button", { name: "Uygulamayı aç" })).toBeNull();
+  it("without canOpen there is no 'Open app'; with it, mirror_open_app is sent", async () => {
+    const a = render(<MirrorCard n={{ id: "x", app: "A", title: "t", body: null, tile: "", tileMono: true, ripple: false, openLabel: "Open app", canOpen: false, at: 0 }} />);
+    expect(within(a.container).queryByRole("button", { name: "Open app" })).toBeNull();
     a.unmount();
     fakeBridge.pushNotice({ ...notice, id: "win.2" });
     render(<NotificationList onReview={() => undefined} />);
     await settle();
-    fireEvent.click(within(document.querySelector<HTMLElement>("[data-mirror='win.2']")!).getByRole("button", { name: "Uygulamayı aç" }));
+    fireEvent.click(within(document.querySelector<HTMLElement>("[data-mirror='win.2']")!).getByRole("button", { name: "Open app" }));
     await settle();
     expect(logged("mirror_open_app")[0].args).toEqual({ id: "win.2" });
   });
-  it("'Pusula yanıtlasın' mirror_ask çağırır ve ada sayfasına yanıt görünümünü açtırır", async () => {
+  it("'Reply with Compass' calls mirror_ask and makes the island page open the reply view", async () => {
     const got: string[] = [];
     const off = onX((m) => got.push(m.t));
     fakeBridge.pushNotice(notice);
     const onClose = vi.fn();
     render(<NotificationList onReview={() => undefined} onClose={onClose} />);
     await settle();
-    fireEvent.click(screen.getByRole("button", { name: "Pusula yanıtlasın" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reply with Compass" }));
     await settle(120);
     off();
     expect(logged("mirror_ask")[0].args).toEqual({ id: "win.1" });
     expect(got).toContain("ask");
     expect(onClose).toHaveBeenCalled();
   });
-  it("ana asistan yokken 'Pusula yanıtlasın' kapalı", async () => {
+  it("with no main assistant 'Reply with Compass' is disabled", async () => {
     fakeBridge.setPlugins([]);
     fakeBridge.pushNotice(notice);
     render(<NotificationList onReview={() => undefined} />);
     await settle();
-    expect((screen.getByRole("button", { name: "Asistan yanıtlasın" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Reply with assistant" }) as HTMLButtonElement).disabled).toBe(true);
   });
-  it("ada sayfası 'ask' mesajıyla sohbet kutusunu açar", async () => {
-    fakeBridge.setSurfaces({ composer: { id: "dev.example.pusula", name: "Pusula", main: true, voice: false } });
+  it("the island page opens the chat box on the 'ask' message", async () => {
+    fakeBridge.setSurfaces({ composer: { id: "dev.example.compass", name: "Compass", main: true, voice: false } });
     render(<Island monitor="m1" init={{ view: null }} />);
     await settle();
     sendX({ t: "ask" });
     await settle(80);
-    expect(screen.getByRole("dialog", { name: "Sor" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Ask" })).toBeTruthy();
   });
-  it("sessiz değilken yeni Windows bildirimi sağ üstte kart olur; sessizken açmaz; ilk liste açmaz; liste kendiliğinden açılmaz", async () => {
+  it("when not quiet a new Windows notification becomes a card at the top right; when quiet it does not; the first list does not; the list never opens by itself", async () => {
     fakeBridge.pushNotice({ ...notice, id: "old" });
     render(<Shell monitor="m1" />);
     await settle();
-    const toast = () => document.querySelector<HTMLElement>('[aria-label="Windows bildirimi"]');
+    const toast = () => document.querySelector<HTMLElement>('[aria-label="Windows notification"]');
     expect(toast()).toBeNull();
     act(() => fakeBridge.setMirrorQuiet(true));
     act(() => fakeBridge.pushNotice({ ...notice, id: "q1" }));
@@ -160,43 +160,43 @@ describe("Windows bildirim aynası (Bildirimler)", () => {
     expect(toast()).not.toBeNull();
     expect(document.querySelector<HTMLElement>("[data-panel=notif]")!.getAttribute("aria-hidden")).toBe("true");
   });
-  it("Pusula yanıtlasın: taslak görünümü açılır, Gönder kapalı ve nedeni yazılı", async () => {
+  it("Reply with Compass: the draft view opens, Send is disabled and the reason is written", async () => {
     render(<Shell monitor="m1" />);
     await settle();
     act(() => fakeBridge.pushNotice({ ...notice, id: "n3" }));
     await settle();
-    fireEvent.click(screen.getByRole("button", { name: /Pusula yanıtlasın/ }));
-    await settle(30); // taslak görünümü abone olsun (act sonunda render olur)
+    fireEvent.click(screen.getByRole("button", { name: /Reply with Compass/ }));
+    await settle(30); // let the draft view subscribe (it renders at the end of act)
     await settle(400);
-    expect(screen.getByText("Olur, 8 uygun. Görüşürüz.")).toBeTruthy();
-    const send = screen.getByRole("button", { name: "Gönder" }) as HTMLButtonElement;
+    expect(screen.getByText("Sure, 8 works. See you then.")).toBeTruthy();
+    const send = screen.getByRole("button", { name: "Send" }) as HTMLButtonElement;
     expect(send.disabled).toBe(true);
-    expect(send.title).toMatch(/henüz yok/);
+    expect(send.title).toMatch(/isn't available yet/);
   });
-  it("kilitliyken gövde ve başlık DOM'da yok: yalnız uygulama adı ve 'Kilitli'", async () => {
-    fakeBridge.pushNotice({ ...notice, body: "Maaş zammı gizli" });
+  it("while locked the body and title are not in the DOM: only the app name and 'Locked'", async () => {
+    fakeBridge.pushNotice({ ...notice, body: "Salary raise secret" });
     render(<NotificationList onReview={() => undefined} />);
     await settle();
-    expect(document.body.textContent).toContain("Maaş zammı gizli");
+    expect(document.body.textContent).toContain("Salary raise secret");
     act(() => fakeBridge.setLocked(true, "manual"));
     await settle();
     const t = document.body.textContent!;
-    expect(t).not.toContain("Maaş zammı gizli");
-    expect(t).not.toContain("Ayşe yazdı");
+    expect(t).not.toContain("Salary raise secret");
+    expect(t).not.toContain("Alex wrote");
     expect(t).toContain("Teams");
-    expect(t).toContain("Kilitli");
-    expect(screen.queryByRole("button", { name: "Pusula yanıtlasın" })).toBeNull();
-    expect(screen.getByRole("status").textContent).toContain("(5 bildirim)");
+    expect(t).toContain("Locked");
+    expect(screen.queryByRole("button", { name: "Reply with Compass" })).toBeNull();
+    expect(screen.getByRole("status").textContent).toContain("(5)");
   });
 });
 
-describe("Ayarlar › Windows bildirimleri", () => {
+describe("Settings › Windows notifications", () => {
   const open = async () => {
-    render(<Shell monitor="m1" init={{ panel: "ayg" }} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Diğer ayarlar" }));
-    return screen.findByRole("switch", { name: "Windows bildirimleri" });
+    render(<Shell monitor="m1" init={{ panel: "appearance" }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "More settings" }));
+    return screen.findByRole("switch", { name: "Windows notifications" });
   };
-  it("kapalıyken engel satırı yok; açınca mirror_enable gider, engelsizse satır çıkmaz", async () => {
+  it("no blocker row while off; turning on sends mirror_enable, and with no blocker no row appears", async () => {
     const sw = await open();
     expect(sw.getAttribute("aria-checked")).toBe("false");
     expect(document.querySelector("[data-blocker]")).toBeNull();
@@ -210,10 +210,10 @@ describe("Ayarlar › Windows bildirimleri", () => {
     expect(logged("mirror_disable")).toHaveLength(1);
   });
   it.each([
-    [{ devMode: false }, "dev_mode_off", "Geliştirici Modu kapalı", "ms-settings:developers"],
-    [{ registered: false }, "not_registered", "register.ps1 çalıştırılıp Peeka yeniden başlatılmalı", null],
-    [{ access: "denied" }, "access_denied", "Windows izin vermedi", "ms-settings:privacy-notifications"],
-  ] as const)("engel %j: neden satırı ve doğru Windows ayarı bağlantısı", async (patch, blocker, text, uri) => {
+    [{ devMode: false }, "dev_mode_off", "Developer Mode is off", "ms-settings:developers"],
+    [{ registered: false }, "not_registered", "Run register.ps1, then restart Peeka", null],
+    [{ access: "denied" }, "access_denied", "Windows didn't allow it", "ms-settings:privacy-notifications"],
+  ] as const)("blocker %j: reason row and the right Windows settings link", async (patch, blocker, text, uri) => {
     fakeBridge.setMirror(patch);
     const sw = await open();
     fireEvent.click(sw);
@@ -227,7 +227,7 @@ describe("Ayarlar › Windows bildirimleri", () => {
     await settle();
     expect(spy).toHaveBeenCalledWith("open_windows_settings", { uri });
   });
-  it("Windows ayarı açılamazsa (Rust izin listesi reddeder) elle yol yazılır", async () => {
+  it("if the Windows setting cannot be opened (the Rust allow-list refuses) the manual path is written out", async () => {
     fakeBridge.setMirror({ devMode: false });
     const sw = await open();
     fireEvent.click(sw);
@@ -236,6 +236,6 @@ describe("Ayarlar › Windows bildirimleri", () => {
     vi.spyOn(fakeBridge, "call").mockImplementation(((cmd: string, ...a: unknown[]) => (cmd === "open_windows_settings" ? Promise.reject("invalid") : real(cmd, ...a))) as never);
     fireEvent.click(document.querySelector("[data-blocker] button")!);
     await settle();
-    expect(document.querySelector("[data-blocker]")!.textContent).toContain("Geliştiriciler için");
+    expect(document.querySelector("[data-blocker]")!.textContent).toContain("For developers");
   });
 });

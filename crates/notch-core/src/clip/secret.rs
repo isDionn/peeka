@@ -58,7 +58,7 @@ const PROCESSES: [&str; 27] = [
     "bitcoin-qt.exe",
 ];
 
-/// The row's source name for the well-known password managers ("Bitwarden · şifreli · 1 sa").
+/// The row's source name for the well-known password managers ("Bitwarden · encrypted · 1 h").
 const MANAGERS: [(&str, &str); 10] = [
     ("1password.exe", "1Password"),
     ("bitwarden.exe", "Bitwarden"),
@@ -73,6 +73,7 @@ const MANAGERS: [(&str, &str); 10] = [
 ];
 
 /// `sensitive_apps._TITLE`, matched on the folded title.
+// Turkish words and bank names kept on purpose: they detect Turkish password, bank and security windows.
 static TITLE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(concat!(
         r"1password|bitwarden|keepass|lastpass|dashlane|enpass|nordpass|roboform|proton pass",
@@ -123,6 +124,7 @@ pub fn manager_name(exe: &str) -> Option<&'static str> {
     MANAGERS.iter().find(|(e, _)| *e == name).map(|(_, n)| *n)
 }
 
+// Turkish words on purpose: they detect Turkish password phrasing ("parola", "şifrem") in copied text.
 const SECRET_WORD: &str =
     r"(?:api[_-]?key|access[_-]?key|secret(?:[_-]?key)?|token|password|passwd|pwd|parola|şifre|sifre)";
 const TR_POSSESSIVE: &str = r"(?:şifre|sifre|parola)(?:m|miz|mız|n|niz|nız|si|sı)";
@@ -251,21 +253,21 @@ mod tests {
 
     /// `core/tests/test_redact.py`, every example that `redact` changes.
     const SECRET_TEXTS: &[&str] = &[
-        // SECRETS (wrapped as "önce X sonra")
-        concat!("önce sk-ant-api03-abcdefghijklmnop", "qrstuvwxyz012345 sonra"), // allow-secret
-        concat!("önce sk-proj-AbCdEfGhIjKlM", "nOpQrStUv1234 sonra"), // allow-secret
-        concat!("önce ghp_abcdefghijklmnop", "qrstuvwxyz0123456789 sonra"), // allow-secret
-        concat!("önce github_pat_11ABCDEFG012", "3456789_abcdefghijklmnop sonra"), // allow-secret
-        concat!("önce xoxb-1234567890-abcdef", "ghijkl sonra"), // allow-secret
-        concat!("önce AKIAIOSFOD", "NN7EXAMPLE sonra"), // allow-secret
-        concat!("önce AIzaSyA1234567890ab", "cdefghijklmnopqrstuv sonra"), // allow-secret
-        concat!("önce eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5", "N_XgL0n3I9PlFUP0THsR8U sonra"), // allow-secret
+        // SECRETS (wrapped as "before X after")
+        concat!("before sk-ant-api03-abcdefghijklmnop", "qrstuvwxyz012345 after"), // allow-secret
+        concat!("before sk-proj-AbCdEfGhIjKlM", "nOpQrStUv1234 after"), // allow-secret
+        concat!("before ghp_abcdefghijklmnop", "qrstuvwxyz0123456789 after"), // allow-secret
+        concat!("before github_pat_11ABCDEFG012", "3456789_abcdefghijklmnop after"), // allow-secret
+        concat!("before xoxb-1234567890-abcdef", "ghijkl after"), // allow-secret
+        concat!("before AKIAIOSFOD", "NN7EXAMPLE after"), // allow-secret
+        concat!("before AIzaSyA1234567890ab", "cdefghijklmnopqrstuv after"), // allow-secret
+        concat!("before eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5", "N_XgL0n3I9PlFUP0THsR8U after"), // allow-secret
         // MORE_SECRETS
-        concat!("önce hf_", "abcdefghijklmnopqrstuvwxyzABCDEFGH sonra"), // allow-secret
-        concat!("önce sk_live_51H8abcde", "fghijklmnopqrstuv sonra"), // allow-secret
-        concat!("önce rk_live_51H8abcde", "fghijklmnopqrstuv sonra"), // allow-secret
-        concat!("önce ya29.a0AfH6SMBabcdefghijklm", "nopqrstuvwxyz0123456789 sonra"), // allow-secret
-        concat!("önce MTIzNDU2Nzg5MDEyMzQ1Njc4.GAbCdE.abcdefghijklmnop", "qrstuvwxyz0123456 sonra"), // allow-secret
+        concat!("before hf_", "abcdefghijklmnopqrstuvwxyzABCDEFGH after"), // allow-secret
+        concat!("before sk_live_51H8abcde", "fghijklmnopqrstuv after"), // allow-secret
+        concat!("before rk_live_51H8abcde", "fghijklmnopqrstuv after"), // allow-secret
+        concat!("before ya29.a0AfH6SMBabcdefghijklm", "nopqrstuvwxyz0123456789 after"), // allow-secret
+        concat!("before MTIzNDU2Nzg5MDEyMzQ1Njc4.GAbCdE.abcdefghijklmnop", "qrstuvwxyz0123456 after"), // allow-secret
         // private key, bearer, basic, URL credentials
         concat!("x -----BEGIN RSA PRIVATE KEY-----\nMIIEpAI", "BAAKCAQEA\nabc\n-----END RSA PRIVATE KEY----- y"), // allow-secret
         "Authorization: Bearer abcdef0123456789xyz",
@@ -288,14 +290,14 @@ mod tests {
         "Name    Value\n----    -----\nGITHUB_TOKEN            s3cr3tvalue123\nPATH   C:\\bin",
         "Name    Value\n----    -----\nOPENAI_API_KEY            s3cr3tvalue123\nPATH   C:\\bin",
         "Name    Value\n----    -----\nMY_SECRET            s3cr3tvalue123\nPATH   C:\\bin",
-        // Turkish ids (checksum-checked), Telegram, possessives, Discord webhook
-        "TC: 10000000146 tamam",
+        // Turkish ids (checksum-checked), Telegram, Turkish possessives (şifrem = my password; matched on purpose), Discord webhook
+        "TC: 10000000146 ok",
         "IBAN TR330006100519786457841326 .",
         "IBAN TR33 0006 1005 1978 6457 8413 26 .",
-        "kart 4111 1111 1111 1111 ok",
-        "kart 5500-0000-0000-0004 ok",
-        "kart 4111111111111111 ok",
-        concat!("bot 123456789:AAEx1_-x1_-x1_-", "x1_-x1_-x1_-x1_-x1_- hazır"), // allow-secret
+        "card 4111 1111 1111 1111 ok",
+        "card 5500-0000-0000-0004 ok",
+        "card 4111111111111111 ok",
+        concat!("bot 123456789:AAEx1_-x1_-x1_-", "x1_-x1_-x1_-x1_-x1_- ready"), // allow-secret
         "şifrem gizli123",
         "parolam=abcd1234",
         "Şifremiz: kedi1234",
@@ -308,10 +310,10 @@ mod tests {
         "tokens: 340",
         "token_count=12",
         "max_tokens: 4096",
-        "merhaba",
-        "sipariş 12345678901",
+        "hello",
+        "order 12345678901",
         "TR330006100519786457841327",
-        "kart 4111111111111112",
+        "card 4111111111111112",
         "şifremi unuttum",
         "şifreniz nedir?",
         "şifrem çok uzun",
@@ -329,7 +331,7 @@ mod tests {
 
     #[test]
     fn the_three_ways_into_the_password_class() {
-        let plain = "kedi resmi";
+        let plain = "cat photo";
         assert!(!password_class(plain, &Origin::default()));
         // (a) a password manager's flag, any of the four
         for flags in [
@@ -347,7 +349,7 @@ mod tests {
         let front = Origin { foreground_exe: Some("KeePassXC.exe".into()), ..Default::default() };
         assert!(password_class(plain, &front));
         let bank =
-            Origin { foreground_title: Some("Ziraat İnternet Şubesi - Google Chrome".into()), ..Default::default() };
+            Origin { foreground_title: Some("Ziraat Bank Online - Google Chrome".into()), ..Default::default() };
         assert!(password_class(plain, &bank));
         let notepad = Origin { owner_exe: Some(r"C:\Windows\notepad.exe".into()), ..Default::default() };
         assert!(!password_class(plain, &notepad));
@@ -360,6 +362,7 @@ mod tests {
         assert_eq!(manager_name(r"C:\x\Bitwarden.exe"), Some("Bitwarden"));
         assert_eq!(manager_name("1Password.exe"), Some("1Password"));
         assert_eq!(manager_name("notepad.exe"), None);
+        // Turkish letters on purpose: fold_tr must match Turkish text typed with or without diacritics.
         assert_eq!(fold_tr("İNTERNET ŞUBESİ"), "internet subesi");
     }
 }

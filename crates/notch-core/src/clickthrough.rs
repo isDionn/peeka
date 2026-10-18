@@ -54,7 +54,7 @@ pub fn captures(cursor: (i32, i32), origin: (i32, i32), scale: f64, rects: &[Css
     rects.iter().any(|r| !r.paint && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h)
 }
 
-/// The window region ("ada penceresi görünen şekle kırpılır"): every reported rectangle, clickable or
+/// The window region ("the island window is clipped to the visible shape"): every reported rectangle, clickable or
 /// painted, as `(left, top, right, bottom)` physical px inside a `win` (w, h) window. The page already holds a
 /// rectangle at its target size while the island grows and until the close animation ends, so following the report
 /// never cuts an animation. Empty rectangles are dropped; nothing = an empty region (the window covers nothing).

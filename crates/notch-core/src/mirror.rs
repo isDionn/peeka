@@ -1,11 +1,10 @@
 //! The Windows notification mirror (Wave 6, owner decisions 3, 14, 17):
 //! optional, off by default, only for owners with Developer Mode on. Other apps' toasts (WhatsApp, Teams…) are read
 //! with `UserNotificationListener`, which needs package identity: a sparse package registered by the owner
-//! (`src-tauri/identity/`). Here: whether it can be on and why not, the poll diff, the mapping to a card and the
-//! in-memory list. Nothing in this file (or in `notch-win/src/notifications.rs`, `src-tauri/src/mirror.rs`) writes
+//! (`crates/notch-app/identity/`). Here: whether it can be on and why not, the poll diff, the mapping to a card and the
+//! in-memory list. Nothing in this file (or in `notch-win/src/notifications.rs`, `crates/notch-app/src/mirror.rs`) writes
 //! a file or a log line: notification bodies live in memory only (a test below checks the sources).
 //!
-//! Inspired by HeyyCzer/windows-dynamic-island (ideas only; no code copied).
 
 use std::collections::HashSet;
 
@@ -14,14 +13,14 @@ use serde_json::Value;
 
 use crate::clip::vault::Secret;
 
-/// Must match `src-tauri/identity/AppxManifest.xml` and the `<msix>` element of `src-tauri/notch.manifest`
+/// Must match `crates/notch-app/identity/AppxManifest.xml` and the `<msix>` element of `crates/notch-app/notch.manifest`
 /// (a test checks both). A rename means the owner unregisters and registers again.
 pub const PACKAGE_NAME: &str = "Notch.Mirror";
 pub const PUBLISHER: &str = "CN=Notch";
 pub const APPLICATION_ID: &str = "Notch";
 
-/// The card's one button instead of Windows's "Yanıtla" (no API reaches a toast's inline reply).
-pub const OPEN_LABEL: &str = "Uygulamayı aç";
+/// The card's one button instead of Windows's "Reply" (no API reaches a toast's inline reply).
+pub const OPEN_LABEL: &str = "Open app";
 pub const MAX_ITEMS: usize = 20;
 /// A wake-up from sleep can deliver a pile of toasts in one poll; only this many of the latest turn into cards.
 pub const MAX_BURST: usize = 3;
@@ -116,7 +115,7 @@ pub struct Notice {
     pub tile_mono: bool,
     /// Always false: a Windows notification never ripples the strip (decision 17).
     pub ripple: bool,
-    /// "Uygulamayı aç".
+    /// "Open app".
     pub open_label: &'static str,
     /// The sender has an app id Notch can open.
     pub can_open: bool,
@@ -130,7 +129,7 @@ pub struct Notice {
     code: Option<Code>,
 }
 
-/// Words that say "a one-time code follows" (matched on lower-cased text, so "KODUNUZ" and "Doğrulama" count).
+/// Words that say "a one-time code follows" (matched on lower-cased text, so "YOUR CODE" and "Verification" count; the Turkish words are kept on purpose).
 const CODE_WORDS: &[&str] = &["kod", "code", "doğrulama", "dogrulama", "verification", "verify", "otp"];
 /// A code must sit within this many characters of one of `CODE_WORDS`.
 const CODE_NEAR: usize = 40;
@@ -234,7 +233,7 @@ pub fn find_code(texts: &[&str]) -> Option<String> {
     near.iter().take_while(|(g, _)| *g == best).all(|(_, d)| *d == code).then_some(code)
 }
 
-/// Digits that look like a code, hidden: what the assistant gets of a notification that has one ("Asistan yanıtlasın"
+/// Digits that look like a code, hidden: what the assistant gets of a notification that has one ("Ask assistant"
 /// must not carry a code to a plugin).
 fn hide_codes(text: &str) -> String {
     let chars: Vec<char> = text.chars().collect();
@@ -242,7 +241,7 @@ fn hide_codes(text: &str) -> String {
     let mut at = 0;
     for (s, e, _) in digit_candidates(&chars) {
         out.extend(&chars[at..s]);
-        out.push_str("[kod gizlendi]");
+        out.push_str("[code hidden]");
         at = e;
     }
     out.extend(&chars[at..]);
@@ -388,18 +387,18 @@ impl Store {
         MirrorView { items: self.items.clone(), quiet }
     }
 
-    /// What "Uygulamayı aç" hands `ShellExecute`: only for a listed id with a checked app id.
+    /// What "Open app" hands `ShellExecute`: only for a listed id with a checked app id.
     pub fn open_target(&self, id: &str) -> Option<String> {
         let n = self.items.iter().find(|x| x.id == id)?;
         n.can_open.then(|| format!("shell:AppsFolder\\{}", n.aumid))
     }
 
-    /// The text "Asistan yanıtlasın" sends, once, to the main assistant only (the caller uses `composer_submit`). A
+    /// The text "Ask assistant" sends, once, to the main assistant only (the caller uses `composer_submit`). A
     /// notification with a one-time code goes with the digits hidden.
     pub fn ask_text(&self, id: &str) -> Option<String> {
         let n = self.items.iter().find(|x| x.id == id)?;
-        let app = if n.app.is_empty() { "bir uygulama" } else { n.app.as_str() };
-        let mut text = format!("Windows bildirimi ({app}): {}", n.title);
+        let app = if n.app.is_empty() { "an app" } else { n.app.as_str() };
+        let mut text = format!("Windows notification ({app}): {}", n.title);
         if let Some(b) = &n.body {
             text.push('\n');
             text.push_str(b);
@@ -447,7 +446,7 @@ mod tests {
                 7,
                 "WhatsApp",
                 "5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App",
-                &["Ayşe", "Akşam\u{202E} geliyor musun?", "  "],
+                &["Alice", "Tonight\u{202E} are you coming?", "  "],
             ),
             "data:image/png;base64,AA".into(),
             1_000,
@@ -455,13 +454,13 @@ mod tests {
         .unwrap();
         assert_eq!(
             (n.id.as_str(), n.title.as_str(), n.body.as_deref()),
-            ("win.7", "Ayşe", Some("Akşam geliyor musun?"))
+            ("win.7", "Alice", Some("Tonight are you coming?"))
         );
         assert!(n.tile_mono && !n.ripple && n.can_open);
-        assert_eq!(n.open_label, "Uygulamayı aç");
+        assert_eq!(n.open_label, "Open app");
         let json = serde_json::to_value(&n).unwrap();
         assert_eq!((json["tileMono"].as_bool(), json["ripple"].as_bool()), (Some(true), Some(false)));
-        assert_eq!(json["openLabel"].as_str(), Some("Uygulamayı aç"));
+        assert_eq!(json["openLabel"].as_str(), Some("Open app"));
         assert!(json.get("aumid").is_none(), "the app id stays in Rust");
 
         let only_app = Notice::from_raw(&raw(8, "Teams", "", &[]), String::new(), 0).unwrap();
@@ -515,10 +514,10 @@ mod tests {
     #[test]
     fn ask_text_is_just_this_one_notification() {
         let mut s = Store::default();
-        s.put(Notice::from_raw(&raw(1, "WhatsApp", "", &["Ayşe", "Geliyor musun?"]), String::new(), 0).unwrap());
-        s.put(Notice::from_raw(&raw(2, "Teams", "", &["Toplantı"]), String::new(), 0).unwrap());
-        assert_eq!(s.ask_text("win.1").as_deref(), Some("Windows bildirimi (WhatsApp): Ayşe\nGeliyor musun?"));
-        assert_eq!(s.ask_text("win.2").as_deref(), Some("Windows bildirimi (Teams): Toplantı"));
+        s.put(Notice::from_raw(&raw(1, "WhatsApp", "", &["Alice", "Are you coming?"]), String::new(), 0).unwrap());
+        s.put(Notice::from_raw(&raw(2, "Teams", "", &["Meeting"]), String::new(), 0).unwrap());
+        assert_eq!(s.ask_text("win.1").as_deref(), Some("Windows notification (WhatsApp): Alice\nAre you coming?"));
+        assert_eq!(s.ask_text("win.2").as_deref(), Some("Windows notification (Teams): Meeting"));
         assert_eq!(s.ask_text("win.3"), None);
     }
 
@@ -529,37 +528,38 @@ mod tests {
     #[test]
     fn a_verification_code_is_found_only_beside_a_code_word() {
         assert_eq!(code_of(&["G-482913 is your Google verification code."]).as_deref(), Some("482913"));
+        // Turkish code words ("kod", "doğrulama") are matched on purpose.
         assert_eq!(code_of(&["Doğrulama kodunuz: 7381"]).as_deref(), Some("7381"));
-        assert_eq!(code_of(&["KOD: 123 456 (5 dk geçerli)"]).as_deref(), Some("123456"), "3 + 3 digits");
+        assert_eq!(code_of(&["KOD: 123 456 (valid 5 min)"]).as_deref(), Some("123456"), "3 + 3 digits");
         assert_eq!(code_of(&["Your code is 123456. Valid for 10 minutes."]).as_deref(), Some("123456"));
         assert_eq!(code_of(&["Banka", "Tek kullanımlık şifre kodu 90871234"]).as_deref(), Some("90871234"));
         assert_eq!(code_of(&["Doğrulama", "Kodunuz 553311"]).as_deref(), Some("553311"), "word in the title, digits in the body");
-        assert_eq!(code_of(&["Toplantı 1234 numaralı odada, saat 15:30"]), None, "no code word, no code");
-        assert_eq!(code_of(&["Siparişiniz 884412 yola çıktı"]), None);
+        assert_eq!(code_of(&["Meeting 1234 in room 7, at 15:30"]), None, "no code word, no code");
+        assert_eq!(code_of(&["Your order 884412 has shipped"]), None);
     }
 
     #[test]
     fn numbers_that_are_not_codes_are_left_alone_even_beside_a_code_word() {
         for t in [
-            "kod: 1500 TL tutarında ödeme",
+            "code: payment of 1500 USD",
             "code costs $4500 today",
-            "kod için +90 532 123 45 67 numarasını ara",
-            "kod 3.14159 sürümü",
-            "kod 12/05/2024 tarihinde",
-            "kod 2024 yılı",
-            "kod 1234567890123 barkod",
-            "kod abc123456def",
+            "code: call +90 532 123 45 67",
+            "code 3.14159 version",
+            "code on 12/05/2024",
+            "code year 2024",
+            "code 1234567890123 barcode",
+            "code abc123456def",
             "verification 12:3456",
         ] {
             assert_eq!(code_of(&[t]), None, "{t}");
         }
-        assert_eq!(code_of(&["kod 123456 ya da 654321"]).as_deref(), Some("123456"), "the nearer one");
-        assert_eq!(code_of(&["123456 kod 654321"]), None, "two equally near, different: none offered");
+        assert_eq!(code_of(&["code 123456 or 654321"]).as_deref(), Some("123456"), "the nearer one");
+        assert_eq!(code_of(&["123456 code 654321"]), None, "two equally near, different: none offered");
     }
 
     #[test]
     fn the_code_never_leaves_except_through_the_copy_secret() {
-        let toast = raw(5, "Google", "Pkg!App", &["Doğrulama kodu", "Kodunuz 482913. Kimseyle paylaşmayın."]);
+        let toast = raw(5, "Google", "Pkg!App", &["Verification code", "Your code is 482913. Do not share it."]);
         let n = Notice::from_raw(&toast, String::new(), 0).unwrap();
         assert!(n.has_code);
         let json = serde_json::to_value(&n).unwrap();
@@ -567,7 +567,7 @@ mod tests {
         assert!(json.get("code").is_none() && json.get("aumid").is_none(), "no code field on the wire");
         let dbg = format!("{:?}", n.code);
         assert!(!dbg.contains("482913"), "Debug of the stored code: {dbg}");
-        let plain = Notice::from_raw(&raw(6, "Teams", "", &["Toplantı", "Saat 3'te"]), String::new(), 0).unwrap();
+        let plain = Notice::from_raw(&raw(6, "Teams", "", &["Meeting", "Saat 3'te"]), String::new(), 0).unwrap();
         assert!(!plain.has_code && serde_json::to_value(&plain).unwrap()["hasCode"].as_bool() == Some(false));
 
         let mut s = Store::default();
@@ -581,11 +581,11 @@ mod tests {
     #[test]
     fn what_the_assistant_gets_to_answer_has_the_code_hidden() {
         let mut s = Store::default();
-        s.put(Notice::from_raw(&raw(1, "Bank", "", &["Doğrulama kodu", "Kod: 482913 veya 111 222"]), String::new(), 0).unwrap());
+        s.put(Notice::from_raw(&raw(1, "Bank", "", &["Verification code", "Code: 482913 or 111 222"]), String::new(), 0).unwrap());
         let text = s.ask_text("win.1").unwrap();
         assert!(!text.contains("482913") && !text.contains("111 222"), "{text}");
-        assert!(text.contains("[kod gizlendi]") && text.contains("Doğrulama kodu"));
-        s.put(Notice::from_raw(&raw(2, "WhatsApp", "", &["Ayşe", "Saat 1234 gibi"]), String::new(), 0).unwrap());
+        assert!(text.contains("[code hidden]") && text.contains("Verification code"));
+        s.put(Notice::from_raw(&raw(2, "WhatsApp", "", &["Alice", "Around 1234"]), String::new(), 0).unwrap());
         assert!(s.ask_text("win.2").unwrap().contains("1234"), "a notification without a code goes as it is");
     }
 
@@ -619,7 +619,7 @@ mod tests {
             ["fn ", "load"].concat(),
         ];
         for file in
-            ["crates/notch-core/src/mirror.rs", "crates/notch-win/src/notifications.rs", "src-tauri/src/mirror.rs"]
+            ["crates/notch-core/src/mirror.rs", "crates/notch-win/src/notifications.rs", "crates/notch-app/src/mirror.rs"]
         {
             let src = std::fs::read_to_string(root.join(file)).unwrap_or_else(|_| panic!("{file} missing"));
             let code = src.split("#[cfg(test)]").next().unwrap();
@@ -633,7 +633,7 @@ mod tests {
 
     #[test]
     fn package_names_match_the_manifests() {
-        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("..").join("src-tauri");
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("..").join("crates/notch-app");
         let appx = std::fs::read_to_string(root.join("identity/AppxManifest.xml")).unwrap();
         let exe = std::fs::read_to_string(root.join("notch.manifest")).unwrap();
         assert!(appx.contains(&format!(r#"Name="{PACKAGE_NAME}" Publisher="{PUBLISHER}""#)));

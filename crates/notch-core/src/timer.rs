@@ -42,7 +42,7 @@ impl Timer {
     pub fn start(label: &str, seconds: u64, now: u64) -> Option<Self> {
         (1..=MAX_S).contains(&seconds).then(|| {
             let label: String = label.trim().chars().take(40).collect();
-            let label = if label.is_empty() { "Zamanlayıcı".into() } else { label };
+            let label = if label.is_empty() { "Timer".into() } else { label };
             Self { label, total_ms: seconds * 1000, left_ms: seconds * 1000, anchor: now, running: true }
         })
     }
@@ -94,8 +94,8 @@ mod tests {
     fn counts_down_pauses_adds_and_stops() {
         assert!(Timer::start("x", 0, 0).is_none() && Timer::start("x", MAX_S + 1, 0).is_none());
         let mut t = Timer::start("  ", 60, 1_000).unwrap();
-        assert_eq!(t.view(1_000).label, "Zamanlayıcı");
-        assert_eq!(Timer::start("  çay  ", 1, 0).unwrap().view(0).label, "çay");
+        assert_eq!(t.view(1_000).label, "Timer");
+        assert_eq!(Timer::start("  tea  ", 1, 0).unwrap().view(0).label, "tea");
         assert_eq!(Timer::start(&"x".repeat(60), MAX_S, 0).unwrap().view(0).label.len(), 40);
         assert_eq!(MAX_S, 86_400);
         assert_eq!(t.left_ms(21_000), 40_000);

@@ -2,9 +2,9 @@ import "./shoulder.css";
 import type { ShapeLayer, ShapeState } from "./shape";
 
 export interface ShoulderLayers {
-  /** `createShape({ layers: [x.layer] })` içine ver */
+  /** pass into `createShape({ layers: [x.layer] })` */
   layer: ShapeLayer;
-  /** kapak rengi (yalnız kartın altındaki hale); null = hale söner. Renk 0,8 sn'de geçer. */
+  /** cover color (only the halo under the card); null = the halo fades. The color transitions over 0.8 s. */
   setAmbient(color: string | null, amount?: number): void;
   destroy(): void;
 }
@@ -12,10 +12,10 @@ export interface ShoulderLayers {
 const div = (cls: string) => Object.assign(document.createElement("div"), { className: cls });
 
 /**
- * Boş `.nm-layers` kabına iç bükey omuz (şeritten akan damla), gölge ve hale katmanlarını kurar.
- * Omuzlar tek tip ölçeklenir, gölge ve hale hedef boyutta çizilip transform ile ölçeklenir: kare başına yalnız transform + opacity.
- * Omuzlar gövdenin dışına 16 px taşar; pencerede her yanda 16 px pay bırak.
- * `sides`: sağ üst kartta yalnız "left" (sağ omuz ekran kenarına 8 px kala yok).
+ * Builds the concave shoulder (a drop flowing from the strip), shadow and halo layers inside an empty `.nm-layers` container.
+ * Shoulders scale uniformly; shadow and halo are drawn at the target size and scaled with transform: only transform + opacity per frame.
+ * Shoulders overflow the body by 16 px; leave a 16 px margin on every side of the window.
+ * `sides`: only "left" on the top-right card (no right shoulder 8 px from the screen edge).
  */
 export function mountShoulders(container: HTMLElement, o: { sides?: "both" | "left" | "right" } = {}): ShoulderLayers {
   const sides = o.sides ?? "both";
@@ -25,7 +25,7 @@ export function mountShoulders(container: HTMLElement, o: { sides?: "both" | "le
 
   const layer: ShapeLayer = (s: ShapeState) => {
     const vis = s.hidden;
-    // hedef boyut/yarıçap değişince bir kez yeniden boyutla (layout), kare başına yalnız transform
+    // resize once (layout) when the target size/radius changes; per frame only transform
     const k = `${s.tw}|${s.th}|${s.rt}`;
     if (k !== key) {
       key = k;

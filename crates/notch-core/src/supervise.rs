@@ -3,7 +3,7 @@
 //! and the relaunch are in `notch_win::taskbar` / `notch_win::autostart`.
 //!
 //! Clean or not is one file, independent of the taskbar mode: `<data>/run/alive` is written at launch and removed
-//! by a clean exit ("Çık", `RunEvent::Exit`, which tao also raises on `WM_ENDSESSION`) and by `WM_QUERYENDSESSION`.
+//! by a clean exit ("Quit", `RunEvent::Exit`, which tao also raises on `WM_ENDSESSION`) and by `WM_QUERYENDSESSION`.
 //! Still there after Notch ended = it crashed or was killed.
 
 use std::path::{Path, PathBuf};
@@ -45,7 +45,7 @@ pub fn gave_up_path(data_dir: &Path) -> PathBuf {
 }
 
 pub const GAVE_UP_TEXT: &str =
-    "Peeka 2 dakikada 3 kez kapandı; yeniden başlatılmadı. Windows görev çubuğu geri getirildi.";
+    "Peeka closed 3 times in 2 minutes; it was not restarted. The Windows taskbar was restored.";
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Next {

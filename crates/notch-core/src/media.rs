@@ -1,7 +1,6 @@
 //! Now playing: the shape `media_changed` / `get_media` carry and the commands the page may
 //! send. The SMTC reader is `notch-win::media`.
 //!
-//! Inspired by HeyyCzer/windows-dynamic-island (ideas only; no code copied).
 
 use serde::{Deserialize, Serialize};
 
@@ -40,8 +39,8 @@ pub enum MediaAction {
 /// Demo mode's "now playing" (no player is asked; the controls change nothing).
 pub fn demo(now_ms: u64) -> Media {
     Media {
-        title: "Gece Yürüyüşü".into(),
-        artist: "Demo Sanatçı".into(),
+        title: "Night Walk".into(),
+        artist: "Demo Artist".into(),
         album: "Peeka Demo".into(),
         app: "Spotify".into(),
         art: None,
@@ -71,7 +70,7 @@ pub fn app_name(app_id: &str) -> String {
         // players
         ("spotify", "Spotify"),
         ("applemusic", "Apple Music"),
-        ("zunemusic", "Medya Oynatıcı"),
+        ("zunemusic", "Media Player"),
         ("deezer", "Deezer"),
         ("tidal", "TIDAL"),
         ("vlc", "VLC"),

@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-/// Is the Windows Search service running? False = the index is off ("dizin kapalı").
+/// Is the Windows Search service running? False = the index is off ("index off").
 #[cfg(windows)]
 pub fn index_on() -> bool {
     use windows::core::w;

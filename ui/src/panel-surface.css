@@ -1,0 +1,44 @@
+/* Panel surface fixes (friction 2 + consistency): in their own file, without touching notch.css. */
+.clipNote{position:fixed;top:38px;left:50%;translate:-50% 0;z-index:30;pointer-events:none;padding:5px 12px;border-radius:14px;font:500 12px/16px var(--font);color:var(--l1);background:var(--e2,rgba(40,40,44,.92));box-shadow:inset 0 .5px 0 rgba(255,255,255,.16);animation:clipNoteIn .16s ease both}
+@keyframes clipNoteIn{from{opacity:0}to{opacity:1}}
+
+/* T-1: Clipboard lifetime tabs are equal width (5/15/30/60 min, not sized by text) */
+.segSmall.segEqual .segb{width:54px;padding:0;justify-content:center}
+
+/* R2-O6: a long plugin name truncates with an ellipsis, the button label never does */
+.pluginName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pluginAction{gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.pluginAction .btn{flex:none;white-space:nowrap}
+.pluginAction .holdHint{white-space:nowrap}
+.row .t12.l3.b4{overflow-wrap:anywhere}
+
+/* Shortcuts: the app list wraps if it doesn't fit on one line (F-26) */
+.exceptionGroup .text{white-space:normal;overflow:visible;text-overflow:clip}
+
+/* C-1: close button 28 px at top 8 / right 8; the panel's first row must not slide under it (R2-D4) */
+.panelClose ~ .inner > .body > :first-child:not(.settings){margin-right:36px}
+.btn.glass.hold .holdHint{color:var(--l2)}
+.btn.glass.hold.filled2 .holdHint{color:var(--l1)}
+
+/* B-2: tray buttons on the radius ladder (8 instead of 6) */
+.trayGrid .trayIconGrid button{border-radius:8px}
+
+/* H-2: in the setup wizard, Back / Next stay put when the step changes */
+.setup .setupStep{min-height:152px;display:flex;flex-direction:column;gap:12px}
+.setup .buttons .btn{min-width:84px;justify-content:center}
+
+/* K-3: the panel's bottom edge doesn't move when Settings pages change (Modules is the longest page) */
+.body .settings{min-height:566px}
+/* T-2 / R-4 / Y-2: single selected fill, 12 gap in the Plugins action row, small button line height t12 */
+.seg.segSmall .segb.on{background:rgba(255,255,255,.13)}
+.pluginAction{gap:12px}
+.btn.kk,.segb,.chip,.smallLink{line-height:16px}
+
+/* R1-5: a removed notification's spot is held briefly */
+.notifEmpty{flex:none}
+/* R1-6: a dependent row isn't removed; its toggle is dimmed and can't be pressed */
+.toggle[aria-disabled="true"]{opacity:.4;pointer-events:none}
+/* R2: Hidden icons heading; on the same line as the corner × (28, top 8 / right 8) */
+.trayHead{height:28px;margin-top:2px;padding:0 4px;display:flex;align-items:center}
+/* R1-8: setup steps share one height, Back / Next never move on any step (longest step is 156) */
+.setup .setupStep{min-height:156px}

@@ -94,33 +94,38 @@ pub fn valid_exe(name: &str) -> bool {
         && name.chars().all(|c| c.is_alphanumeric() || " ._-()".contains(c))
 }
 
-/// On Windows Ctrl+Alt *is* AltGr on most European layouts (Turkish Q, German, French…): a global Ctrl+Alt+Q would
-/// swallow every `@` typed there. The Windows virtual key and Shift state of a Ctrl+Alt combination (no Windows key)
-/// whose key can type a character; None = it cannot clash (other modifiers, or an arrow / F-key / Space).
-/// Adapted from CouCou (`windows/src-tauri/src/shortcuts.rs` `is_altgr_like`, `character_vk`, commit ff825663, MIT;
-/// see `docs/THIRD_PARTY_NOTICES.md`).
+// Peeka — original implementation (MIT).
+/// Windows reads Ctrl+Alt as AltGr, and many European layouts (Turkish Q, German, French…) type characters with it,
+/// so a global Ctrl+Alt+Q would eat every `@` typed on Turkish Q. For a Ctrl+Alt combination without the Windows key
+/// whose key is a letter or digit, returns that key's virtual-key code and whether Shift is held; None when the
+/// combination cannot collide with typing (other modifiers, or keys such as Space, arrows and F-keys).
 pub fn altgr_vk(keys: &str) -> Option<(u16, bool)> {
-    let parts: Vec<String> = normalize(keys).split('+').map(str::to_string).collect();
-    let (key, mods) = parts.split_last()?;
-    let has = |names: &[&str]| mods.iter().any(|m| names.contains(&m.as_str()));
+    let keys = normalize(keys);
+    let mut parts: Vec<&str> = keys.split('+').collect();
+    let key = parts.pop().filter(|k| !k.is_empty())?;
+    let has = |names: &[&str]| parts.iter().any(|p| names.contains(p));
     if !has(&["ctrl", "control"]) || !has(&["alt", "option"]) || has(&["super", "win", "meta", "cmd", "command"]) {
         return None;
     }
-    let key = key.strip_prefix("key").filter(|k| k.len() == 1).or_else(|| key.strip_prefix("digit")).unwrap_or(key);
-    let c = match key.as_bytes() {
-        [c] if c.is_ascii_alphanumeric() => c.to_ascii_uppercase(),
-        _ => return None,
+    let key = match key.strip_prefix("digit") {
+        Some(rest) => rest,
+        None => key.strip_prefix("key").filter(|rest| rest.len() == 1).unwrap_or(key),
     };
-    Some((u16::from(c), has(&["shift"])))
+    match key.as_bytes() {
+        [c] if c.is_ascii_alphanumeric() => Some((u16::from(c.to_ascii_uppercase()), has(&["shift"]))),
+        _ => None,
+    }
 }
 
-/// Why `keys` cannot be a shortcut on this machine, in Turkish, or None. `types(vk, shift)` = the character Ctrl+Alt
-/// (+Shift) + that key types on one of the installed keyboard layouts (`notch_win::keyboard::ctrl_alt_types`).
+/// The English explanation of why `keys` would break typing on this machine, or None if it is safe. `types(vk,
+/// shift)` reports what Ctrl+Alt(+Shift)+that key types on any installed layout
+/// (`notch_win::keyboard::ctrl_alt_types`); it is only asked about Ctrl+Alt letter/digit combinations.
 pub fn altgr_reason(keys: &str, types: impl Fn(u16, bool) -> Option<String>) -> Option<String> {
     let (vk, shift) = altgr_vk(keys)?;
     let typed = types(vk, shift)?;
     Some(format!(
-        "{} kurulu klavyelerden birinde AltGr gibi davranır ve \"{typed}\" yazar; kısayol olursa o karakter yazılamaz. Başka bir kısayol seçin.",
+        "{} acts like AltGr on one of the installed keyboards and types \"{typed}\"; as a shortcut that character \
+         could not be typed. Pick another shortcut.",
         pretty(keys)
     ))
 }
@@ -214,6 +219,7 @@ mod tests {
             table.iter().find(|(k, s, _)| u16::from(*k) == vk && *s == shift).map(|(_, _, c)| c.to_string())
         }
     }
+    // Turkish keyboard data on purpose: the owner types on Turkish Q, where AltGr makes these characters.
     const TURKISH_Q: &[(u8, bool, &str)] = &[
         (b'Q', false, "@"),
         (b'E', false, "€"),
@@ -234,10 +240,10 @@ mod tests {
         &[(b'E', false, "€"), (b'2', false, "~"), (b'3', false, "#"), (b'0', false, "@")];
 
     #[test]
-    fn ctrl_alt_letters_that_altgr_types_are_refused_with_a_turkish_reason() {
+    fn ctrl_alt_letters_that_altgr_types_are_refused_with_an_explanation() {
         let tr = layout(TURKISH_Q);
         let why = altgr_reason("ctrl+alt+q", &tr).unwrap();
-        assert!(why.starts_with("Ctrl+Alt+Q ") && why.contains("\"@\"") && why.contains("Başka bir kısayol"), "{why}");
+        assert!(why.starts_with("Ctrl+Alt+Q ") && why.contains("\"@\"") && why.contains("Pick another shortcut"), "{why}");
         assert!(altgr_reason("Ctrl+Alt+T", &tr).unwrap().contains('₺'));
         assert!(altgr_reason("ctrl+alt+KeyE", layout(GERMAN)).unwrap().contains('€'), "Tauri spelling");
         assert!(altgr_reason("ctrl+alt+m", layout(GERMAN)).unwrap().contains('µ'));

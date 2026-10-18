@@ -1,6 +1,6 @@
 //! `plugins.json`: per paired plugin only the SHA-256 digest of its token, the scopes the owner gave,
 //! the ones the owner turned off since, and when. The token itself is shown to the plugin once and never stored.
-//! Also the main assistant (the owner's choice) and the "bir daha sorma" list.
+//! Also the main assistant (the owner's choice) and the "never ask again" list.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -50,19 +50,19 @@ pub struct Registry {
     /// The main assistant's id (owner's choice only; it must hold `composer.handler`).
     #[serde(default)]
     pub main: Option<String>,
-    /// "Bu eklentiyi bir daha sorma".
+    /// "Never ask about this plugin again".
     #[serde(default)]
     pub blocked: BTreeSet<String>,
     /// Settings › Modules: tab order and the tabs turned off (Notch's ids and "<plugin id>/<tab id>").
     #[serde(default)]
     pub modules: ModulePrefs,
-    /// A main assistant has reached Notch at least once (the "ilk bağlantı" card shows once in a lifetime).
+    /// A main assistant has reached Notch at least once (the "first connection" card shows once in a lifetime).
     #[serde(default)]
     pub main_seen: bool,
     /// That card is waiting for the owner (`first_connect_ack` puts it out).
     #[serde(default)]
     pub first_connect: bool,
-    /// Settings › İzin geçmişi: who got or lost which scope, newest last, at most `PERMISSION_LOG_MAX`. Names and
+    /// Settings › Permission history: who got or lost which scope, newest last, at most `PERMISSION_LOG_MAX`. Names and
     /// scope names only, never a token or digest.
     #[serde(default)]
     pub permission_log: Vec<PermissionEvent>,
@@ -151,13 +151,37 @@ fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
+/// Notch's core module ids were Turkish before; saved prefs are mapped to the English ids on load (old id, new id).
+const OLD_MODULE_IDS: [(&str, &str); 8] = [
+    ("genel", "general"),
+    ("müzik", "music"),
+    ("pano", "clipboard"),
+    ("raf", "shelf"),
+    ("takvim", "calendar"),
+    ("zamanlayıcı", "timer"),
+    ("sistem", "system"),
+    ("bildirimler", "notifications"),
+];
+
+fn migrate_module_ids(m: &mut ModulePrefs) {
+    let new = |id: String| OLD_MODULE_IDS.iter().find(|(old, _)| *old == id).map_or(id, |(_, n)| n.to_string());
+    m.order = std::mem::take(&mut m.order).into_iter().map(new).collect();
+    m.off = std::mem::take(&mut m.off).into_iter().map(new).collect();
+}
+
 /// Missing or corrupt = empty (a corrupt file is kept aside, like the settings file; nobody is paired then).
 pub fn load(path: &Path) -> Registry {
     let Ok(bytes) = std::fs::read(path) else { return Registry::default() };
-    serde_json::from_slice(&bytes).unwrap_or_else(|_| {
-        let _ = std::fs::rename(path, path.with_extension("json.bozuk"));
-        Registry::default()
-    })
+    match serde_json::from_slice::<Registry>(&bytes) {
+        Ok(mut r) => {
+            migrate_module_ids(&mut r.modules);
+            r
+        }
+        Err(_) => {
+            let _ = std::fs::rename(path, path.with_extension("json.bad"));
+            Registry::default()
+        }
+    }
 }
 
 pub fn save(path: &Path, r: &Registry) -> std::io::Result<()> {
@@ -177,7 +201,7 @@ mod tests {
     fn record(id: &str, digest: String) -> Record {
         Record {
             id: id.into(),
-            name: "Pusula".into(),
+            name: "Compass".into(),
             publisher: "Ornek".into(),
             version: "1".into(),
             digest,
@@ -212,7 +236,17 @@ mod tests {
         let tmp = Tmp::new();
         let p = tmp.write(FILE, b"{not json");
         assert_eq!(load(&p), Registry::default());
-        assert!(tmp.path().join("plugins.json.bozuk").exists());
+        assert!(tmp.path().join("plugins.json.bad").exists());
+    }
+
+    #[test]
+    fn old_turkish_module_ids_load_as_english() {
+        let tmp = Tmp::new();
+        // Old Turkish module ids on purpose: they feed the migration table with ids saved by earlier versions.
+        let p = tmp.write(FILE, r#"{"modules":{"order":["müzik","genel","dev.x/cc"],"off":["sistem"]}}"#.as_bytes());
+        let m = load(&p).modules;
+        assert_eq!(m.order, ["music", "general", "dev.x/cc"]);
+        assert_eq!(m.off, ["system".to_string()].into());
     }
 
     #[test]
@@ -220,7 +254,7 @@ mod tests {
         let mut r = Registry::default();
         r.upsert(record("dev.example", "d".into()));
         r.main = Some("dev.example".into());
-        assert_eq!(r.main_name(), Some("Pusula"));
+        assert_eq!(r.main_name(), Some("Compass"));
         assert!(r.remove("dev.example") && r.main.is_none());
     }
 }

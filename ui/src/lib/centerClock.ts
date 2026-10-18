@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 
-// Ada sayfası ortada saati gösteriyorsa şerit sayfası sağdaki saatte yalnız tarihi yazar (bir bilgi bir kez).
-// İki ayrı pencere: aynı kökenli BroadcastChannel. Kanal yoksa ya da ada hiç konuşmazsa sağdaki saat tam kalır.
+// If the island page shows the clock in the middle, the strip page's right-hand clock shows only the date (each fact once).
+// Two separate windows: a same-origin BroadcastChannel. Without a channel, or if the island never speaks, the right clock stays complete.
 const NAME = "notch-center-clock";
 let chan: BroadcastChannel | null = null;
 let current = false;
-// Ada tarafı: son değeri tutar ve "?" isteğine yanıt verir (şerit sayfası ada konuşmadan sonra açılmış olabilir).
+// Island side: keeps the last value and answers a "?" request (the strip page may have opened after the island spoke).
 const open = () => {
   if (!chan && typeof BroadcastChannel !== "undefined") {
     chan = new BroadcastChannel(NAME);
@@ -14,7 +14,7 @@ const open = () => {
   return chan;
 };
 
-export function announceCenterClock(on: boolean) { current = on; try { open()?.postMessage(on); } catch { /* kanal yok */ } }
+export function announceCenterClock(on: boolean) { current = on; try { open()?.postMessage(on); } catch { /* no channel */ } }
 
 export function useCenterClock(): boolean {
   const [on, setOn] = useState(false);

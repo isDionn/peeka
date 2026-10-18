@@ -1,4 +1,4 @@
-//! The shelf (`raf`, Wave 5): files dropped on the island, kept in Rust for the session (a page reload keeps them).
+//! The shelf (`shelf`, Wave 5): files dropped on the island, kept in Rust for the session (a page reload keeps them).
 //! The page gets names only; paths stay here and leave only through `share_open` (the Windows share sheet) and
 //! `shelf_ask` (a one-shot share to the main assistant).
 
@@ -43,8 +43,8 @@ pub fn kind_of(path: &Path) -> &'static str {
     }
 }
 
-/// Extensions Windows runs as code or a script. "Aç" on a copied or downloaded file never launches these (the owner
-/// can still find them with "Klasörde göster"): one click on a notification must not be able to start a program.
+/// Extensions Windows runs as code or a script. "Open" on a copied or downloaded file never launches these (the owner
+/// can still find them with "Show in folder"): one click on a notification must not be able to start a program.
 const RUNNABLE: &[&str] = &[
     "exe", "msi", "msix", "appx", "bat", "cmd", "com", "scr", "pif", "ps1", "psm1", "vbs", "vbe", "js", "jse", "wsf",
     "wsh", "hta", "cpl", "msc", "reg", "lnk", "url", "jar", "dll", "sys", "gadget", "application", "appref-ms",
@@ -56,9 +56,9 @@ pub fn runnable(path: &Path) -> bool {
     RUNNABLE.contains(&ext.as_str())
 }
 
-/// 2_400_000 -> "2,3 MB"; None (a folder) -> "Klasör".
+/// 2_400_000 -> "2,3 MB"; None (a folder) -> "Folder".
 pub fn size_text(bytes: Option<u64>) -> String {
-    let Some(b) = bytes else { return "Klasör".into() };
+    let Some(b) = bytes else { return "Folder".into() };
     let one = |v: f64, unit: &str| format!("{v:.1} {unit}").replace('.', ",");
     match b {
         0..=1023 => format!("{b} B"),
@@ -77,7 +77,7 @@ impl Shelf {
             self.items.retain(|(_, p)| p != &path);
             self.next += 1;
             let kind = if size.is_some() { kind_of(&path) } else { "other" };
-            let item = ShelfItem { id: format!("raf-{}", self.next), name, sub: size_text(size), kind };
+            let item = ShelfItem { id: format!("shelf-{}", self.next), name, sub: size_text(size), kind };
             self.items.insert(0, (item, path));
             changed = true;
         }
@@ -147,15 +147,15 @@ mod tests {
     #[test]
     fn drops_newest_first_deduped_capped_and_ids_are_ours() {
         let mut s = Shelf::default();
-        assert!(s.add(vec![(r"C:\a\Rapor.PDF".into(), Some(2_400_000)), (r"C:\a\klasor".into(), None)]));
+        assert!(s.add(vec![(r"C:\a\Rapor.PDF".into(), Some(2_400_000)), (r"C:\a\folder".into(), None)]));
         let l = s.list();
-        assert_eq!((l[0].name.as_str(), l[0].sub.as_str(), l[0].kind), ("klasor", "Klasör", "other"));
+        assert_eq!((l[0].name.as_str(), l[0].sub.as_str(), l[0].kind), ("folder", "Folder", "other"));
         assert_eq!((l[1].sub.as_str(), l[1].kind), ("2,3 MB", "pdf"));
         s.add(vec![(r"C:\a\Rapor.PDF".into(), Some(1))]);
         assert_eq!(s.list().len(), 2, "same path once");
         assert_eq!(s.list()[0].name, "Rapor.PDF");
         assert_eq!(s.path(&s.list()[0].id), Some(Path::new(r"C:\a\Rapor.PDF")));
-        assert_eq!(s.path("raf-999"), None);
+        assert_eq!(s.path("shelf-999"), None);
         assert_eq!(s.path(r"C:\a\Rapor.PDF"), None, "a path is not an id");
         s.add((0..30).map(|i| (PathBuf::from(format!("f{i}.mp4")), Some(5))).collect());
         assert_eq!(s.list().len(), MAX);
@@ -169,7 +169,7 @@ mod tests {
         use crate::plugins::share;
         use std::time::SystemTime;
         let tmp = crate::test_util::Tmp::new();
-        let src = tmp.path().join("kaynak");
+        let src = tmp.path().join("source");
         std::fs::create_dir_all(&src).unwrap();
         let put = |name: &str, body: &[u8]| {
             let p = src.join(name);
@@ -188,13 +188,13 @@ mod tests {
         for name in ["kasa.kdbx", "id_rsa", ".env", "sunucu.pem", "aws credentials.txt"] {
             assert_eq!(share_copy(tmp.path(), &put(name, b"x")), Err(CopyErr::Password), "{name}");
         }
-        let key = put("notlar.txt", concat!("anahtar: sk-ant-api03-abcdefghijklmnop", "qrstuvwxyz012345").as_bytes()); // allow-secret
+        let key = put("notes.txt", concat!("key: sk-ant-api03-abcdefghijklmnop", "qrstuvwxyz012345").as_bytes()); // allow-secret
         assert_eq!(share_copy(tmp.path(), &key), Err(CopyErr::Password), "a secret inside a text file");
         assert_eq!(share_copy(tmp.path(), &src), Err(CopyErr::NotFile), "a folder");
-        assert_eq!(share_copy(tmp.path(), &src.join("yok.pdf")), Err(CopyErr::Io));
-        let big = std::fs::File::create(src.join("buyuk.bin")).unwrap();
+        assert_eq!(share_copy(tmp.path(), &src.join("missing.pdf")), Err(CopyErr::Io));
+        let big = std::fs::File::create(src.join("big.bin")).unwrap();
         big.set_len(crate::fidelity::ATTACH_MAX_BYTES + 1).unwrap();
-        assert_eq!(share_copy(tmp.path(), &src.join("buyuk.bin")), Err(CopyErr::TooBig));
+        assert_eq!(share_copy(tmp.path(), &src.join("big.bin")), Err(CopyErr::TooBig));
         assert_eq!(
             std::fs::read_dir(share::dir(tmp.path())).map(|d| d.count()).unwrap_or(0),
             0,

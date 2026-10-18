@@ -1,0 +1,76 @@
+/* Wave 4: clipboard card, Clipboard tab, screen snip peek, Ctrl+K file/setting/plugin results, Settings › Clipboard.
+   Rules come from the .pg / .tip2 / .eyeOpen blocks in yon-3d-son.html; actions are drawn only on .current (hovered, focused, selected row) (decision 15). */
+.clipInner{display:flex;flex-direction:column;gap:12px}
+.clipImages{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.pg{position:relative;border-radius:var(--rPlat);corner-shape:squircle;padding:4px;cursor:grab;touch-action:none;transition:opacity .2s ease,transform .16s var(--ease)}
+.pg img,.pgNone{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:var(--rInner);corner-shape:squircle}
+.pgNone{display:grid;place-items:center;background:rgba(255,255,255,.08);color:var(--l3)}
+.pg .sub{display:flex;justify-content:space-between;gap:6px;padding:6px 4px 2px;font-size:12px;color:var(--l2)}
+.pg .sub span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pg .sub span:last-child{color:var(--l3);white-space:nowrap}
+.pg .action{position:absolute;right:8px;top:8px;display:flex;gap:6px;animation:actionIn .16s ease both}
+.pg .action button{width:28px;height:28px;border-radius:14px;display:grid;place-items:center;color:#fff;background:rgba(20,20,22,.55);-webkit-backdrop-filter:blur(12px) saturate(180%);backdrop-filter:blur(12px) saturate(180%);box-shadow:inset 0 .5px 0 rgba(255,255,255,.2)}
+.pg .action button svg.lucide{width:12px;height:12px}
+.pg .action .ask,.mini.ask{color:var(--mint)}
+.pg .action .shown,.mini.shown{color:var(--yellow)}
+.pg.selected{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.5)}
+.pg:focus-visible{outline-offset:-2px}
+@keyframes actionIn{from{opacity:0}to{opacity:1}}
+
+/* list: time right-aligned; it fades out when actions appear (decision 15) */
+.clipList{max-height:340px;overflow:auto}
+.results{max-height:500px}
+.clipList .row[data-clip]{cursor:default}
+.clipList .row.current .mini{opacity:1}
+.clipList .row .rowAction{animation:actionIn .16s ease both}
+.clipList .row.current .rowAction{opacity:1}
+.clipList .row.current .time{opacity:0}
+.clipList .row.dim>:not(.rowAction){opacity:.45}
+.clipList .row:focus-visible{outline-offset:-2px;border-radius:var(--rInner)}
+.row .tip2{width:26px;height:26px;border-radius:var(--rInner);corner-shape:squircle;display:grid;place-items:center;flex:none;background:rgba(255,255,255,.08);color:var(--l2)}
+.row .tip2 svg.lucide{width:14px;height:14px}
+.row .swatch{width:26px;height:26px;border-radius:var(--rInner);corner-shape:squircle;flex:none}
+.row .thumb{object-fit:cover;box-shadow:0 0 0 .5px rgba(255,255,255,.2)}
+.row .pinIcon{width:12px;height:12px;color:var(--l3);flex:none}
+.row .command,.command{font-family:var(--mono);font-size:12px;letter-spacing:.06em;font-variant-ligatures:none}
+.k-pdf{background:color-mix(in srgb,var(--red) 18%,transparent)!important;color:var(--redText)!important}
+.k-video{background:color-mix(in srgb,var(--cyan) 18%,transparent)!important;color:var(--cyan)!important}
+.k-sheet{background:color-mix(in srgb,var(--green) 18%,transparent)!important;color:var(--green)!important}
+.k-image{background:color-mix(in srgb,var(--purple) 18%,transparent)!important;color:var(--purple)!important}
+.k-password{background:color-mix(in srgb,var(--orange) 16%,transparent)!important;color:var(--orange)!important}
+/* password: the placeholder is blurred; on hover the plain text unblurs (same box, same font: no shift; a long password gets an ellipsis) */
+.row.hidden .text{font-family:var(--mono);letter-spacing:0;color:var(--l2);filter:blur(5px);user-select:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:filter .18s cubic-bezier(.23,1,.32,1),color .18s}
+.row.hidden.shown .text{filter:none;color:var(--l1);user-select:text}
+.mini.eyeOpen{background:rgba(255,255,255,.12);color:var(--l1)}
+.mini.delete{color:var(--l3)}
+/* the eye button's ring empties over 5 s (fixed 72% in mockup h3; a real countdown in the app) */
+@property --g{syntax:"<number>";inherits:false;initial-value:100}
+.eyeOpen{position:relative}
+.eyeOpen::after{content:"";position:absolute;inset:-2px;border-radius:50%;--g:100;animation:eyeRing 5s linear forwards;background:conic-gradient(var(--l1) calc(var(--g) * 1%),transparent 0);-webkit-mask:radial-gradient(closest-side,transparent calc(100% - 2px),#000 calc(100% - 1.5px));mask:radial-gradient(closest-side,transparent calc(100% - 2px),#000 calc(100% - 1.5px))}
+@keyframes eyeRing{to{--g:0}}
+
+/* screen snip peek (h1) */
+.snipSmall{width:64px;height:40px;border-radius:8px;corner-shape:squircle;object-fit:cover;box-shadow:0 0 0 .5px rgba(255,255,255,.2)}
+.peekBar.shotOut{padding-bottom:10px;flex-direction:column;align-items:stretch;gap:8px;width:360px;box-sizing:border-box}
+.shotTop{display:flex;align-items:center;justify-content:center;gap:10px;min-width:0}
+.shotTop .t12{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.shotIcon{width:26px;height:26px;border-radius:var(--rInner);corner-shape:squircle;display:grid;place-items:center;flex:none;background:rgba(255,255,255,.08);color:var(--l2)}
+.shotIcon svg.lucide{width:14px;height:14px}
+/* added below on hover; the top row stays put (nothing shifts under the cursor) */
+.shotLarge{display:flex;flex-direction:column;align-items:center;gap:8px;animation:shotIn .2s cubic-bezier(.23,1,.32,1)}
+.shotLargeImage{width:100%;height:190px;object-fit:contain;border-radius:12px;corner-shape:squircle;background:rgba(255,255,255,.05);box-shadow:0 0 0 .5px rgba(255,255,255,.16)}
+.shotAction{display:flex;gap:8px}
+@keyframes shotIn{from{opacity:0}to{opacity:1}}
+
+/* Ctrl+K: file/setting/plugin tiles */
+.result .tile.iconBrain{color:var(--cyan)}
+.result .tile.k-pdf,.result .tile.k-video,.result .tile.k-sheet,.result .tile.k-image{background:rgba(255,255,255,.08)!important}
+
+/* Settings: small selected-button capsule */
+.segSmall .segb.on{background:rgba(255,255,255,.14);border-radius:12px;corner-shape:squircle}
+
+/* filter box (R2-O5): compact instead of the 40-high input box; clicking a row body copies it */
+.clipFilter{height:32px;border-radius:16px;flex:none}
+.clipFilter svg.lucide{width:14px;height:14px}
+.clipList .row[data-clip]{cursor:pointer}
+.mini:disabled{opacity:.4;cursor:default}

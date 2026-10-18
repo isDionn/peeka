@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { coverColors } from "../coverColor";
 
-// jsdom görüntü çözmez ve tuval yok: Image ve getContext sahte, 32x32 piksel dizisini testin kendisi verir.
+// jsdom doesn't decode images and has no canvas: Image and getContext are fakes, and the test supplies the 32x32 pixel array itself.
 let pixels: number[][] = [];
 let fail = false;
 let noCtx = false;
@@ -19,32 +19,32 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-describe("coverColors (kapak rengi)", () => {
-  it("kapak yok, görüntü okunmaz ya da tuval yoksa null: kart nötr kalır", async () => {
+describe("coverColors (cover color)", () => {
+  it("null when there is no cover, the image can't be read or there is no canvas: the card stays neutral", async () => {
     expect(await coverColors(null)).toBeNull();
     fail = true; expect(await coverColors("data:image/png;base64,AA")).toBeNull();
     fail = false; noCtx = true; expect(await coverColors("data:image/png;base64,AA")).toBeNull();
   });
 
-  it("tek renk kapak: ana renk doygun ve aydınlığı 0,52-0,68'e sıkıştırılır, ikinci renk 40° kayar", async () => {
+  it("single-color cover: the main color is saturated and its lightness clamped to 0.52-0.68, the second color is shifted 40°", async () => {
     paint([255, 0, 0]);
     expect(await coverColors("x")).toEqual(["hsl(0 100% 52%)", "hsl(40 100% 52%)"]);
   });
 
-  it("iki renkli kapak: baskın renk birinci, ondan 35°'den uzak ikinci gerçek renk ikinci olur", async () => {
+  it("two-color cover: the dominant color comes first, a real second color more than 35° away from it comes second", async () => {
     paint([255, 0, 0], [255, 0, 0], [255, 0, 0], [0, 0, 255]);
     expect(await coverColors("x")).toEqual(["hsl(0 100% 52%)", "hsl(240 100% 52%)"]);
   });
 
-  it("neredeyse siyah ve beyaz pikseller yok sayılır: renk kalmazsa nötr gri-kırmızı varsayılan", async () => {
+  it("near-black and near-white pixels are ignored: with no color left, a neutral gray-red default", async () => {
     paint([5, 5, 5], [250, 250, 250]);
     expect(await coverColors("x")).toEqual(["hsl(0 60% 52%)", "hsl(40 60% 52%)"]);
   });
 
-  it("çok açık renk 0,68'e, çok koyu renk 0,52'ye çekilir", async () => {
-    paint([255, 160, 160]); // l ~0,81
+  it("a very light color is pulled to 0.68, a very dark one to 0.52", async () => {
+    paint([255, 160, 160]); // l ~0.81
     expect((await coverColors("x"))![0]).toMatch(/ 68%\)$/);
-    paint([60, 0, 0]); // l ~0,12
+    paint([60, 0, 0]); // l ~0.12
     expect((await coverColors("x"))![0]).toMatch(/ 52%\)$/);
   });
 });

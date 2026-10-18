@@ -1,12 +1,11 @@
-// Maskot hareket sayıları (saf, test edilir). Süre ve değerler: docs/research/2026-10-16-coucou-mochi-analizi.md §7.
-// Sayıların kaynağı CouCou (MIT, Louis-CFM/coucou, windows/src/mochi/engine.ts) davranışı; kod değil ilke olarak uyarlandı, bkz. docs/THIRD_PARTY_NOTICES.md.
+// Mascot motion numbers (pure, tested).
 
-/** Anahtar kare izi: her adım [hedef değer, süre ms]; başlangıç değeri ayrıca verilir. */
+/** Keyframe track: each step is [target value, duration ms]; the start value is given separately. */
 export type Track = readonly (readonly [number, number])[];
 
 export const trackMs = (tr: Track) => tr.reduce((a, [, d]) => a + d, 0);
 
-/** t ms'deki değer: her parça kendi içinde yumuşak (smoothstep), uçlarda hız 0 (titremede yön değişimi doğal). */
+/** Value at t ms: each segment is smooth on its own (smoothstep), zero velocity at the ends (natural direction changes in a shake). */
 export function sample(tr: Track, from: number, t: number): number {
   let v = from, at = 0;
   for (const [to, d] of tr) {
@@ -16,20 +15,20 @@ export function sample(tr: Track, from: number, t: number): number {
   return v;
 }
 
-/** Hata titremesi (px, 56 px kart için; büyük kartta size/56 ile ölçeklenir): +4, -4, +2,5, 0 / 50, 70, 70, 90 ms. */
+/** Error shake (px, for the 56 px card; scaled by size/56 on bigger cards): +4, -4, +2.5, 0 / 50, 70, 70, 90 ms. */
 export const SHAKE: Track = [[4, 50], [-4, 70], [2.5, 70], [0, 90]];
 export const shakeTrack = (size: number): Track => SHAKE.map(([v, d]) => [v * (size / 56), d] as const);
 
-/** Dosya yutma: sy 1 -> 0,78 -> 1,18 -> 1 (80/130/220 ms); sx tersine. Ağız 460 ms açık. */
+/** File swallow: sy 1 -> 0.78 -> 1.18 -> 1 (80/130/220 ms); sx the inverse. Mouth open 460 ms. */
 export const SWALLOW_Y: Track = [[.78, 80], [1.18, 130], [1, 220]];
 export const SWALLOW_X: Track = [[1.28, 80], [.92, 130], [1, 220]];
 export const SWALLOW_MOUTH_MS = 460;
-/** Yutma sonrası çiğneme: dosya simgesi 320 ms'de ağza küçülür; ağız kapanınca 3 çiğneme (o/gülüş, 120 ms) + hafif ezilme. */
+/** Chewing after the swallow: the file icon shrinks into the mouth in 320 ms; once the mouth closes, 3 chews (o/smile, 120 ms) + a slight squash. */
 export const SWALLOW_FILE_MS = 320;
 export const CHEW = { steps: 3, stepMs: 120 } as const;
 export const CHEW_Y: Track = [[.96, 60], [1.02, 60], [.96, 60], [1.02, 60], [.97, 60], [1, 60]];
 
-/** Tıklama ezilmesi (sy 0,78 -> 1,1 -> 1; 70/130/170 ms) + sersem gözler. */
+/** Click squash (sy 0.78 -> 1.1 -> 1; 70/130/170 ms) + dizzy eyes. */
 export const POKE_Y: Track = [[.78, 70], [1.1, 130], [1, 170]];
 export const POKE_X: Track = [[1.2, 70], [.94, 130], [1, 170]];
 
@@ -37,7 +36,7 @@ export const BADGE = { out: 90, delay: 100, inn: 280 } as const;
 export const SPARKLE = { count: 5, startMs: 500, gapMs: 140, lifeMin: 1300, lifeMax: 1800, riseMin: .45, riseMax: .8 } as const;
 
 export const DAZE = { one: 800, triple: 3300, windowMs: 1700, clicks: 3 } as const;
-/** Tıklama sayacı: 1,7 sn içinde 3 tıklama = uzun sersemlik, yoksa kısa. Dönen değer sersemlik süresi (ms). */
+/** Click counter: 3 clicks within 1.7 s = a long daze, otherwise short. Returns the daze duration (ms). */
 export function createClickCounter(now: () => number = () => performance.now()) {
   let stamps: number[] = [];
   return () => {
@@ -48,7 +47,7 @@ export function createClickCounter(now: () => number = () => performance.now()) 
     return DAZE.one;
   };
 }
-/** Sersemlik sallanması: ±3° yarım saniyelik adımlar, sonda 0. */
+/** Daze sway: ±3° half-second steps, ending at 0. */
 export function swayTrack(ms: number): Track {
   const out: [number, number][] = [];
   for (let t = 0, s = 1; t + 500 <= ms; t += 500, s = -s) out.push([3 * s, 500]);
@@ -56,21 +55,21 @@ export function swayTrack(ms: number): Track {
   return out;
 }
 
-/** Bakış (CouCou): hedef = tanh(dx/260), tanh(dy/200); yumuşatma adımı 1 - 0,0025^dt (dt saniye). */
+/** Gaze: target = tanh(dx/260), tanh(dy/200); smoothing step 1 - 0.0025^dt (dt in seconds). */
 export const gazeTarget = (dx: number, dy: number): [number, number] => [Math.tanh(dx / 260), Math.tanh(dy / 200)];
 export const gazeStep = (dt: number) => 1 - Math.pow(0.0025, dt);
 
-/** Dokunma tepkileri (CouCou "tokat" ve "sevgi"). Sayılar başlangıç değeri; kaynak: analiz §5. */
+/** Touch reactions. The numbers are starting values; tuned by eye. */
 export const REACT = { slapMs: 600, slapGap: 350, loveHoverMs: 1900, loveMs: 2400, loveGap: 8000, hearts: 5, dizzyTaps: 5, dizzyWindow: 3000, dizzyMs: 2600 } as const;
-/** Tokat: ezilme (POKE) + yatay titreme birlikte; gözler `slapMs` boyunca kısık. Sonra önceki hale döner. */
-/** Sevgi yalnız sakin hallerde (onay, hata, uyku, dikkat örtülmez). */
+/** Slap: squash (POKE) + horizontal shake together; eyes squint for `slapMs`. Then back to the previous look. */
+/** Love only in calm moods (approval, error, sleep and attention are never covered). */
 export const LOVE_MOODS: ReadonlySet<string> = new Set(["idle", "done", "listening", "music", "speaking"]);
 
-/** Tepki kapısı (saf): tıklama seli sonsuz tokat döngüsüne girmesin; sevgi aralıklı. Saat dışarıdan verilir. */
+/** Reaction gate (pure): a click flood mustn't loop slaps forever; love is spaced out. The clock is passed in. */
 export function createReactionGate(now: () => number = () => performance.now()) {
   let lastSlap = -Infinity, lastLove = -Infinity, dizzyUntil = -Infinity, stamps: number[] = [];
   return {
-    /** Tıklama: "slap", hız sınırında "none" (kart açma gibi asıl eylem yine çalışır) ya da 3 sn'de 5 tıklamada "dizzy" (süresince tepki yok). */
+    /** Click: "slap", "none" at the rate limit (the real action like opening a card still runs) or "dizzy" on 5 clicks in 3 s (no reactions meanwhile). */
     tap(): "slap" | "dizzy" | "none" {
       const t = now();
       if (t < dizzyUntil) return "none";
@@ -79,7 +78,7 @@ export function createReactionGate(now: () => number = () => performance.now()) 
       if (t - lastSlap < REACT.slapGap) return "none";
       lastSlap = t; return "slap";
     },
-    /** Üstünde 1,9 sn kalınca: sevgi serbest mi (8 sn'de en çok bir). */
+    /** After hovering 1.9 s: is love allowed (at most once every 8 s). */
     love(): boolean {
       const t = now();
       if (t - lastLove < REACT.loveGap) return false;
@@ -88,7 +87,7 @@ export function createReactionGate(now: () => number = () => performance.now()) 
   };
 }
 
-/** Sersem: bir tur yuvarlanma (900 ms) sonra ±3° yavaş sallanma; son değer 360 = 0 (iz sonunda sıfırlanır). */
+/** Dizzy: one roll (900 ms) then a slow ±3° sway; the final 360 = 0 (reset at the end of the track). */
 export function dizzyTrack(ms: number): Track {
   const out: [number, number][] = [[360, 900]];
   for (let t = 900, s = 1; t + 500 <= ms; t += 500, s = -s) out.push([360 + 3 * s, 500]);

@@ -2,7 +2,6 @@
 //! The readers live in `notch-win` (volume callback, the status tick, the Bluetooth `DeviceWatcher`); the judging is
 //! here so it is tested without a machine. Also the volume keys' arithmetic (owner decision 11).
 //!
-//! Inspired by HeyyCzer/windows-dynamic-island (ideas only; no code copied).
 
 use std::collections::HashMap;
 
@@ -17,7 +16,7 @@ const THRESHOLDS: [u8; 3] = [20, 10, 5];
 /// The volume bar in the list (any change, any source). It never opens the island by itself: the volume keys have
 /// their own `volume_osd` event, and with key capture off Windows shows its own.
 pub fn volume_alert(v: Volume, now: u64) -> Alert {
-    let title = if v.muted { "Ses kapalı".to_string() } else { format!("Ses %{}", v.percent) };
+    let title = if v.muted { "Muted".to_string() } else { format!("Volume {}%", v.percent) };
     Alert {
         icon: Some(if v.muted || v.percent == 0 { "mute" } else { "volume" }.into()),
         progress: Some(if v.muted { 0.0 } else { f64::from(v.percent) / 100.0 }),
@@ -38,7 +37,7 @@ pub fn power_alert(before: Option<&Battery>, after: Option<&Battery>, now: u64) 
     let pct = a.percent?;
     let progress = Some(f64::from(pct) / 100.0);
     if b.plugged != a.plugged {
-        let title = if a.plugged { "Şarj oluyor" } else { "Pille çalışıyor" };
+        let title = if a.plugged { "Charging" } else { "On battery" };
         return Some(Alert {
             icon: Some(if a.plugged { "charging" } else { "battery" }.into()),
             color: if a.plugged { Some(GREEN.into()) } else { None },
@@ -50,12 +49,12 @@ pub fn power_alert(before: Option<&Battery>, after: Option<&Battery>, now: u64) 
     let t = crossed(b.percent?, pct).filter(|_| !a.plugged)?;
     let color = if t <= 10 { RED } else { ORANGE };
     Some(Alert {
-        subtitle: Some(format!("%{pct} kaldı")),
+        subtitle: Some(format!("{pct}% left")),
         icon: Some("battery".into()),
         color: Some(color.into()),
         progress,
         expand: true,
-        ..Alert::system("system.battery", "power", "Pil azaldı".into(), 80, now, 6_000)
+        ..Alert::system("system.battery", "power", "Battery low".into(), 80, now, 6_000)
     })
 }
 
@@ -98,7 +97,7 @@ impl Bluetooth {
         let name = self.devices.get(id)?.0.clone();
         // The kind is part of the id, so a quick reconnect after a disconnect is a fresh alert, not an update.
         let (kind, sub, ms) =
-            if connected { ("connected", "Bağlandı", 4_000) } else { ("disconnected", "Bağlantı kesildi", 2_500) };
+            if connected { ("connected", "Connected", 4_000) } else { ("disconnected", "Disconnected", 2_500) };
         Some(Alert {
             subtitle: Some(sub.into()),
             icon: Some("headphones".into()),
@@ -113,7 +112,7 @@ pub const MUSIC_GRACE_MS: u64 = 3_000;
 /// How long a disconnect waits for the music to pause before it decides the music simply plays on (speakers).
 const MUSIC_WAIT_MS: u64 = 4_000;
 
-/// "Kulaklık ayrıldı · müzik durdu" (scenario 19): joins the Bluetooth watcher's disconnect with the media state.
+/// "Headset left · music stopped" (scenario 19): joins the Bluetooth watcher's disconnect with the media state.
 /// Windows usually pauses the player, but the pause can arrive just before or just after the disconnect; a player that
 /// keeps playing through the speakers is not "stopped", so nothing is said. Platform-free; `now` is Unix ms.
 #[derive(Debug, Default)]
@@ -212,11 +211,11 @@ mod tests {
         assert!(power_alert(None, Some(&bat(50, false)), 0).is_none(), "the first reading is a baseline");
         assert!(power_alert(Some(&bat(50, false)), None, 0).is_none(), "a desktop");
         let plug = power_alert(Some(&bat(50, false)), Some(&bat(50, true)), 0).unwrap();
-        assert_eq!((plug.title.as_str(), plug.color.as_deref(), plug.expand), ("Şarj oluyor", Some(GREEN), true));
+        assert_eq!((plug.title.as_str(), plug.color.as_deref(), plug.expand), ("Charging", Some(GREEN), true));
         let un = power_alert(Some(&bat(50, true)), Some(&bat(50, false)), 0).unwrap();
-        assert_eq!((un.title.as_str(), un.color), ("Pille çalışıyor", None));
+        assert_eq!((un.title.as_str(), un.color), ("On battery", None));
         let low = power_alert(Some(&bat(11, false)), Some(&bat(10, false)), 0).unwrap();
-        assert_eq!((low.priority, low.color.as_deref(), low.subtitle.as_deref()), (80, Some(RED), Some("%10 kaldı")));
+        assert_eq!((low.priority, low.color.as_deref(), low.subtitle.as_deref()), (80, Some(RED), Some("10% left")));
         assert!(power_alert(Some(&bat(21, true)), Some(&bat(20, true)), 0).is_none(), "on the charger: no warning");
         assert!(power_alert(Some(&bat(40, false)), Some(&bat(39, false)), 0).is_none());
     }
@@ -225,7 +224,7 @@ mod tests {
     fn bluetooth_start_is_silent_then_changes_are_announced() {
         let mut bt = Bluetooth::default();
         assert!(bt.added("h", "AirPods", true, 0).is_none(), "already connected at start");
-        assert!(bt.added("s", "Hoparlör", false, 0).is_none());
+        assert!(bt.added("s", "Speaker", false, 0).is_none());
         bt.ready();
         assert!(bt.updated("h", None, 0).is_none(), "no IsConnected in the update");
         assert!(bt.updated("h", Some(true), 0).is_none(), "no change");
@@ -234,10 +233,10 @@ mod tests {
         let on = bt.updated("s", Some(true), 0).unwrap();
         assert_eq!(
             (on.id.as_str(), on.subtitle.as_deref(), on.priority),
-            ("system.bluetooth.connected:s", Some("Bağlandı"), 70)
+            ("system.bluetooth.connected:s", Some("Connected"), 70)
         );
         assert!(bt.updated("ghost", Some(true), 0).is_none(), "never added");
-        assert!(bt.added("new", "Kulaklık", true, 0).is_some(), "paired and connected after start");
+        assert!(bt.added("new", "Headset", true, 0).is_some(), "paired and connected after start");
         bt.removed("new");
         assert!(bt.updated("new", Some(false), 0).is_none());
     }
