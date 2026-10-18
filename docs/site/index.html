@@ -5,11 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Peeka – Dynamic Island for Windows (free &amp; open source)</title>
 <meta name="description" content="Peeka replaces the Windows taskbar with a slim top strip. An island grows out of it for music, Claude Code tasks and alerts. Free, open source (MIT), and nothing leaves your PC.">
+<meta name="google-site-verification" content="2QnU543WatYNLiR3yBYt81dv4PfH2t6GuMoeUNj1Ks4" />
 <meta name="theme-color" content="#0c0920">
 <link rel="canonical" href="https://isdionn.github.io/peeka/">
 <link rel="sitemap" type="application/xml" href="sitemap.xml">
-<link rel="icon" type="image/png" href="images/icon-transparent.png">
-<link rel="apple-touch-icon" href="images/icon.png">
+<link rel="icon" type="image/png" href="media/icon-192.png">
+<link rel="apple-touch-icon" href="media/apple-touch-icon.png">
 
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Peeka">
@@ -24,110 +25,202 @@
 <meta name="twitter:image" content="https://isdionn.github.io/peeka/images/banner.png">
 <meta name="twitter:image:alt" content="Peeka: a thin top strip with an island and the ghost mascot hanging below it">
 
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&amp;display=swap">
 <link rel="stylesheet" href="style.css">
+<script>document.documentElement.classList.add("js")</script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 
-<header class="hero">
-  <div class="strip" aria-hidden="true">
-    <div class="l"><i></i><i></i><i></i><i></i></div>
-    <div class="r"><i></i><i></i><i></i><i></i></div>
-  </div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-win" viewBox="0 0 16 16"><path d="M1 2.3 6.6 1.5v5.6H1zM7.4 1.4 15 .3v6.8H7.4zM1 7.9h5.6v5.6L1 12.7zM7.4 7.9H15v6.8l-7.6-1.1z"/></symbol>
+  <symbol id="i-star" viewBox="0 0 16 16"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></symbol>
+</svg>
 
-  <div class="stage" role="img" aria-label="Peeka's island growing out of the top strip to show a music card, a Claude Code permission request and a finished download, with the ghost mascot hanging below it.">
-    <div class="ghost"><img src="images/icon-transparent.png" alt="" width="1024" height="1024"></div>
-    <div class="island">
-      <div class="card c1">
-        <div class="art"></div>
-        <div class="grow"><b>Now playing</b><small>From Windows media sessions</small><div class="bar"></div></div>
-      </div>
-      <div class="card c2">
-        <div class="chip">&gt;_</div>
-        <div class="grow"><b>Claude Code needs permission</b><small>A tool wants to run</small><div class="btns"><span>Allow</span><span>Deny</span></div></div>
-      </div>
-      <div class="card c3">
-        <div class="tick"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
-        <div class="grow"><b>Download finished</b><small>Name and size only</small></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="wrap">
-    <h1>Peeka</h1>
-    <p class="tagline">A Dynamic-Island-style top strip for Windows, with a ghost that keeps you company.</p>
-    <div class="cta">
-      <a class="btn primary" href="https://github.com/isDionn/peeka/releases/latest">Download for Windows</a>
-      <a class="btn ghosty" href="https://github.com/isDionn/peeka">View on GitHub</a>
-    </div>
-    <p class="note">Free and open source (MIT). One portable exe for Windows 10 and 11, no installer. It is not code-signed yet, so SmartScreen may warn: choose More info, then Run anyway. The interface is in Turkish for now.</p>
-  </div>
+<header class="strip">
+  <a class="brand" href="#top" aria-label="Peeka, back to top"><img src="media/ghost-192.webp" alt="" width="192" height="192">Peeka</a>
+  <div class="island" aria-hidden="true"><span class="island-label" id="island-label">Peeka</span></div>
+  <nav aria-label="Sections">
+    <a href="#features">Features</a>
+    <a href="#privacy">Privacy</a>
+    <a href="#plugins">Plugins</a>
+    <a href="#faq">FAQ</a>
+    <a class="pill" href="https://github.com/isDionn/peeka"><svg class="ico"><use href="#i-star"/></svg>Star</a>
+  </nav>
 </header>
 
 <main id="main">
-  <section>
+  <section class="hero" id="top" data-label="Peeka">
+    <img class="hero-ghost" src="media/ghost-480.webp" alt="" width="480" height="480" fetchpriority="high">
+    <h1>A Dynamic Island for&nbsp;Windows.</h1>
+    <p class="sub">Peeka replaces the taskbar with a slim top strip. Music, Claude Code tasks and alerts grow out of it.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/isDionn/peeka/releases/latest"><svg class="ico"><use href="#i-win"/></svg>Download for Windows</a>
+      <a class="btn quiet" href="https://github.com/isDionn/peeka"><svg class="ico"><use href="#i-star"/></svg>Star on GitHub</a>
+    </div>
+    <p class="meta">Windows 10 and 11 · Free and open source (MIT)</p>
+    <div class="screen">
+      <video autoplay muted loop playsinline poster="media/hero-poster.webp" width="1440" height="488" aria-label="Peeka's island growing out of the top strip into a music card, then a Claude Code task taking the island while the song moves to the side bubble.">
+        <source src="media/hero.webm" type="video/webm">
+        <source src="media/hero.mp4" type="video/mp4">
+      </video>
+    </div>
+  </section>
+
+  <section class="features" id="features" data-label="Features">
     <div class="wrap">
-      <h2>Your taskbar, but it pays attention.</h2>
-      <p class="lead">Peeka replaces the Windows taskbar with a thin strip along the top of the screen. When something happens, a song starts, a download finishes, a timer runs out, Claude Code asks for permission, the island in the middle grows into a card. A second task waits in a small bubble beside it.</p>
-      <div class="video-wrap">
-        <video controls muted playsinline preload="metadata" poster="poster.png" aria-label="Peeka promo video">
+      <h2>Everything the taskbar did, and a bit more.</h2>
+
+      <div class="row">
+        <div class="copy">
+          <h3>The island grows when something happens.</h3>
+          <p>A song starts, a download finishes, a timer runs out, Claude Code asks for permission. The pill in the middle of the strip opens into a card with the controls you need, then tucks itself away.</p>
+        </div>
+        <figure class="shot reveal"><img src="media/island-music.webp" alt="The island expanded into a music card with album art, a progress bar and play, pause and skip buttons" width="1200" height="406" loading="lazy"></figure>
+      </div>
+
+      <div class="row flip">
+        <div class="copy">
+          <h3>Two tasks, one glance.</h3>
+          <p>While a Claude Code session thinks in the island, the song you were playing waits in the small bubble beside it. One button in Settings connects Claude Code, and another removes exactly those entries.</p>
+        </div>
+        <figure class="shot reveal"><img src="media/side-bubble.webp" alt="The island showing a Claude Code session with a running timer, and a round side bubble holding the music task" width="1200" height="282" loading="lazy"></figure>
+      </div>
+
+      <div class="duo">
+        <article class="tile tall reveal">
+          <img src="media/quick-settings.webp" alt="The quick settings panel: volume and brightness sliders, Wi-Fi, Bluetooth and Do Not Disturb tiles, battery, microphone and camera status" width="560" height="912" loading="lazy">
+          <div>
+            <h3>Wi-Fi, sound and battery, one click away.</h3>
+            <p>Quick settings drop down from the strip. Volume, brightness and radio changes show up as short island events.</p>
+          </div>
+        </article>
+        <article class="tile reveal">
+          <img src="media/clipboard.webp" alt="Clipboard history with screenshots, files and links; a Bitwarden entry is blurred" width="960" height="660" loading="lazy">
+          <div>
+            <h3>A clipboard that keeps secrets secret.</h3>
+            <p>Text, images and file paths. Password-like items, like the Bitwarden row above, stay blurred until you hover, never go to plugins, and sit in a vault encrypted with Windows DPAPI.</p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="mascot" data-label="The ghost">
+    <div class="wrap">
+      <h2>A tiny ghost that keeps you company.</h2>
+      <p class="lead">It hangs below the island and reacts to what the island is doing.</p>
+      <img class="moods reveal" src="media/ghost-moods.webp" alt="Three ghost moods: happy, low battery and asleep" width="1120" height="384" loading="lazy">
+    </div>
+  </section>
+
+  <section class="rest" data-label="Features">
+    <div class="wrap">
+      <h2>And the rest of the taskbar's job.</h2>
+      <dl class="list">
+        <div><dt>The strip</dt><dd>Running apps, tray, start and search, system status. Clicking it never steals focus, and hovering an app shows a live window preview.</dd></div>
+        <div><dt>Notifications</dt><dd>An optional mirror of Windows notifications. One-time codes copy with one click.</dd></div>
+        <div><dt>Timer</dt><dd>A countdown that lives in the island.</dd></div>
+        <div><dt>System</dt><dd>CPU and memory, battery thresholds, volume and brightness as brief island events.</dd></div>
+        <div><dt>Downloads</dt><dd>A finished-download notice with names and sizes only. Files are never opened.</dd></div>
+        <div><dt>Setup wizard</dt><dd>Three steps on first launch: taskbar, notification mirror, Windows banners. Run it again any time.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="tour" data-label="Tour">
+    <div class="wrap">
+      <h2>See it move.</h2>
+      <div class="player reveal">
+        <video controls playsinline preload="none" poster="media/promo-poster.webp" width="1920" height="1080" aria-label="Peeka promo video, 33 seconds">
           <source src="promo.mp4" type="video/mp4">
           Your browser cannot play this video. <a href="promo.mp4">Download the promo video</a>.
         </video>
       </div>
-      <div class="showcase">
-        <img src="images/showcase.png" alt="Peeka showcase: the quick settings panel with volume, Wi-Fi and Bluetooth tiles next to a music card with the ghost mascot peeking over its edge" width="1600" height="900" loading="lazy">
-      </div>
     </div>
   </section>
 
-  <section class="features" id="features">
+  <section class="privacy" id="privacy" data-label="Privacy">
     <div class="wrap">
-      <h2>Everything the taskbar did, and a bit more.</h2>
-      <div class="grid">
-        <div><h3>Strip</h3><p>A top bar that does the taskbar's job: running apps, tray, start and search, system status. Clicking it never steals focus. Hover an app for a live window preview.</p></div>
-        <div><h3>Island</h3><p>The central pill expands into cards for what is happening now: media, alerts, a timer, a finished download, a Claude Code session, plugin cards.</p></div>
-        <div><h3>Side bubble</h3><p>Short, quiet messages and a second task next to the island instead of full pop-ups.</p></div>
-        <div><h3>Ghost mascot</h3><p>A ghost hangs below the island and reacts to what the island is doing.</p></div>
-        <div><h3>Quick settings</h3><p>Wi-Fi, Bluetooth, volume and battery within reach, plus brief island events when volume, brightness or radios change.</p></div>
-        <div><h3>Clipboard history</h3><p>Text, images and file paths. Password-like items are recognised and shown blurred, and a vault keeps them encrypted with Windows DPAPI.</p></div>
-        <div><h3>Media</h3><p>The current track from Windows media sessions, with play, pause and skip.</p></div>
-        <div><h3>Notifications</h3><p>An optional mirror of Windows notifications, plus Peeka's own. One-time codes copy with one click.</p></div>
-        <div><h3>Timer</h3><p>A countdown that lives in the island.</p></div>
-        <div><h3>Claude Code</h3><p>One button in Settings adds Peeka's hooks to Claude Code. Sessions, tool use and permission requests then show up in the island. Another button removes exactly those entries.</p></div>
-        <div><h3>Plugins</h3><p>Any program can add island items, cards, search results and alerts over a local named pipe. You approve each plugin, scope by scope.</p></div>
-        <div><h3>Setup wizard</h3><p>Three steps on first launch: taskbar, optional notification mirror, Windows banners. Available again any time.</p></div>
-      </div>
-    </div>
-  </section>
-
-  <section id="privacy">
-    <div class="wrap split">
-      <div>
-        <h2>Nothing leaves your PC.</h2>
-        <p class="lead">Peeka runs locally. Its own code makes no outbound network requests: no update check, no analytics, no telemetry. This page has none either.</p>
-        <p class="small">Plugins may use their own internet connection. Peeka cannot control that, and the approval window says so.</p>
-      </div>
-      <ul class="plist">
+      <h2>Nothing leaves your PC.</h2>
+      <p class="lead">Peeka runs locally. Its own code makes no outbound network requests: no update check, no analytics, no telemetry. This page has none either.</p>
+      <ul class="facts">
         <li><strong>Passwords stay blurred.</strong> Password rows in the clipboard stay blurred until you hover or focus them, and the real text is not in the page until then.</li>
-        <li><strong>Lock and presentation modes.</strong> While locked, or while Windows is in presentation mode, the strip and bubble show generic labels instead of content, and nothing is sent to plugins.</li>
-        <li><strong>One-time codes clean up after themselves.</strong> A code copied from a notification is cleared from the clipboard after 60 seconds, unless you copied something else since.</li>
+        <li><strong>Lock and presentation modes.</strong> While locked, or while Windows is presenting, the strip and bubble show generic labels instead of content, and nothing is sent to plugins.</li>
+        <li><strong>One-time codes clean up.</strong> A code copied from a notification is cleared from the clipboard after 60 seconds, unless you copied something else since.</li>
         <li><strong>Mic and camera indicator.</strong> A dot shows which apps are using the microphone or camera, read from Windows' own consent store.</li>
         <li><strong>Local listeners only.</strong> A per-user named pipe for plugins, and an optional alert API on 127.0.0.1 that is off by default and needs a per-install key.</li>
-        <li><strong>Your data stays on disk, in your profile.</strong> Settings, the clipboard vault and plugin tokens live in your local app data folder.</li>
+        <li><strong>Your data stays in your profile.</strong> Settings, the clipboard vault and plugin tokens live in your local app data folder.</li>
       </ul>
+      <p class="aside">Plugins may use their own internet connection. Peeka cannot control that, and the approval window says so.</p>
     </div>
   </section>
 
-  <section class="plugins" id="plugins">
-    <div class="wrap">
-      <h2>Add your own cards with a local plugin API.</h2>
-      <p class="lead">Plugins talk to Peeka over JSON-RPC 2.0 on a user-only named pipe. They send data and Peeka draws it: no HTML, CSS or scripts from plugins, scoped permissions, and an approval window that Peeka draws itself. You can disconnect a plugin at any time.</p>
-      <div class="links">
-        <a class="btn primary" href="https://github.com/isDionn/peeka/blob/main/docs/plugin-api.md">Read the plugin API docs</a>
-        <a class="btn ghosty" href="https://github.com/isDionn/peeka/blob/main/sdk/README.md">SDK examples (Python, Node)</a>
+  <section class="plugins" id="plugins" data-label="Plugins">
+    <div class="wrap split">
+      <div>
+        <h2>Add your own cards.</h2>
+        <p class="lead">Plugins speak JSON-RPC 2.0 over a named pipe only your user can open. They send data and Peeka draws it: no HTML, CSS or scripts from plugins, permissions you approve scope by scope, and you can disconnect a plugin at any time.</p>
+        <div class="links">
+          <a class="btn quiet" href="https://github.com/isDionn/peeka/blob/main/docs/plugin-api.md">Read the plugin API</a>
+          <a class="btn quiet" href="https://github.com/isDionn/peeka/blob/main/sdk/README.md">SDK examples (Python, Node)</a>
+        </div>
       </div>
-      <p class="small">The API contract is written in Turkish for now.</p>
+      <figure class="code reveal">
+        <figcaption>Two messages put a row with a live timer in the island</figcaption>
+<pre><code><span class="c">// 1. Ask for a scope. Peeka shows its own approval window.</span>
+{"jsonrpc":"2.0","id":1,"method":"hello","params":{
+  "id":"com.example.focus","name":"Focus","publisher":"Example",
+  "version":"1.0.0","api":1,"scopes":["island.protrusion"],
+  "why":{"island.protrusion":"Show the focus timer in the island"}}}
+
+<span class="c">// 2. Send data. Peeka draws the row and counts the timer.</span>
+{"jsonrpc":"2.0","id":2,"method":"island.protrusion.set","params":{
+  "title":"Deep work","icon":"timer","state":"info",
+  "timer":{"started_at":"2026-10-18T09:00:00Z"}}}</code></pre>
+      </figure>
+    </div>
+  </section>
+
+  <section class="faq" id="faq" data-label="FAQ">
+    <div class="wrap">
+      <h2>Questions.</h2>
+      <div class="qa">
+        <details>
+          <summary>Windows SmartScreen warns me. Is that expected?</summary>
+          <p>Yes. The exe is not code-signed yet, so SmartScreen may say "Windows protected your PC". Choose <b>More info</b>, then <b>Run anyway</b>. If you would rather not, you can <a href="https://github.com/isDionn/peeka#-build-from-source">build it from source</a>.</p>
+        </details>
+        <details>
+          <summary>Which Windows versions does it run on?</summary>
+          <p>Windows 10 and 11. Peeka needs the WebView2 runtime, which is already part of Windows 11. It is one portable exe with no installer.</p>
+        </details>
+        <details>
+          <summary>How do I uninstall it?</summary>
+          <p>If you connected Claude Code, press Remove in Settings first. Choose <b>Restore taskbar</b> (in the Start panel, or right-click the strip), quit Peeka and delete <code>peeka.exe</code>. Settings, the clipboard vault and plugin tokens live in <code>%LOCALAPPDATA%\notch</code>; delete that folder too.</p>
+        </details>
+        <details>
+          <summary>Is it really free?</summary>
+          <p>Yes. The source code is MIT licensed. The ghost mascot is the one exception: its artwork is © isDionn and not covered by MIT, so forks bring their own mascot. See the <a href="https://github.com/isDionn/peeka/blob/main/docs/MASCOT-LICENSE.md">mascot license</a>.</p>
+        </details>
+        <details>
+          <summary>What language is the interface?</summary>
+          <p>Turkish for now. English is on the way.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section class="final" data-label="Download">
+    <div class="wrap">
+      <img class="final-art reveal" src="media/showcase.webp" alt="The quick settings panel next to a music card, with the ghost mascot peeking over its edge" width="1400" height="788" loading="lazy">
+      <h2>Give your taskbar a day off.</h2>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/isDionn/peeka/releases/latest"><svg class="ico"><use href="#i-win"/></svg>Download for Windows</a>
+        <a class="btn quiet" href="https://github.com/isDionn/peeka"><svg class="ico"><use href="#i-star"/></svg>Star on GitHub</a>
+      </div>
+      <p class="note">One portable exe, no installer. Not code-signed yet, so SmartScreen may warn: choose More info, then Run anyway. The interface is in Turkish for now.</p>
     </div>
   </section>
 </main>
@@ -135,16 +228,36 @@
 <footer>
   <div class="wrap">
     <div>
-      <div class="brand"><img src="images/icon-transparent.png" alt="" width="32" height="32">Peeka</div>
+      <div class="brand"><img src="media/ghost-192.webp" alt="" width="192" height="192">Peeka</div>
       <p>Source code under the <a href="https://github.com/isDionn/peeka/blob/main/LICENSE">MIT license</a>.</p>
       <p>Mascot &copy; isDionn, all rights reserved. See the <a href="https://github.com/isDionn/peeka/blob/main/docs/MASCOT-LICENSE.md">mascot license</a>.</p>
-      <p><a href="https://github.com/isDionn/peeka">GitHub</a> &nbsp; <a href="https://github.com/isDionn/peeka/releases/latest">Latest release</a> &nbsp; <a href="https://github.com/isDionn/peeka/blob/main/docs/THIRD_PARTY_NOTICES.md">Third-party notices</a></p>
     </div>
     <div>
+      <p><a href="https://github.com/isDionn/peeka">GitHub</a> &nbsp; <a href="https://github.com/isDionn/peeka/releases/latest">Latest release</a> &nbsp; <a href="https://github.com/isDionn/peeka/blob/main/docs/THIRD_PARTY_NOTICES.md">Third-party notices</a></p>
       <p>Inspired by <a href="https://github.com/HeyyCzer/windows-dynamic-island">HeyyCzer/windows-dynamic-island</a> (ideas only, no code copied).</p>
       <p>Parts adapted from <a href="https://github.com/Louis-CFM/coucou">Louis-CFM/coucou</a> (MIT).</p>
     </div>
   </div>
 </footer>
+
+<script>
+(() => {
+  // Reveal media once as it scrolls in.
+  const seen = new IntersectionObserver((es) => es.forEach((e) => {
+    if (e.isIntersecting) { e.target.classList.add("in"); seen.unobserve(e.target); }
+  }), { rootMargin: "0px 0px -8% 0px" });
+  document.querySelectorAll(".reveal").forEach((el) => seen.observe(el));
+
+  // The strip's island names the section you are reading, like the real one names what is playing.
+  const island = document.querySelector(".island"), label = document.getElementById("island-label");
+  const spy = new IntersectionObserver((es) => es.forEach((e) => {
+    const text = e.target.dataset.label;
+    if (!e.isIntersecting || label.textContent === text) return;
+    label.textContent = text;
+    island.classList.remove("pulse"); void island.offsetWidth; island.classList.add("pulse");
+  }), { rootMargin: "-45% 0px -50% 0px" });
+  document.querySelectorAll("[data-label]").forEach((s) => spy.observe(s));
+})();
+</script>
 </body>
 </html>
