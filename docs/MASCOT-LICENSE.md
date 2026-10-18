@@ -6,12 +6,10 @@ You may not use, copy, modify or redistribute the mascot character or its artwor
 
 The source code is MIT (see [LICENSE](../LICENSE)). Forks must replace the mascot with their own artwork.
 
-Türkçe: Maskot (hayalet karakter), adı, tasarımı ve tüm görselleri isDionn'a aittir, tüm hakları saklıdır; MIT kapsamında değildir.
-
 ## Covered paths
 
 - `ui/public/mascot/parts/` (all files: body, mouth, eyes, hands, skirt and effect parts, `.webp`)
 - `ui/public/mascot/sprite24/` (all files: 24 px silhouette sprites)
-- `src-tauri/icons/icon.ico` (app icon showing the character)
+- `crates/notch-app/icons/icon.ico` (app icon showing the character)
 
 `ui/src/mascot/ghost.ts` only composes the artwork files above and contains no drawing of the character; it stays MIT.

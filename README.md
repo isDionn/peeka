@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/gorseller/banner.png" alt="Peeka: a thin top strip with a Dynamic-Island-style island and the ghost mascot hanging below it" width="100%">
+<img src="docs/images/banner.png" alt="Peeka: a thin top strip with a Dynamic-Island-style island and the ghost mascot hanging below it" width="100%">
 
 <h1>Peeka</h1>
 
@@ -19,7 +19,7 @@
   <a href="https://github.com/isDionn/peeka/releases/latest"><b>⬇️ Download for Windows</b></a>
 </p>
 
-<img src="docs/gorseller/demo.gif" alt="Peeka in action: the island grows out of the strip, then a second task moves into the side bubble" width="100%">
+<img src="docs/images/demo.gif" alt="Peeka in action: the island grows out of the strip, then a second task moves into the side bubble" width="100%">
 
 <p>
   <a href="#-download">Download</a> ·
@@ -40,7 +40,7 @@ Peeka replaces the Windows taskbar with a thin strip along the top of the screen
 It runs locally, sends nothing anywhere, and other programs can add their own cards through a public plugin API.
 
 <p align="center">
-  <img src="docs/gorseller/vitrin.png" alt="Peeka showcase: strip, island, side bubble and mascot" width="100%">
+  <img src="docs/images/showcase.png" alt="Peeka showcase: strip, island, side bubble and mascot" width="100%">
 </p>
 
 ## ✨ Features
@@ -120,7 +120,7 @@ The app is `target/release/peeka.exe`.
 
 Plugins talk to Peeka over JSON-RPC 2.0 on a user-only named pipe. They send data; Peeka draws it. No HTML, CSS or scripts from plugins, scoped permissions, and an approval window that Peeka draws itself.
 
-- 📜 Contract: [`docs/eklenti-api.md`](docs/eklenti-api.md) (Turkish)
+- 📜 Contract: [`docs/plugin-api.md`](docs/plugin-api.md)
 - 🛠️ SDK examples in Python and Node: [`sdk/README.md`](sdk/README.md)
 
 ## 🤝 Contributing
@@ -146,5 +146,5 @@ Peeka, Windows görev çubuğunun yerine geçen ince bir üst şerit ve ondan a�
 - **İndirme:** [Son sürümden](https://github.com/isDionn/peeka/releases/latest) `peeka.exe` dosyasını indirip çalıştırın. Exe henüz imzalı değil; SmartScreen uyarırsa **Ek bilgi → Yine de çalıştır**.
 - **Kaynaktan derleme:** Yukarıdaki adımlar. Gereksinim: WebView2'li Windows 10/11, Rust (MSVC), Node.js ve pnpm. Düz `cargo build` arayüzü gömmez, `custom-protocol` özelliği şarttır.
 - **Gizlilik:** Yerel çalışır, dışarıya kendi isteği yok, telemetri yok. Kilitte ve sunum modunda içerik yerine genel etiket görünür; parolalar bulanık durur; bildirimden kopyalanan tek kullanımlık kod 60 saniye sonra panodan silinir. Eklentiler her biri sizin onayınızla, kapsam kapsam bağlanır; kilitliyken eklentilere hiçbir şey gitmez.
-- **Eklentiler:** Sözleşme [`docs/eklenti-api.md`](docs/eklenti-api.md), örnekler [`sdk/README.md`](sdk/README.md).
+- **Eklentiler:** Sözleşme [`docs/plugin-api.md`](docs/plugin-api.md), örnekler [`sdk/README.md`](sdk/README.md).
 - **Lisans:** MIT. Maskot: hayalet karakter ve görselleri MIT dışındadır, hakları saklıdır; bkz. [`MASCOT-LICENSE.md`](docs/MASCOT-LICENSE.md).

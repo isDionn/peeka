@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Peeka – Dynamic Island for Windows (free &amp; open source)</title>
+<meta name="description" content="Peeka replaces the Windows taskbar with a slim top strip. An island grows out of it for music, Claude Code tasks and alerts. Free, open source (MIT), and nothing leaves your PC.">
+<meta name="theme-color" content="#0c0920">
+<link rel="canonical" href="https://isdionn.github.io/peeka/">
+<link rel="icon" type="image/png" href="images/icon-transparent.png">
+<link rel="apple-touch-icon" href="images/icon.png">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Peeka">
+<meta property="og:title" content="Peeka: a Dynamic-Island-style top strip for Windows">
+<meta property="og:description" content="A slim top strip, an island for music, Claude Code tasks and alerts, and a ghost that keeps you company. Free, open source, no telemetry.">
+<meta property="og:url" content="https://isdionn.github.io/peeka/">
+<meta property="og:image" content="https://isdionn.github.io/peeka/images/banner.png">
+<meta property="og:image:alt" content="Peeka: a thin top strip with an island and the ghost mascot hanging below it">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Peeka: a Dynamic-Island-style top strip for Windows">
+<meta name="twitter:description" content="A slim top strip, an island for music, Claude Code tasks and alerts, and a ghost that keeps you company. Free, open source, no telemetry.">
+<meta name="twitter:image" content="https://isdionn.github.io/peeka/images/banner.png">
+<meta name="twitter:image:alt" content="Peeka: a thin top strip with an island and the ghost mascot hanging below it">
+
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="hero">
+  <div class="strip" aria-hidden="true">
+    <div class="l"><i></i><i></i><i></i><i></i></div>
+    <div class="r"><i></i><i></i><i></i><i></i></div>
+  </div>
+
+  <div class="stage" role="img" aria-label="Peeka's island growing out of the top strip to show a music card, a Claude Code permission request and a finished download, with the ghost mascot hanging below it.">
+    <div class="ghost"><img src="images/icon-transparent.png" alt="" width="1024" height="1024"></div>
+    <div class="island">
+      <div class="card c1">
+        <div class="art"></div>
+        <div class="grow"><b>Now playing</b><small>From Windows media sessions</small><div class="bar"></div></div>
+      </div>
+      <div class="card c2">
+        <div class="chip">&gt;_</div>
+        <div class="grow"><b>Claude Code needs permission</b><small>A tool wants to run</small><div class="btns"><span>Allow</span><span>Deny</span></div></div>
+      </div>
+      <div class="card c3">
+        <div class="tick"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+        <div class="grow"><b>Download finished</b><small>Name and size only</small></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <h1>Peeka</h1>
+    <p class="tagline">A Dynamic-Island-style top strip for Windows, with a ghost that keeps you company.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/isDionn/peeka/releases/latest">Download for Windows</a>
+      <a class="btn ghosty" href="https://github.com/isDionn/peeka">View on GitHub</a>
+    </div>
+    <p class="note">Free and open source (MIT). One portable exe for Windows 10 and 11, no installer. It is not code-signed yet, so SmartScreen may warn: choose More info, then Run anyway. The interface is in Turkish for now.</p>
+  </div>
+</header>
+
+<main id="main">
+  <section>
+    <div class="wrap">
+      <h2>Your taskbar, but it pays attention.</h2>
+      <p class="lead">Peeka replaces the Windows taskbar with a thin strip along the top of the screen. When something happens, a song starts, a download finishes, a timer runs out, Claude Code asks for permission, the island in the middle grows into a card. A second task waits in a small bubble beside it.</p>
+      <div class="video-wrap">
+        <video controls muted playsinline preload="metadata" poster="poster.png" aria-label="Peeka promo video">
+          <source src="promo.mp4" type="video/mp4">
+          Your browser cannot play this video. <a href="promo.mp4">Download the promo video</a>.
+        </video>
+      </div>
+      <div class="showcase">
+        <img src="images/showcase.png" alt="Peeka showcase: the quick settings panel with volume, Wi-Fi and Bluetooth tiles next to a music card with the ghost mascot peeking over its edge" width="1600" height="900" loading="lazy">
+      </div>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <div class="wrap">
+      <h2>Everything the taskbar did, and a bit more.</h2>
+      <div class="grid">
+        <div><h3>Strip</h3><p>A top bar that does the taskbar's job: running apps, tray, start and search, system status. Clicking it never steals focus. Hover an app for a live window preview.</p></div>
+        <div><h3>Island</h3><p>The central pill expands into cards for what is happening now: media, alerts, a timer, a finished download, a Claude Code session, plugin cards.</p></div>
+        <div><h3>Side bubble</h3><p>Short, quiet messages and a second task next to the island instead of full pop-ups.</p></div>
+        <div><h3>Ghost mascot</h3><p>A ghost hangs below the island and reacts to what the island is doing.</p></div>
+        <div><h3>Quick settings</h3><p>Wi-Fi, Bluetooth, volume and battery within reach, plus brief island events when volume, brightness or radios change.</p></div>
+        <div><h3>Clipboard history</h3><p>Text, images and file paths. Password-like items are recognised and shown blurred, and a vault keeps them encrypted with Windows DPAPI.</p></div>
+        <div><h3>Media</h3><p>The current track from Windows media sessions, with play, pause and skip.</p></div>
+        <div><h3>Notifications</h3><p>An optional mirror of Windows notifications, plus Peeka's own. One-time codes copy with one click.</p></div>
+        <div><h3>Timer</h3><p>A countdown that lives in the island.</p></div>
+        <div><h3>Claude Code</h3><p>One button in Settings adds Peeka's hooks to Claude Code. Sessions, tool use and permission requests then show up in the island. Another button removes exactly those entries.</p></div>
+        <div><h3>Plugins</h3><p>Any program can add island items, cards, search results and alerts over a local named pipe. You approve each plugin, scope by scope.</p></div>
+        <div><h3>Setup wizard</h3><p>Three steps on first launch: taskbar, optional notification mirror, Windows banners. Available again any time.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="privacy">
+    <div class="wrap split">
+      <div>
+        <h2>Nothing leaves your PC.</h2>
+        <p class="lead">Peeka runs locally. Its own code makes no outbound network requests: no update check, no analytics, no telemetry. This page has none either.</p>
+        <p class="small">Plugins may use their own internet connection. Peeka cannot control that, and the approval window says so.</p>
+      </div>
+      <ul class="plist">
+        <li><strong>Passwords stay blurred.</strong> Password rows in the clipboard stay blurred until you hover or focus them, and the real text is not in the page until then.</li>
+        <li><strong>Lock and presentation modes.</strong> While locked, or while Windows is in presentation mode, the strip and bubble show generic labels instead of content, and nothing is sent to plugins.</li>
+        <li><strong>One-time codes clean up after themselves.</strong> A code copied from a notification is cleared from the clipboard after 60 seconds, unless you copied something else since.</li>
+        <li><strong>Mic and camera indicator.</strong> A dot shows which apps are using the microphone or camera, read from Windows' own consent store.</li>
+        <li><strong>Local listeners only.</strong> A per-user named pipe for plugins, and an optional alert API on 127.0.0.1 that is off by default and needs a per-install key.</li>
+        <li><strong>Your data stays on disk, in your profile.</strong> Settings, the clipboard vault and plugin tokens live in your local app data folder.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="plugins" id="plugins">
+    <div class="wrap">
+      <h2>Add your own cards with a local plugin API.</h2>
+      <p class="lead">Plugins talk to Peeka over JSON-RPC 2.0 on a user-only named pipe. They send data and Peeka draws it: no HTML, CSS or scripts from plugins, scoped permissions, and an approval window that Peeka draws itself. You can disconnect a plugin at any time.</p>
+      <div class="links">
+        <a class="btn primary" href="https://github.com/isDionn/peeka/blob/main/docs/plugin-api.md">Read the plugin API docs</a>
+        <a class="btn ghosty" href="https://github.com/isDionn/peeka/blob/main/sdk/README.md">SDK examples (Python, Node)</a>
+      </div>
+      <p class="small">The API contract is written in Turkish for now.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <div class="brand"><img src="images/icon-transparent.png" alt="" width="32" height="32">Peeka</div>
+      <p>Source code under the <a href="https://github.com/isDionn/peeka/blob/main/LICENSE">MIT license</a>.</p>
+      <p>Mascot &copy; isDionn, all rights reserved. See the <a href="https://github.com/isDionn/peeka/blob/main/docs/MASCOT-LICENSE.md">mascot license</a>.</p>
+      <p><a href="https://github.com/isDionn/peeka">GitHub</a> &nbsp; <a href="https://github.com/isDionn/peeka/releases/latest">Latest release</a> &nbsp; <a href="https://github.com/isDionn/peeka/blob/main/docs/THIRD_PARTY_NOTICES.md">Third-party notices</a></p>
+    </div>
+    <div>
+      <p>Inspired by <a href="https://github.com/HeyyCzer/windows-dynamic-island">HeyyCzer/windows-dynamic-island</a> (ideas only, no code copied).</p>
+      <p>Parts adapted from <a href="https://github.com/Louis-CFM/coucou">Louis-CFM/coucou</a> (MIT).</p>
+    </div>
+  </div>
+</footer>
+</body>
+</html>
