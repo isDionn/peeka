@@ -129,7 +129,7 @@ pub fn guard_main(args: &[String]) -> Option<i32> {
     let Ok(pid) = guard_pid(args)? else { return Some(2) };
     // Cannot watch Notch (not "already gone"): end without touching the bars - restoring now would fight a live
     // Notch. Notch sees this guard end and starts another.
-    if !wait_for_exit(pid) {
+    if !wait_for_exit(pid, None) {
         return Some(3);
     }
     let Some(dir) = notch_core::data_dir() else { return Some(1) };
@@ -177,8 +177,7 @@ fn supervise(dir: &std::path::Path) {
 
 /// The same exe, quietly. A Notch the owner started meanwhile wins: single-instance sends this one away.
 fn relaunch() {
-    let Ok(exe) = std::env::current_exe() else { return };
-    if let Err(error) = std::process::Command::new(exe).arg(notch_core::supervise::AUTOSTART_ARG).spawn() {
+    if let Err(error) = spawn_self(&[notch_core::supervise::AUTOSTART_ARG]) {
         eprintln!("[guard] Notch could not be started again: {error}");
     }
 }
@@ -197,9 +196,10 @@ fn no_such_process(code: windows::core::HRESULT) -> bool {
     code == windows::Win32::Foundation::ERROR_INVALID_PARAMETER.to_hresult()
 }
 
-/// True = the process ended (or was already gone); false = it cannot be watched.
+/// True = the process ended (or was already gone); false = it cannot be watched, or `timeout_ms` (None = no limit)
+/// ran out first.
 #[cfg(windows)]
-fn wait_for_exit(pid: u32) -> bool {
+pub fn wait_for_exit(pid: u32, timeout_ms: Option<u32>) -> bool {
     use windows::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
     use windows::Win32::System::Threading::{OpenProcess, WaitForSingleObject, INFINITE, PROCESS_SYNCHRONIZE};
     // SAFETY: OpenProcess with a plain pid; the result is checked.
@@ -209,14 +209,14 @@ fn wait_for_exit(pid: u32) -> bool {
     };
     // SAFETY: a valid handle we own; closed right after.
     unsafe {
-        let ended = WaitForSingleObject(process, INFINITE) == WAIT_OBJECT_0;
+        let ended = WaitForSingleObject(process, timeout_ms.unwrap_or(INFINITE)) == WAIT_OBJECT_0;
         let _ = CloseHandle(process);
         ended
     }
 }
 
 #[cfg(not(windows))]
-fn wait_for_exit(_pid: u32) -> bool {
+pub fn wait_for_exit(_pid: u32, _timeout_ms: Option<u32>) -> bool {
     true
 }
 
@@ -224,15 +224,34 @@ fn wait_for_exit(_pid: u32) -> bool {
 #[cfg(windows)]
 static GUARD: parking_lot::Mutex<(Option<std::process::Child>, u8)> = parking_lot::Mutex::new((None, 0));
 
-/// Keep a guard running while full hide is wanted (checked every worker tick; false = none could be kept).
-/// `CREATE_BREAKAWAY_FROM_JOB` lets the guard outlive a job that whatever launched Notch put it in; a job that
-/// forbids breaking away refuses that flag, and the guard then starts inside it (it may die with Notch - logged).
+/// This exe again, with no console and no inherited handles. `CREATE_BREAKAWAY_FROM_JOB` lets it outlive a job that
+/// whatever launched Notch put it in; a job that forbids breaking away refuses that flag, and it then starts inside
+/// it (it may die with Notch - logged).
 #[cfg(windows)]
-pub fn ensure_guard() -> bool {
+pub fn spawn_self(args: &[&str]) -> std::io::Result<std::process::Child> {
     use std::os::windows::process::CommandExt;
-    use std::process::{Child, Command, Stdio};
+    use std::process::{Command, Stdio};
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
+    let exe = std::env::current_exe()?;
+    let spawn = |flags: u32| {
+        Command::new(&exe).args(args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).creation_flags(flags).spawn()
+    };
+    spawn(CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB).or_else(|error| {
+        eprintln!("[taskbar] could not break away from a job ({error}); starting inside it");
+        spawn(CREATE_NO_WINDOW)
+    })
+}
+
+#[cfg(not(windows))]
+pub fn spawn_self(_args: &[&str]) -> std::io::Result<std::process::Child> {
+    Err(std::io::ErrorKind::Unsupported.into())
+}
+
+/// Keep a guard running while full hide is wanted (checked every worker tick; false = none could be kept).
+#[cfg(windows)]
+pub fn ensure_guard() -> bool {
+    use std::process::Child;
     let alive = |child: &mut Child| match child.try_wait() {
         Ok(None) => true,
         Ok(Some(status)) => {
@@ -246,21 +265,7 @@ pub fn ensure_guard() -> bool {
         }
     };
     let start = || {
-        let exe = std::env::current_exe().ok()?;
-        let spawn = |flags: u32| {
-            Command::new(&exe)
-                .args([GUARD_ARG, &std::process::id().to_string()])
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .creation_flags(flags)
-                .spawn()
-        };
-        spawn(CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB)
-            .or_else(|error| {
-                eprintln!("[taskbar] guard could not break away from a job ({error}); starting it inside");
-                spawn(CREATE_NO_WINDOW)
-            })
+        spawn_self(&[GUARD_ARG, &std::process::id().to_string()])
             .map_err(|error| eprintln!("[taskbar] guard did not start: {error}"))
             .ok()
     };

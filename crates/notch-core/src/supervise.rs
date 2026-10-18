@@ -31,6 +31,23 @@ pub fn is_autostart(args: &[String]) -> bool {
     args.iter().skip(1).any(|a| a == AUTOSTART_ARG)
 }
 
+/// Sample data, nothing written to disk (`app::demo`).
+pub const DEMO_ARG: &str = "--demo";
+/// `--after <pid>`: wait for that Peeka to end before starting (a restart; single-instance would send us away).
+pub const AFTER_ARG: &str = "--after";
+
+/// Settings > About "Try demo" / "Stop demo": the new Peeka's arguments. Leaving demo starts quietly (no welcome
+/// card when a settings file exists), like the guard's relaunch.
+pub fn restart_args(demo: bool, pid: u32) -> Vec<String> {
+    vec![AFTER_ARG.into(), pid.to_string(), (if demo { DEMO_ARG } else { AUTOSTART_ARG }).into()]
+}
+
+/// The pid in `--after <pid>`; None when absent or not a number.
+pub fn after_pid(args: &[String]) -> Option<u32> {
+    let i = args.iter().skip(1).position(|a| a == AFTER_ARG)? + 2;
+    args.get(i)?.parse().ok()
+}
+
 pub fn alive_path(data_dir: &Path) -> PathBuf {
     data_dir.join("run").join("alive")
 }
@@ -90,6 +107,19 @@ pub fn write_history(path: &Path, history: &[u64]) {
 mod tests {
     use super::*;
     use crate::test_util::Tmp;
+
+    #[test]
+    fn restart_args_round_trip_and_pick_the_mode() {
+        let args = |demo| [vec!["peeka.exe".to_string()], restart_args(demo, 4242)].concat();
+        assert_eq!(after_pid(&args(true)), Some(4242));
+        assert!(args(true).iter().any(|a| a == DEMO_ARG) && !is_autostart(&args(true)));
+        assert!(!args(false).iter().any(|a| a == DEMO_ARG) && is_autostart(&args(false)));
+        let own = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(after_pid(&own(&["peeka.exe"])), None);
+        assert_eq!(after_pid(&own(&["peeka.exe", AFTER_ARG])), None);
+        assert_eq!(after_pid(&own(&["peeka.exe", AFTER_ARG, "x"])), None);
+        assert_eq!(after_pid(&own(&["--after", "7"])), None, "argv[0] is the exe, never an argument");
+    }
 
     #[test]
     fn the_run_value_quotes_the_path() {

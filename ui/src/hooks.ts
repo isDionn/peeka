@@ -314,9 +314,20 @@ export function useShelf(): ShelfItem[] {
   return l;
 }
 
+/** A file is being dragged over a strip or the island. "Off" waits `SHELF_DRAG_HOLD_MS`: moving from the strip onto
+ * the island sends the strip's leave just before the island's enter, and the Shelf bump must not blink under the cursor. */
+export const SHELF_DRAG_HOLD_MS = 150;
 export function useShelfDrag(): boolean {
   const [on, setOn] = useState(false);
-  useEffect(() => { const off = bridge.on("shelf_drag", setOn); return () => { off.then((f) => f()); }; }, []);
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const off = bridge.on("shelf_drag", (v) => {
+      clearTimeout(t);
+      if (v) setOn(true);
+      else t = setTimeout(() => setOn(false), SHELF_DRAG_HOLD_MS);
+    });
+    return () => { clearTimeout(t); off.then((f) => f()); };
+  }, []);
   return on;
 }
 

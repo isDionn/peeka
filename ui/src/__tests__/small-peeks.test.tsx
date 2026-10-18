@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeBridge } from "../bridge.fake";
 import { Island } from "../components/Island";
-import { createBatteryTiers, createBurst, createCcSessions, burstLabel } from "../lib/notes";
+import { ccLimit, createBatteryTiers, createBurst, createCcSessions, burstLabel } from "../lib/notes";
 import { VOICE_THINKING, PROTRUSION } from "../plugin.fixtures";
 import type { Media } from "../bridge";
 
@@ -65,7 +65,7 @@ describe("pure logic", () => {
     expect(s.feed({ kind: "session_start", sid: "bbbbbbbb" }, 10)).toBe(2);
     expect(s.feed({ kind: "pre_tool", tool: "Bash", sid: "aaaaaaaa" }, 20)).toBe(2);
     expect(s.feed({ kind: "post_tool", sid: "aaaaaaaa" }, 30)).toBe(2);
-    expect(s.list(30)).toEqual([{ sid: "aaaaaaaa", tool: "Bash", at: 30 }, { sid: "bbbbbbbb", tool: null, at: 10 }]);
+    expect(s.list(30)).toEqual([{ sid: "aaaaaaaa", agent: "claude", tool: "Bash", at: 30 }, { sid: "bbbbbbbb", agent: "claude", tool: null, at: 10 }]);
     expect(s.count(5020)).toBe(1); // b stayed silent for 5 s and dropped out
     expect(s.feed({ kind: "session_end", sid: "aaaaaaaa" }, 5100)).toBe(0);
     expect(s.feed({ kind: "stop", sid: "bbbbbbbb" }, 5200)).toBe(1); // a dropped session comes back with a new event
@@ -157,6 +157,31 @@ describe("15 usage limit reached", () => {
   });
 });
 
+describe("F3 plan limit", () => {
+  it("ccLimit: on with rate_limit, off with the next stop or Claude Code's auto-resume; other events keep it", () => {
+    expect(ccLimit(false, { kind: "stop_failure", reason: "rate_limit" })).toBe(true);
+    expect(ccLimit(false, { kind: "stop_failure", reason: "server_error" })).toBe(false);
+    for (const e of [{ kind: "prompt" }, { kind: "session_end" }, { kind: "pre_tool" }, { kind: "notification", reason: "idle_prompt" }]) expect(ccLimit(true, e)).toBe(true);
+    expect(ccLimit(true, { kind: "stop" })).toBe(false);
+    expect(ccLimit(true, { kind: "notification", reason: "quota_auto_resume_fired" })).toBe(false);
+  });
+  it("the sessions list shows 'Usage limit reached' until the limit lifts", { timeout: 20000 }, async () => {
+    render(<Island monitor="m1" init={{ view: null }} />);
+    await settle();
+    act(() => { fakeBridge.emit("cc_event", { kind: "session_start", sid: "1a2b3c4d" }); fakeBridge.emit("cc_event", { kind: "session_start", sid: "5e6f7a8b" }); });
+    await settle(100);
+    fireEvent.click(screen.getByRole("button", { name: /2 sessions/ }));
+    const list = () => screen.getByRole("group", { name: "Claude Code sessions" }).textContent!;
+    expect(list()).not.toContain("Usage limit reached");
+    act(() => fakeBridge.emit("cc_event", { kind: "stop_failure", reason: "rate_limit", sid: "1a2b3c4d" }));
+    await settle(100);
+    expect(list()).toContain("Usage limit reached");
+    act(() => fakeBridge.emit("cc_event", { kind: "notification", reason: "quota_auto_resume_fired", sid: "1a2b3c4d" }));
+    await settle(100);
+    expect(list()).not.toContain("Usage limit reached");
+  });
+});
+
 describe("13 two sessions", () => {
   it("two session_start: an 'N sessions' chip; clicking opens the list; one session_end removes the chip", { timeout: 20000 }, async () => {
     render(<Island monitor="m1" init={{ view: null }} />);
@@ -183,6 +208,18 @@ describe("13 two sessions", () => {
     expect(list).toContain("Session 2: Grep");
     expect(list).not.toContain("can't be told apart");
     expect(list).not.toContain("1a2b3c4d");
+  });
+  it("mixed agents: each row names its agent with its accent dot", { timeout: 20000 }, async () => {
+    render(<Island monitor="m1" init={{ view: null }} />);
+    await settle();
+    act(() => { fakeBridge.emit("cc_event", { kind: "session_start", sid: "1a2b3c4d" }); fakeBridge.emit("cc_event", { agent: "codex", kind: "pre_tool", tool: "Bash", sid: "5e6f7a8b" }); });
+    await settle(100);
+    fireEvent.click(screen.getByRole("button", { name: /2 sessions/ }));
+    const group = screen.getByRole("group", { name: "Agent sessions" });
+    expect(group.textContent).toContain("2 agent sessions open");
+    expect(group.textContent).toContain("Claude Code · Session 1: event");
+    expect(group.textContent).toContain("Codex · Session 2: Bash");
+    expect(group.querySelectorAll(".agentDot")).toHaveLength(2);
   });
   it("the chip does not change the island center box", { timeout: 20000 }, async () => {
     render(<Island monitor="m1" init={{ view: null }} />);

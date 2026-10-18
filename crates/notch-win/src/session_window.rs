@@ -36,7 +36,7 @@ pub fn focus(pid: u32) -> Result<(), FocusErr> {
 
 /// Every running process keyed by pid, with its parent pid and exe file name. Empty if no snapshot can be taken.
 #[cfg(windows)]
-fn process_table() -> std::collections::HashMap<u32, notch_core::session_window::Proc> {
+pub(crate) fn process_table() -> std::collections::HashMap<u32, notch_core::session_window::Proc> {
     use notch_core::session_window::Proc;
     use windows::Win32::Foundation::CloseHandle;
     use windows::Win32::System::Diagnostics::ToolHelp::{

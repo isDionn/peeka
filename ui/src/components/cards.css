@@ -26,7 +26,7 @@
 /* summary row icons and session states */
 .row > .orangeIcon, .row > .dim { display: grid; place-items: center; flex: none; }
 .row > .orangeIcon { color: var(--orange); }
-.row > .dim { color: var(--l3); opacity: 1; } /* multiplied by .soluk's .5 it was only 2.4:1 (F-11) */
+.row > .dim { color: var(--l3); opacity: 1; } /* multiplied by .dim's .5 it was only 2.4:1 (F-11) */
 .row > .orangeIcon svg.lucide, .row > .dim svg.lucide { width: 16px; height: 16px; }
 .sessions .row { --indent: 22px; min-height: 40px; padding: 6px 0; } /* R3-1: single row 40, padding 6 */
 .sessions .row:first-child { margin-top: 6px; }
@@ -53,7 +53,7 @@
 .inputBox .leftIcon svg.lucide { width: 16px; height: 16px; }
 .slot svg.lucide { width: 16px; height: 16px; }
 
-/* Modules tab body: the tab's own card (.govde) adds no nested padding; short transition */
+/* Modules tab body: the tab's own card (.body) adds no nested padding; short transition */
 .modBody { display: flex; flex-direction: column; gap: 12px; animation: modIn .13s ease-out both; }
 @keyframes modIn { from { opacity: 0; } to { opacity: 1; } }
 /* The Clipboard tab waits invisibly until it's ready to draw; the old tab stays put and the card grows in one spring */
@@ -108,9 +108,9 @@
 .modTop .seg .segb:focus-visible { outline-offset: -2px; }
 .modTop > .close { flex: none; width: 28px; padding: 0; }
 
-/* Modules: every tab has the same bottom edge; the card doesn't breathe between Music 179 and General 404 (H-1). General 404 = 14 + 32 + 12 + body 330 + 16 */
-/* one height (R1-10): long tabs (Clipboard, plugins) scroll inside, the card doesn't grow; 2 px slack so the focus ring isn't clipped */
-.modBody { height: 330px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; padding: 2px; margin: -2px; box-sizing: content-box; }
+/* Modules: the card hugs its tab (owner: no empty surface under a short tab like System); General 404 = 14 + 32 + 12 + body 330 + 16 is the cap */
+/* capped (R1-10): long tabs (Clipboard, plugins) scroll inside, the card doesn't grow; the clip reaches the card edge (2 px on top for the focus ring, the card padding on the left and bottom; the scrollbar stays put) so the cover glow fades out instead of being cut */
+.modBody { max-height: 330px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; padding: 2px 2px 16px 16px; margin: -2px -2px -16px -16px; box-sizing: content-box; }
 
 /* notification list: the last row isn't cut mid-way, it fades at the bottom (R2-D2) */
 .notifs { -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); padding-bottom: 14px; }
@@ -124,3 +124,25 @@
 /* R1-4: an answered approval row stays as a placeholder, then collapses with a height animation */
 .row.rowDone { overflow: hidden; max-height: 46px; transition: max-height .26s var(--ease), opacity .26s ease, padding .26s var(--ease), min-height .26s var(--ease); }
 .row.rowDone.go { max-height: 0; min-height: 0; padding-block: 0; opacity: 0; }
+
+/* General overview: same-size tiles, one per module; a fixed height so an empty module or a long title never moves the grid */
+.genTiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; } /* 620 px card: 3 x 2; wide General: one row of 6 above the assistant boxes */
+.genTiles + .general3 { margin-top: 12px; }
+.genTile { display: flex; flex-direction: column; align-items: stretch; height: 92px; text-align: left; color: inherit; font: inherit; border: 0; cursor: pointer; transition: filter .16s var(--ease); }
+.genTile .genMain, .genTile .genSub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.genTile .genMain .ms { display: inline-flex; gap: 6px; align-items: center; }
+.genTile .genMain .ms svg { display: none; }
+@media (hover:hover) and (pointer:fine) { .genTile:hover { filter: brightness(1.15); } }
+
+/* resting center: the clock never shrinks under the music (they overlapped on long titles); the title box is fixed, a long title scrolls (transform only) */
+.islandMascot > .ms.keep { flex: none; }
+.islandMascot .ms > .marquee.l2 { flex: none; width: 132px; overflow: hidden; white-space: nowrap; text-overflow: clip; }
+.marquee > span { display: inline-block; }
+.marquee.on { -webkit-mask-image: linear-gradient(90deg, transparent, #000 6px, #000 calc(100% - 6px), transparent); mask-image: linear-gradient(90deg, transparent, #000 6px, #000 calc(100% - 6px), transparent); }
+.marquee.on > span { animation: marquee var(--dur) ease-in-out infinite alternate; will-change: transform; }
+@keyframes marquee { 0%, 15% { transform: translateX(0); } 85%, 100% { transform: translateX(var(--dx)); } }
+
+/* F4 live diff: + green, − red text; the diff scrolls inside a fixed-height card */
+.editCount .add, .diffLines .add { color: var(--green); }
+.editCount .del, .diffLines .del { color: var(--redText); }
+.diffCard .diffLines { max-height: 260px; margin: 8px 0; white-space: pre; overflow: auto; }

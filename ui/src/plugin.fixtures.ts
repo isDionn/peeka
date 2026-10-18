@@ -9,7 +9,7 @@ export const EMPTY_SURFACES: SurfacesView = { protrusion: null, approvals: [], a
 export const APPROVAL_LOW: ApprovalItem = {
   plugin: COMPASS, id: "ap-1", source: "Claude Code", title: "api-server needs approval", risk: "low", kind: "command",
   command: "npm run test -- --coverage", cwd: "~/projects/api-server", detail: "Opus, 38% of session quota",
-  options: ["allow", "always", "deny"], alwaysLabel: "npm test in this folder", expiresS: 300,
+  options: ["allow", "always", "deny"], alwaysLabel: "Bash(npm run test:*)", expiresS: 300,
 };
 export const APPROVAL_HIGH: ApprovalItem = {
   ...APPROVAL_LOW, id: "ap-2", title: "api-server wants to run a high-risk command", risk: "high",

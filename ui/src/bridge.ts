@@ -134,6 +134,8 @@ export type TimerAction = "pause" | "resume" | "add5" | "stop";
 export interface ShelfItem { id: string; name: string; sub: string; kind: "pdf" | "video" | "sheet" | "image" | "other" }
 
 /* ---------- Bluetooth earbuds (mockup bt): no case battery ---------- */
+export interface CcEdit { sid: string | null; file: string | null; add: number | null; del: number | null }
+export interface CcDiff { file: string; add: number; del: number; lines: string[]; more: number }
 export interface DownloadDone { id: string; name: string; size: number }
 export interface FullscreenScreens { island: boolean; strips: string[] }
 export interface ApprovalBadge { monitor: string; count: number }
@@ -169,6 +171,8 @@ export interface RecentItem { id: string; name: string; sub: string; kind: Recen
 export interface AssistantCounts { jobs: number; memory: number; approvals?: number }
 /** Claude Code hook bridge (as reported by the main assistant). `lastEventAgoS`: seconds since the last event, null if none yet. */
 export interface BridgeState { installed: boolean; healthy: boolean; lastEventAgoS: number | null }
+/** One other coding agent's hook row (Rust `agent_bridges`): `file` is the config Install changes (`~` = user folder); `present` = the agent's own folder exists. */
+export interface AgentBridge extends BridgeState { id: string; name: string; file: string; present: boolean }
 /** Permission history row (newest first): who got or gave up which scope, and when. `at` is Unix ms. */
 export interface PermissionEvent { at: number; plugin: string; scope: string; granted: boolean }
 /** `open_tray` result + color icon (while `colorIcons` is on). Rust gives NO badge count: without `badge` no badge is drawn. */
@@ -210,6 +214,8 @@ export interface Commands {
   restore_taskbar: { args: void; ret: void };
   /** Quit Peeka (after the UI asks its own confirmation). */
   quit: { args: void; ret: void };
+  /** Settings > About: restart Peeka in demo mode (`on`) or normally. Peeka quits right after; Err = nothing happened. */
+  demo_restart: { args: { on: boolean }; ret: void };
   get_settings: { args: void; ret: Settings };
   set_settings: { args: { patch: Partial<Settings> }; ret: { ok: boolean; error: string | null } };
   /** Clickable rectangles (CSS pixels inside the window). Clicks outside pass through to the window below. Shared by the strip and island pages. */
@@ -315,6 +321,11 @@ export interface Commands {
   claude_bridge_install: { args: void; ret: BridgeState };
   /** "Remove": only Peeka's own entries go. */
   claude_bridge_remove: { args: void; ret: BridgeState };
+  /** Codex CLI, Cursor, Gemini CLI, GitHub Copilot CLI: Peeka's status-only hook per agent (Claude Code has its own row). */
+  agent_bridges: { args: void; ret: AgentBridge[] };
+  /** Same rules as `claude_bridge_install` (backup, merge, `refused` in demo mode), for one agent `id`. */
+  agent_bridge_install: { args: { agent: string }; ret: AgentBridge };
+  agent_bridge_remove: { args: { agent: string }; ret: AgentBridge };
   permission_history: { args: void; ret: PermissionEvent[] };
   /** Whether the main assistant has connected for the first time (once ever); cleared by `first_connect_ack`. */
   first_connect_get: { args: void; ret: boolean };
@@ -329,6 +340,10 @@ export interface Commands {
   composer_kinds: { args: void; ret: ComposerKind[] };
   /** "Open terminal": brings Claude Code's terminal window forward using the row's `session` id. Errors: `unknown` | `not_connected` | `missing` | `refused` | `unsupported` (demo). */
   cc_focus_terminal: { args: { sessionId: string }; ret: void };
+  /** The last Edit/Write of hook session `sid` (`cc_edit.sid`), read on demand from the hook's local cache: at most 200 lines (`more` = lines past that). `denied` while locked or presenting, `missing` when nothing is cached (or it is older than 30 min). */
+  cc_diff: { args: { sid: string }; ret: CcDiff };
+  /** "Open in editor": that file with its default app. `denied` while locked/presenting or for a runnable file, `missing` when it's gone. */
+  cc_diff_open: { args: { sid: string }; ret: void };
   /** Elevated window menu and alert button: opens Task Manager. */
   open_task_manager: { args: void; ret: void };
   /** Tab order across windows: granted only while focus is already in a Peeka window (focus is never stolen from another app); otherwise `refused`. When the island leaves its last control, to the `monitor` strip. */
@@ -410,7 +425,10 @@ export interface Events {
   /** Whether there's a meeting (main assistant `meeting.set`): mascot pranks go quiet. */
   meeting_changed: boolean;
   /** The main assistant's `cc.event`: a Claude Code hook event (drives the mascot state). `tool` is the tool name, `reason` the error class; no free text. */
-  cc_event: { kind: string; tool?: string | null; reason?: string | null; sid?: string | null };
+  /** `agent`: claude | codex | cursor | gemini | copilot | opencode (absent = claude). */
+  cc_event: { agent?: string | null; kind: string; tool?: string | null; reason?: string | null; sid?: string | null };
+  /** Peeka's own hook only: an Edit/Write inside the session folder. `file` is relative to it; `file`/`add`/`del` are null while locked or presenting (generic label only). The diff itself comes only from `cc_diff`. */
+  cc_edit: CcEdit;
 }
 export type EventName = keyof Events;
 

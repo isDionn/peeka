@@ -28,9 +28,15 @@ fn main() {
         if let Some(code) = notch_win::taskbar::guard_main(&args) {
             std::process::exit(code);
         }
-        // Claude Code's hook (`peeka.exe --cc-hook`): forwards one sanitized event and exits, before Tauri starts.
+        // A coding agent's hook (`peeka.exe --cc-hook [agent [event]]`): forwards one sanitized event and exits, before Tauri starts.
         if args.get(1).map(String::as_str) == Some("--cc-hook") {
             plugins::cc_hook_main();
+        }
+        // A restart from Settings > About (`demo_restart`): the old Peeka must be gone first, or single-instance
+        // sends this one away. If it cannot be watched or is still there after 15 s, start anyway: at worst
+        // single-instance does just that.
+        if let Some(pid) = notch_core::supervise::after_pid(&args) {
+            notch_win::taskbar::wait_for_exit(pid, Some(15_000));
         }
         app::run();
     }

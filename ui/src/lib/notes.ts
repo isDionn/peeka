@@ -1,5 +1,7 @@
 /** Pure logic for the small peeks (used by Island.tsx): battery tiers, notification burst, Claude Code session count. No clock, no React. */
 import type { CcEvent } from "../mascot/ccMood";
+import type { CcEdit } from "../bridge";
+import { flat } from "./plugin";
 
 /** Battery: 20 once on reaching 20%, 10 once on reaching 10%. Resets when plugged in. A direct drop to 8% gives only 10 (20 counts as spent too). */
 export function createBatteryTiers() {
@@ -37,7 +39,25 @@ export function createBurst(n = 6, windowMs = 5000) {
 export const burstLabel = (count: number, apps: readonly string[], generic = false) =>
   generic ? "New notifications" : `${count} new notifications: ${apps.slice(0, 2).join(", ")}${apps.length > 2 ? "…" : ""}`;
 
-export interface CcSession { sid: string; tool: string | null; at: number }
+/**
+ * Claude plan limit, from Peeka's own hook: on with `stop_failure`+`rate_limit`, off with the next successful `stop` or Claude Code's
+ * `quota_auto_resume_fired` notification. Hooks carry no fill level or reset time (only the status line JSON does), so this is on/off only.
+ */
+export const ccLimit = (on: boolean, e: { kind: string; reason?: string | null }) =>
+  e.kind === "stop_failure" && e.reason === "rate_limit" ? true : e.kind === "stop" || (e.kind === "notification" && e.reason === "quota_auto_resume_fired") ? false : on;
+
+export interface CcSession { sid: string; agent: string; tool: string | null; at: number }
+
+/** Each coding agent's name and accent (a dot in the sessions list; the mascot stays one ghost). Unknown ids fall back to Claude Code's. */
+export const AGENTS: Record<string, { name: string; color: string }> = {
+  claude: { name: "Claude Code", color: "#d97757" },
+  codex: { name: "Codex", color: "#10a37f" },
+  cursor: { name: "Cursor", color: "#9aa4b2" },
+  gemini: { name: "Gemini", color: "#4f8df5" },
+  copilot: { name: "Copilot", color: "#a371f7" },
+  opencode: { name: "OpenCode", color: "#e5c07b" },
+};
+export const agentOf = (id?: string | null) => AGENTS[id ?? "claude"] ?? AGENTS.claude;
 
 /**
  * Open Claude Code sessions, from Peeka's own hook (`cc_event`). The hook sends not the session id but a salted 8-character hash
@@ -57,7 +77,7 @@ export function createCcSessions(staleMs = 3_600_000, quietMs = 1_800_000) {
       prune(now);
       if (e.sid) {
         if (e.kind === "session_end") known.delete(e.sid);
-        else known.set(e.sid, { sid: e.sid, tool: e.tool ?? known.get(e.sid)?.tool ?? null, at: now }); // re-setting keeps the order: "Session 1" stays in place
+        else known.set(e.sid, { sid: e.sid, agent: e.agent ?? "claude", tool: e.tool ?? known.get(e.sid)?.tool ?? null, at: now }); // re-setting keeps the order: "Session 1" stays in place
       } else {
         last = now;
         if (e.kind === "session_start") anon++;
@@ -71,3 +91,7 @@ export function createCcSessions(staleMs = 3_600_000, quietMs = 1_800_000) {
     list(now: number): CcSession[] { prune(now); return [...known.values()]; },
   };
 }
+
+/** Claude Code's last edit (Rust `cc_edit`): file name and +N −M. `generic` (locked or presenting; Rust then sends no name either): one label, no name, no counts. */
+export const editLabel = (e: CcEdit, generic: boolean) =>
+  generic || e.file === null ? "Claude Code is editing" : `${flat(e.file.split("/").pop() ?? e.file, 40)} +${e.add ?? 0} −${e.del ?? 0}`;

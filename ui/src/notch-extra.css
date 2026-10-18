@@ -3,13 +3,14 @@
 html, body, #root { height: 100%; }
 html, body { background: transparent; }
 body { position: relative; overflow: hidden; }
+/* strip, island and panel chrome isn't a document: a drag, double-click or Ctrl+A mustn't paint a selection over the clock or the song title; typed and copyable text stays selectable */
+body { -webkit-user-select: none; user-select: none; }
+:is(input, textarea, [contenteditable], .code, .chat, .draft) { -webkit-user-select: text; user-select: text; }
 .bar { inset: 0 0 auto 0; } /* the strip is the top 30 px of the window; the rest of the window is for panels and passes clicks through */
 
 /* monochrome icon: the alpha mask is painted with the text color (§0i item 7) */
 .appIcon.mono { background: currentColor; -webkit-mask: center / contain no-repeat; mask: center / contain no-repeat; }
 html[data-color] .appIcon.mono[style*="--icon-color"] { background: var(--icon-color) center / contain no-repeat; -webkit-mask: none; mask: none; }
-/* on the strip, tray and Start grid, color icons only on hover (mockup: .color only on :hover); monochrome otherwise */
-html[data-color] :is(.pin, .tabA, .favTray .key, .appCell):not(:hover, .hovered) .appIcon.mono[style*="--icon-color"] { background: currentColor; }
 .row > .appIcon, .row > svg.lucide { color: var(--l3); }
 
 /* strip */

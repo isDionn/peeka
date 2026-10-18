@@ -54,10 +54,10 @@ pub struct Settings {
     pub clip_media: bool,
     #[serde(default = "sixty")]
     pub clip_password_min: u32,
-    /// Wave 5: the mascot's idle pranks (decision 8, on by default) and colour app icons (decision 14, off).
+    /// Wave 5: the mascot's idle pranks (decision 8, on by default) and colour app icons (on by default, owner 2026-10-19: one-colour cut-outs turn colourful logos into white squares).
     #[serde(default = "yes")]
     pub mascot_pranks: bool,
-    #[serde(default)]
+    #[serde(default = "yes")]
     pub color_icons: bool,
     /// Wave 6: the Windows notification mirror (decision 3), off until the owner turns it on with `mirror_enable`
     /// (Developer Mode + the registered package + Windows's yes). Only this switch is saved, never a notification.
@@ -105,7 +105,7 @@ impl Default for Settings {
             clip_media: true,
             clip_password_min: 60,
             mascot_pranks: true,
-            color_icons: false,
+            color_icons: true,
             mirror: false,
             celebrate: true,
             watch_downloads: true,
@@ -356,13 +356,13 @@ mod tests {
         assert!(json["shortcuts"]["hide_island"].is_string() && json["secondaryStrips"].is_boolean());
         assert_eq!((json["captureVolumeKeys"].as_bool(), json["alertsApi"].as_bool()), (Some(true), Some(false)));
         assert_eq!((json["autostart"].as_bool(), json["taskbarHide"].as_str()), (Some(true), Some("full")));
-        assert_eq!((json["mascotPranks"].as_bool(), json["colorIcons"].as_bool()), (Some(true), Some(false)));
+        assert_eq!((json["mascotPranks"].as_bool(), json["colorIcons"].as_bool()), (Some(true), Some(true)));
         assert_eq!((json["celebrate"].as_bool(), json["watchDownloads"].as_bool()), (Some(true), Some(true)));
         let p: UiPatch =
-            serde_json::from_str(r#"{"colorIcons":true,"mascotPranks":false,"celebrate":false,"watchDownloads":false}"#)
+            serde_json::from_str(r#"{"colorIcons":false,"mascotPranks":false,"celebrate":false,"watchDownloads":false}"#)
                 .unwrap();
         let n = apply_patch(&s, p, |_: &str| None, |_: &str| None).unwrap();
-        assert!(n.color_icons && !n.mascot_pranks && !n.celebrate && !n.watch_downloads);
+        assert!(!n.color_icons && !n.mascot_pranks && !n.celebrate && !n.watch_downloads);
 
         let ok = |_: &str| None;
         let none = |_: &str| None;

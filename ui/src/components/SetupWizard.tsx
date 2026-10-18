@@ -61,7 +61,7 @@ function Step({ n }: { n: number }) {
   }
   return (
     <div className="list glass" style={NO_INDENT}>
-      <Row title="You're all set" sub="Change anything later in Peeka settings. Right-click the strip to open them." />
+      <Row title="You're all set" sub="Change anything later in Peeka settings: click the Windows button on the strip." />
     </div>
   );
 }

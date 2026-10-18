@@ -208,7 +208,7 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
   }, [from]);
   const live = pv ? [...pinned, ...tabs].find((i) => i.appId === pv.item.appId) : null; // the preview refreshes when a window closes or updates
   const privacy = usePrivacy();
-  const priv = [privacy.mic.length ? `Microphone: ${privacy.mic.join(", ")}` : "", privacy.camera.length ? `Camera: ${privacy.camera.join(", ")}` : ""].filter(Boolean).join(". ");
+  const priv = [privacy.mic.length ? "Microphone in use" : "", privacy.camera.length ? "Camera in use" : ""].filter(Boolean).join(". "); // owner: no app names on the strip or in Status
   // full screen: the strip slides up (t1), returns when the pointer touches the top edge (4 px), leaves ~500 ms after it drops below 140 px (t2); stays visible while an approval drops in (t3)
   const surf = useSurfaces();
   const [fs, setFs] = useState(false);

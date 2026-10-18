@@ -55,7 +55,11 @@ fn cc_event(p: &Value) -> Result<UiEvent, RpcErr> {
         None | Some(Value::Null) => None,
         Some(v) => Some(v.as_str().filter(|s| cc_hooks::is_sid(s)).ok_or_else(|| bad("sid: 8 lower-case hex characters"))?.to_string()),
     };
-    Ok(UiEvent::CcEvent { kind: kind.into(), tool: cc_word(p, "tool")?, reason: cc_word(p, "reason")?, sid })
+    let agent = match p.get("agent") {
+        None | Some(Value::Null) => "claude",
+        Some(v) => v.as_str().filter(|a| cc_hooks::AGENT_IDS.contains(a)).ok_or_else(|| bad("agent: must be a known agent"))?,
+    };
+    Ok(UiEvent::CcEvent { agent: agent.into(), kind: kind.into(), tool: cc_word(p, "tool")?, reason: cc_word(p, "reason")?, sid })
 }
 
 /// fidelity-api.ts `AssistantCounts`.
@@ -281,14 +285,23 @@ impl Host {
         Ok(BridgeState { last_event_ago_s: aged, ..b })
     }
 
-    /// One line from Peeka's own Claude Code hook pipe (`peeka.exe --cc-hook`). None = not a valid `cc.event`;
+    /// One line from Peeka's own agent hook pipe (`peeka.exe --cc-hook`). None = not a valid `cc.event`;
     /// Some(empty) = valid, but the ready main assistant sent its own `cc.event` within the last 2 minutes (it wins:
     /// no double reaction while it forwards the same hook).
     pub fn cc_hook(&self, line: &[u8], now: u64) -> Option<Vec<Out>> {
-        let ev = serde_json::from_slice::<Value>(line).ok().and_then(|p| cc_event(&p).ok())?;
-        let main_live = self.main_ready().is_some_and(|(pid, _)| pid == self.assistant.owner)
+        let p = serde_json::from_slice::<Value>(line).ok()?;
+        let ev = cc_event(&p).ok()?;
+        // the main assistant forwards Claude Code only: another agent's line always goes
+        let claude = matches!(&ev, UiEvent::CcEvent { agent, .. } if agent == "claude");
+        let main_live = claude
+            && self.main_ready().is_some_and(|(pid, _)| pid == self.assistant.owner)
             && self.assistant.main_cc.is_some_and(|t| now.saturating_sub(t) < CC_MAIN_WINS_MS);
-        Some(if main_live { vec![] } else { vec![Out::Ui(ev)] })
+        // The main assistant's `cc.event` never carries an edit, so the edit goes out even while it wins.
+        let n = |k: &str| p.pointer(&format!("/edit/{k}")).and_then(Value::as_u64).and_then(|v| u32::try_from(v).ok());
+        let edit = p.pointer("/edit/file").and_then(Value::as_str).filter(|f| cc_hooks::is_rel(f)).zip(n("add").zip(n("del")));
+        let sid = match &ev { UiEvent::CcEvent { kind, sid, .. } if kind == "post_tool" => Some(sid.clone()), _ => None };
+        let edit = sid.zip(edit).map(|(sid, (f, (add, del)))| Out::Ui(UiEvent::CcEdit { sid, file: f.into(), add, del }));
+        Some(if main_live { vec![] } else { vec![Out::Ui(ev)] }.into_iter().chain(edit).collect())
     }
 
     /// "Open terminal": the pid the main assistant announced for `session` (Unknown = it never did).

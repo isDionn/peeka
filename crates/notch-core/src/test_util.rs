@@ -1,4 +1,4 @@
-//! A throwaway folder (no `tempfile` dependency); copied from app/src-tauri/src/test_util.rs.
+//! A throwaway folder (no `tempfile` dependency); copied from the app crate (crates/notch-app).
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};

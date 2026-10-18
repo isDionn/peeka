@@ -5,6 +5,7 @@ import { fileKind } from "../lib/clip";
 import { initial } from "../lib/plugin";
 import { AppIcon, HoldButton, Kbd } from "./common";
 import { FileIcon } from "./Pano";
+import { useSettings } from "../hooks";
 import "../fidelity-settings.css";
 
 const PIN_COUNT = 12;
@@ -33,6 +34,7 @@ function ResultIcon({ r }: { r: SearchResult }) {
 }
 
 export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: MonitorInfo; pins: PinnedApp[]; onClose: () => void; onSettings?: () => void }) {
+  const taskbarShown = useSettings()?.taskbarHide === "off";
   const [apps, setApps] = useState<AppRef[]>([]);
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [q, setQ] = useState("");
@@ -85,7 +87,7 @@ export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: Mo
             <div className="suggestionGrid allApps" role="group" aria-label="All apps">
               {apps.map((a) => (
                 <button key={a.appId} className="row" onClick={() => launch(a.appId)}>
-                  <AppIcon src={a.icon} /><span className="text" style={{ textAlign: "left" }} title={a.name}>{a.name}</span>
+                  <AppIcon src={a.icon} color={a.colorIcon} /><span className="text" style={{ textAlign: "left" }} title={a.name}>{a.name}</span>
                 </button>
               ))}
             </div>
@@ -94,7 +96,7 @@ export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: Mo
               <div className="appGrid">
                 {startPins.map((a) => (
                   <button key={a.appId} className="appCell" onClick={() => launch(a.appId)}>
-                    <span className="lt"><AppIcon src={a.icon} /></span><span className="appName" title={a.name}>{a.name}</span>
+                    <span className="lt"><AppIcon src={a.icon} color={a.colorIcon} /></span><span className="appName" title={a.name}>{a.name}</span>
                   </button>
                 ))}
               </div>
@@ -129,7 +131,9 @@ export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: Mo
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <span style={{ display: "flex", gap: 14 }}>
           {onSettings && <button className="smallLink" onClick={onSettings}><Settings />Peeka settings</button>}
-          <button className="smallLink" onClick={() => { bridge.call("restore_taskbar"); onClose(); }}><PanelBottom />Restore taskbar</button>
+          {taskbarShown
+            ? <button className="smallLink" onClick={() => { bridge.call("taskbar_set_mode", { mode: "full" }).catch(() => undefined); onClose(); }}><PanelBottom />Hide taskbar</button>
+            : <button className="smallLink" onClick={() => { bridge.call("restore_taskbar"); onClose(); }}><PanelBottom />Restore taskbar</button>}
         </span>
         <button className="smallLink" onClick={() => { bridge.call("open_start_menu").catch(() => undefined); onClose(); }}>Open Windows Start<ArrowUpRight /></button>
       </div>

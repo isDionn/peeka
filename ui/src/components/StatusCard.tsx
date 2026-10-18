@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { ArrowUpRight, Settings, Battery, BatteryCharging, Bluetooth, Brain, Camera, LoaderCircle, Mic, Moon, Power, ShieldAlert, Sun, Volume2, VolumeX, Wifi, WifiOff } from "lucide-react";
+import { ArrowUpRight, Battery, BatteryCharging, Bluetooth, Brain, Camera, LoaderCircle, Mic, Moon, Power, ShieldAlert, Sun, Volume2, VolumeX, Wifi, WifiOff } from "lucide-react";
 import { bridge, type AssistantCounts, type MonitorInfo, type Radio, type Status } from "../bridge";
 import { useMainAssistant, usePrivacy, useSurfaces } from "../hooks";
 import { pluginName } from "../lib/plugin";
@@ -50,7 +50,7 @@ function AssistantSection() {
   );
 }
 
-export function StatusCard({ monitor, status, setStatus, onSettings, onQuit }: { monitor: MonitorInfo; status: Status; setStatus: (s: Status) => void; onSettings?: () => void; /** "Quit Peeka": opens Peeka's quit confirmation (ADR-0062; owner decision 2026-10-17: the second route after the menu). */ onQuit?: () => void }) {
+export function StatusCard({ monitor, status, setStatus, onQuit }: { monitor: MonitorInfo; status: Status; setStatus: (s: Status) => void; /** "Quit Peeka": opens Peeka's quit confirmation (ADR-0062; owner decision 2026-10-17: the second route after the menu). */ onQuit?: () => void }) {
   const denied = monitor.radios === "denied"; // if access was denied the button opens the Windows settings page
   const radio = (kind: "wifi" | "bluetooth", r: Radio) => {
     const page = () => bridge.call("open_windows_settings", { uri: kind === "wifi" ? "ms-settings:network-wifi" : "ms-settings:bluetooth" });
@@ -88,12 +88,11 @@ export function StatusCard({ monitor, status, setStatus, onSettings, onQuit }: {
             <span className="t12 l3">{battery.charging ? "Charging" : battery.remaining ?? ""}</span>
           </div>
         )}
-        <div className="row"><Mic /><span className="text">Microphone</span><span className="t12 l3">{privacy.mic.length ? `In use by ${privacy.mic.join(", ")}` : "Not in use"}</span></div>
-        <div className="row"><Camera /><span className="text">Camera</span><span className="t12 l3">{privacy.camera.length ? `In use by ${privacy.camera.join(", ")}` : "Not in use"}</span></div>
+        <div className="row"><Mic /><span className="text">Microphone</span><span className="t12 l3">{privacy.mic.length ? "In use" : "Not in use"}</span></div>
+        <div className="row"><Camera /><span className="text">Camera</span><span className="t12 l3">{privacy.camera.length ? "In use" : "Not in use"}</span></div>
       </div>
       <AssistantSection />
       <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "4px 12px" }}>
-        {onSettings && <button className="smallLink" style={{ flexBasis: "100%", justifyContent: "flex-start" }} onClick={onSettings}><Settings />Peeka settings</button>}
         <button className="smallLink" onClick={() => bridge.call("open_windows_settings", { uri: "ms-settings:quiethours" })}>Windows Focus settings<ArrowUpRight /></button>
         <button className="smallLink" onClick={() => bridge.call("open_windows_settings", { uri: "ms-settings:" })}>Windows settings<ArrowUpRight /></button>
       </div>

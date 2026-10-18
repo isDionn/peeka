@@ -58,7 +58,7 @@ describe("Claude Code bridge: Install / Remove", () => {
     fireEvent.click(btn("Install"));
     await settle();
     expect(screen.getByText("Didn't work. See the notification for why")).toBeTruthy();
-    expect(screen.getByText("Install")).toBeTruthy(); // status unchanged
+    expect(btn("Install")).toBeTruthy(); // status unchanged
   });
   it("Install is disabled while the demo setting is on", async () => {
     fakeBridge.setBridge({ installed: false, healthy: false, lastEventAgoS: null });
@@ -67,5 +67,27 @@ describe("Claude Code bridge: Install / Remove", () => {
     await screen.findByText("Claude Code bridge");
     await settle();
     expect((btn("Install") as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe("Other coding agents: one row each", () => {
+  it("lists only agents present on this PC, says which file Install changes, and installs/removes one agent on a click", async () => {
+    render(<PluginExtras />);
+    await screen.findByText("Codex CLI bridge");
+    expect(screen.getByText("Gemini CLI bridge")).toBeTruthy();
+    expect(screen.queryByText("Cursor bridge")).toBeNull(); // not on this PC: no row
+    expect(screen.getByText("Not installed · Install adds Peeka's hook to ~\\.codex\\hooks.json (backup kept)")).toBeTruthy();
+    expect(calls("agent_bridge_install")).toBe(0);
+    const b = btn("Install Codex CLI bridge");
+    const w = b.getAttribute("style");
+    fireEvent.click(b);
+    await settle();
+    expect(fakeBridge.log.filter((l) => l.cmd === "agent_bridge_install").map((l) => l.args)).toEqual([{ agent: "codex" }]);
+    expect(btn("Remove Codex CLI bridge").getAttribute("style")).toBe(w);
+    expect(btn("Install Gemini CLI bridge")).toBeTruthy(); // the other row is untouched
+    fireEvent.click(btn("Remove Codex CLI bridge"));
+    await settle();
+    expect(calls("agent_bridge_remove")).toBe(1);
+    expect(btn("Install Codex CLI bridge")).toBeTruthy();
   });
 });

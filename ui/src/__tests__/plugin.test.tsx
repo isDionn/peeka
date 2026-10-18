@@ -57,6 +57,25 @@ describe("approval risk", () => {
     render(<ApprovalCard a={APPROVAL_LOW} />);
     expect(screen.getByText("Always allow")).toBeTruthy();
   });
+  it("'Always allow' shows its exact rule and answers 'always' from the card; same button class as Deny", () => {
+    vi.useFakeTimers();
+    render(<ApprovalCard a={APPROVAL_LOW} />);
+    advance(600);
+    expect(screen.getByText("Always allow: Bash(npm run test:*)")).toBeTruthy();
+    const always = screen.getByRole("button", { name: "Always allow" });
+    expect(always.className).toBe(screen.getByRole("button", { name: "Deny" }).className.replace(" destructive", ""));
+    fireEvent.click(always);
+    expect(fakeBridge.log.filter((l) => l.cmd === "approval_answer").at(-1)?.args).toMatchObject({ id: APPROVAL_LOW.id, decision: "always", surface: "card" });
+  });
+  it("locked or presenting: no command, no rule text, no 'Always'; Allow / Deny stay", () => {
+    const { container } = render(<ApprovalCard a={APPROVAL_LOW} generic />);
+    expect(container.textContent).not.toContain("npm run test");
+    expect(container.querySelector(".code")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Always allow" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Allow" }) && screen.getByRole("button", { name: "Deny" })).toBeTruthy();
+    const bump = render(<ApprovalBump a={APPROVAL_LOW} generic onDetail={() => undefined} />);
+    expect(bump.container.querySelector(".codeRow")).toBeNull();
+  });
   it("with an unknown risk the card behaves like high risk", () => {
     render(<ApprovalCard a={{ ...APPROVAL_LOW, risk: undefined }} />);
     expect(screen.queryByText("Always allow")).toBeNull();

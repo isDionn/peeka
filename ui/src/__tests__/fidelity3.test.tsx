@@ -33,14 +33,15 @@ describe("status card (o)", () => {
     render(<StatusCard monitor={monitor} status={status} setStatus={() => undefined} />);
     await settle();
   };
-  it("Microphone and Camera row: 'not in use' when idle, the app name when in use", async () => {
+  it("Microphone and Camera row: 'not in use' when idle, 'in use' without app names (owner: privacy)", async () => {
     await card();
     expect(screen.getByText("Microphone").parentElement!.textContent).toContain("Not in use");
     expect(screen.getByText("Camera").parentElement!.textContent).toContain("Not in use");
     act(() => fakeBridge.setPrivacy({ mic: ["Compass"], camera: ["Chrome"] }));
     await settle();
-    expect(screen.getByText("Microphone").parentElement!.textContent).toContain("In use by Compass");
-    expect(screen.getByText("Camera").parentElement!.textContent).toContain("In use by Chrome");
+    expect(screen.getByText("Microphone").parentElement!.textContent).toContain("In use");
+    expect(screen.getByText("Camera").parentElement!.textContent).toContain("In use");
+    expect(document.body.textContent).not.toContain("Chrome"); // no app name anywhere in the card
   });
   it("no network row while online, shown when there is a problem; first focus on the Wi-Fi tile", async () => {
     await card();
@@ -123,7 +124,7 @@ describe("Start panel (w2)", () => {
 });
 
 describe("menus (p1, sr)", () => {
-  const menu = (m: Parameters<typeof ContextMenu>[0]["menu"]) => render(<ContextMenu menu={m} pins={[]} windows={[{ hwnd: 7, appId: "discord", name: "Discord", icon: "", title: "General", active: true, monitor: "m1" }]} onClose={() => undefined} onPins={() => undefined} onSettings={() => undefined} />);
+  const menu = (m: Parameters<typeof ContextMenu>[0]["menu"]) => render(<ContextMenu menu={m} pins={[]} windows={[{ hwnd: 7, appId: "discord", name: "Discord", icon: "", title: "General", active: true, monitor: "m1" }]} onClose={() => undefined} onPins={() => undefined} />);
   it("app menu: Close window and Quit app are separate", async () => {
     menu({ kind: "app", appId: "discord", x: 100 });
     const names = screen.getAllByRole("menuitem").map((b) => b.textContent);
@@ -136,7 +137,7 @@ describe("menus (p1, sr)", () => {
   });
   it("strip menu in the mockup's order; 'Hide island for now' shows its shortcut, hides on click, and brings it back when reopened", async () => {
     menu({ kind: "strip", x: 10 });
-    expect(screen.getAllByRole("menuitem").map((b) => b.textContent)).toEqual(["Peeka settings", "Restore taskbar", "Hide island for nowCtrl+Shift+A", "Lock Peeka", "Quit"]);
+    expect(screen.getAllByRole("menuitem").map((b) => b.textContent)).toEqual(["Restore taskbar", "Hide island for nowCtrl+Shift+A", "Lock Peeka", "Quit"]);
     fireEvent.click(screen.getByRole("menuitem", { name: /Hide island for now/ }));
     await settle();
     expect(flog("island_hide")[0].args).toEqual({ on: true });

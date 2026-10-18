@@ -26,6 +26,7 @@ pub const COMMANDS: &[&str] = &[
     "power",
     "restore_taskbar",
     "quit",
+    "demo_restart",
     "get_settings",
     "set_settings",
     "report_hit_rects",
@@ -112,7 +113,12 @@ pub const COMMANDS: &[&str] = &[
     "claude_bridge_state",
     "claude_bridge_install",
     "claude_bridge_remove",
+    "agent_bridges",
+    "agent_bridge_install",
+    "agent_bridge_remove",
     "cc_focus_terminal",
+    "cc_diff",
+    "cc_diff_open",
     "permission_history",
     "first_connect_get",
     "first_connect_ack",
@@ -171,6 +177,7 @@ pub const EVENTS: &[&str] = &[
     "assistant_offline",
     "meeting_changed",
     "cc_event",
+    "cc_edit",
     "notch://outside_press",
 ];
 

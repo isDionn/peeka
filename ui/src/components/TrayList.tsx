@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { bridge, type TrayIconX } from "../bridge";
-import { initial } from "../lib/plugin";
+import { AppWindow } from "lucide-react";
 import { AppIcon, SAFE_ICON } from "./common";
 import "../fidelity-settings.css";
 
@@ -9,11 +9,16 @@ const loadTray = (monitor: string): Promise<TrayIconX[]> => bridge.call("tray_ic
 const open = (t: TrayIconX, then?: () => void) => bridge.call("tray_open", { id: t.id }).then(then).catch(() => undefined);
 const label = (t: TrayIconX) => t.name + (t.badge ? `, ${t.badge} new` : "");
 
-/** Strip icon 17, hidden-icons grid (list role) 18: the notch.css app icon scale. */
-function TrayIconView({ t, size }: { t: TrayIconX; size: number }) {
+/** The last list, so a reopened panel paints its cells at once instead of growing in after the call. */
+let last: TrayIconX[] | null = null;
+/** Rust's icons are the exe's own PNG; an SVG (preview glyphs) stays a monochrome template icon. */
+const PNG = /^data:image\/png[;,]/;
+
+/** Strip icon 17, hidden-icons grid (list role) 18: the notch.css app icon scale. No icon: one neutral glyph, same box. */
+function TrayIconView({ t, size, color }: { t: TrayIconX; size: number; color?: string | null }) {
   return (
     <>
-      {SAFE_ICON.test(t.icon) ? <AppIcon src={t.icon} color={t.colorIcon} size={size} /> : <b aria-hidden="true">{initial(t.name)}</b>}
+      {SAFE_ICON.test(t.icon) ? <AppIcon src={t.icon} color={color} size={size} /> : <AppWindow aria-hidden="true" style={{ width: size, height: size }} />}
       {!!t.badge && <span className="badge" aria-hidden="true">{t.badge > 99 ? "99+" : t.badge}</span>}
     </>
   );
@@ -25,10 +30,10 @@ function TrayIconView({ t, size }: { t: TrayIconX; size: number }) {
  * Panel width should be ~188 px (Shell `<Panel width>`); at 300 px the grid sits to the left.
  */
 export function TrayList({ monitor, onClose }: { monitor: string; onClose: () => void }) {
-  const [list, setList] = useState<TrayIconX[] | null>(null);
+  const [list, setList] = useState<TrayIconX[] | null>(last);
   useEffect(() => {
     let live = true;
-    loadTray(monitor).then((l) => { if (live) setList(l); }).catch(() => { if (live) setList([]); });
+    loadTray(monitor).then((l) => { last = l; if (live) setList(l); }).catch(() => { if (live) setList([]); });
     return () => { live = false; };
   }, [monitor]);
   const grid = useRef<HTMLDivElement>(null);
@@ -41,7 +46,7 @@ export function TrayList({ monitor, onClose }: { monitor: string; onClose: () =>
       {list && list.length > 0 && (
         <div className="trayIconGrid" role="group" aria-label="Hidden icons" ref={grid}>
           {list.map((t, i) => (
-            <button key={t.id} title={t.name} aria-label={label(t)} data-autofocus={i === 0 ? "" : undefined} onClick={() => open(t, onClose)}><TrayIconView t={t} size={18} /></button>
+            <button key={t.id} title={t.name} aria-label={label(t)} data-autofocus={i === 0 ? "" : undefined} onClick={() => open(t, onClose)}><TrayIconView t={t} size={18} color={PNG.test(t.icon) ? t.icon : t.colorIcon} /></button>
           ))}
         </div>
       )}
@@ -62,7 +67,7 @@ export function PromotedTray({ monitor }: { monitor: string }) {
   if (!list.length) return null;
   return (
     <span className="favTray" role="group" aria-label="Pinned tray icons">
-      {list.map((t) => <button key={t.id} className="key" title={t.name} aria-label={label(t)} onClick={() => open(t)}><TrayIconView t={t} size={17} /></button>)}
+      {list.map((t) => <button key={t.id} className="key" title={t.name} aria-label={label(t)} onClick={() => open(t)}><TrayIconView t={t} size={17} color={t.colorIcon} /></button>)}
     </span>
   );
 }

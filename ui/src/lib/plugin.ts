@@ -37,12 +37,13 @@ export function prefixed(p: Pick<PluginRef, "name">, title: unknown): string {
 export const riskOf = (risk: unknown): "low" | "high" => (risk === "low" ? "low" : "high");
 
 /** Peeka's mascot state table (§0i); a plugin can't send other names. The names are plugin wire values. */
-export const MASCOT_STATES = new Set(["ready", "listening", "thinking", "speaking", "approval", "serious", "error", "done", "music", "drowsy", "sleeping", "quiet", "tired", "attention", "searching", "question", "ratelimit", "dizzy"]);   // the last four are Peeka's own states; Rust's plugin set is items.rs MASCOT_STATES
+export const MASCOT_STATES = new Set(["ready", "listening", "thinking", "speaking", "approval", "serious", "error", "done", "music", "drowsy", "sleeping", "quiet", "tired", "attention", "searching", "question", "ratelimit", "dizzy", "happy", "surprised"]);   // "ratelimit".."dizzy" are Peeka's own states; Rust's plugin set is items.rs MASCOT_STATES
 /** Plugin state name -> mascot mood (src/mascot/moods.ts). */
 export const STATE_MOOD: Record<string, Mood> = {
   ready: "idle", listening: "listening", thinking: "thinking", speaking: "speaking", approval: "approval", serious: "serious", error: "error",
   done: "done", music: "music", drowsy: "drowsy", sleeping: "sleeping", quiet: "quiet", tired: "tired", attention: "attention",
   searching: "searching", question: "question", ratelimit: "ratelimit", dizzy: "dizzy",
+  happy: "done", surprised: "attention", // plugin states without their own pose yet
 };
 export const moodOf = (state: string): Mood => STATE_MOOD[state] ?? "idle";
 /** Mascot only for the main assistant and only in a table state; otherwise null (Peeka's initial tile is drawn). */

@@ -130,13 +130,13 @@ export const ApprovalShort = () => <span className="ms"><span className="pulse" 
  * Approval peek. Low risk: "Allow" + "Details"; high risk (or unknown risk), on the strip dropping in over full screen,
  * and for questions that need a choice or text: only "Details" (the answer goes in the card).
  */
-export function ApprovalBump({ a, onDetail, onlyDetail, dropMs }: { a: ApprovalItem; onDetail: () => void; onlyDetail?: boolean; dropMs?: number | null }) {
+export function ApprovalBump({ a, onDetail, onlyDetail, dropMs, generic = false }: { a: ApprovalItem; onDetail: () => void; onlyDetail?: boolean; dropMs?: number | null; generic?: boolean }) {
   const high = riskOf(a.risk) === "high";
   const simple = !a.choices?.length && !a.freeText;
   const direct = !high && !onlyDetail && simple && a.options.includes("allow");
   return (
     <div className="peekBar" style={dropMs ? ({ "--dur": dropMs + "ms", position: "relative" } as React.CSSProperties) : undefined}>
-      {codeOf(a) && <span className="codeRow" title={codeOf(a)}>{codeOf(a)}</span>}
+      {!generic && codeOf(a) && <span className="codeRow" title={codeOf(a)}>{codeOf(a)}</span>}
       {direct && <GuardBtn className="btn kk primary" onClick={() => answer(a, "allow", {}, "protrusion")}>Allow</GuardBtn>}
       <button className={"btn kk " + (direct ? "gray" : "primary")} onClick={onDetail}>Details</button>
       {dropMs ? <span className="timeLine" /> : null}
@@ -148,11 +148,12 @@ function answer(a: ApprovalItem, decision: "allow" | "always" | "deny" | "choice
   bridge.call("approval_answer", { pluginId: a.plugin.id, id: a.id, decision, surface, ...extra }).catch(() => undefined);
 }
 
-/** Approval card. On high risk "Deny" has default focus, "Allow" needs a 1.2 s press and hold, and there's no "Always". */
-export function ApprovalCard({ a }: { a: ApprovalItem }) {
+/** Approval card. On high risk "Deny" has default focus, "Allow" needs a 1.2 s press and hold, and there's no "Always".
+ *  `generic` (locked or presenting): no command, folder or rule text, and no "Always" (a rule nobody can read is not offered). */
+export function ApprovalCard({ a, generic = false }: { a: ApprovalItem; generic?: boolean }) {
   const high = riskOf(a.risk) === "high";
   const opts = new Set(a.options);
-  if (high) opts.delete("always"); // Peeka removes it on high risk
+  if (high || generic) opts.delete("always"); // Peeka removes it on high risk
   const choices = (a.choices ?? []).slice(0, 6);
   const rec = choices.find((c) => (c as ChoiceExt).recommended === true)?.id ?? null; // the recommended choice is preselected in the card (mockup c3)
   const [choice, setChoice] = useState<string | null>(rec);
@@ -169,7 +170,7 @@ export function ApprovalCard({ a }: { a: ApprovalItem }) {
     setChoice(choices[n].id);
     (e.currentTarget.parentElement?.children[n] as HTMLElement | undefined)?.focus();
   };
-  const code = codeOf(a);
+  const code = generic ? null : codeOf(a);
   const left = useDeadline(a.id, a.expiresS);
   // N = Deny, Y = Allow: clicks the button, so the same guard (600 ms + pointer rule) applies. On high risk Y only focuses the hold button.
   const card = useRef<HTMLDivElement>(null);
@@ -230,7 +231,7 @@ export function ApprovalCard({ a }: { a: ApprovalItem }) {
         ) : (
           <>
             {opts.has("allow") && <GuardBtn className="btn primary" data-autofocus data-shortcut="allow" onClick={() => answer(a, "allow")}>Allow</GuardBtn>}
-            {opts.has("always") && <GuardBtn className="btn glass" title={plain(a.alwaysLabel, 80)} onClick={() => answer(a, "always")}>Always allow</GuardBtn>}
+            {opts.has("always") && <GuardBtn className="btn glass" title={"Always allow: " + plain(a.alwaysLabel, 80)} onClick={() => answer(a, "always")}>Always allow</GuardBtn>}
             {opts.has("deny") && <GuardBtn className="btn glass destructive" data-shortcut="deny" onClick={() => answer(a, "deny")}><X />Deny</GuardBtn>}
           </>
         )}
@@ -239,7 +240,7 @@ export function ApprovalCard({ a }: { a: ApprovalItem }) {
         {a.kind === "command" || a.kind === "file" || a.kind === "plan" ? open : null}
       </div>
       {choices.length > 0 && box}{/* the text box opens below the buttons: the buttons stay put (R1-3) */}
-      {!high && opts.has("always") && a.alwaysLabel && <div className="t12 l3 b4">Always: {plain(a.alwaysLabel, 80)}</div>}
+      {opts.has("always") && a.alwaysLabel && <div className="t12 l3 b4">Always allow: {plain(a.alwaysLabel, 80)}</div>}
     </div>
   );
 }

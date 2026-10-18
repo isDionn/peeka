@@ -6,11 +6,12 @@
  * - Battery: "battery" at 20% (alert tier), "batteryCrit" at 10% (above live jobs too); each tier once (lib/notes.ts).
  * - Alert (critical battery rank, doc item 4): already filtered by Rust's attention budget; doesn't displace a live job or meeting but sits above music and timer.
  * - Job done keeps today's relation (before music): a short 3 s strip.
+ * - Edit: Claude Code's last file edit from Peeka's own hook (`cc_edit`); it is the hook's live job, so it ranks with "live" (pushed after it).
  * - Download: fed by Rust `download_done` (Downloads folder, name and size only); a short (8 s) peek, so it goes ahead of playing music (the owner's "download last" order was written before there was a source).
  */
-export type ActivityKind = "approval" | "clip" | "batteryCrit" | "live" | "meeting" | "net" | "alert" | "burst" | "rateLimit" | "battery" | "cpu" | "timerEnd" | "done" | "summary" | "musicStopped" | "download" | "music" | "timer" | "other";
+export type ActivityKind = "approval" | "clip" | "batteryCrit" | "live" | "edit" | "meeting" | "net" | "alert" | "burst" | "rateLimit" | "battery" | "cpu" | "timerEnd" | "done" | "summary" | "musicStopped" | "download" | "music" | "timer" | "other";
 
-export const RANK: Readonly<Record<ActivityKind, number>> = { approval: 0, clip: 1, batteryCrit: 2, live: 3, meeting: 4, net: 5, alert: 6, burst: 7, rateLimit: 8, battery: 9, cpu: 10, timerEnd: 11, done: 12, summary: 13, musicStopped: 14, download: 15, music: 16, timer: 17, other: 18 };
+export const RANK: Readonly<Record<ActivityKind, number>> = { approval: 0, clip: 1, batteryCrit: 2, live: 3, edit: 3, meeting: 4, net: 5, alert: 6, burst: 7, rateLimit: 8, battery: 9, cpu: 10, timerEnd: 11, done: 12, summary: 13, musicStopped: 14, download: 15, music: 16, timer: 17, other: 18 };
 
 /** In its last this-many seconds the timer goes ahead of music. */
 export const TIMER_END_S = 60;

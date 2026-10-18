@@ -1,8 +1,8 @@
 //! The read-only tray list (way 2b): **PENDING Wave 0 test 4** (`probe tray`). It is the
 //! fallback for when the real hidden-icons panel cannot be opened under the strip and the tray mirror (2a) did not
 //! hold; if the test shows either works, this list goes. Source: `HKCU\Control Panel\NotifyIconSettings` (Windows 11
-//! 22H2+), one subkey per icon Windows has seen, with `ExecutablePath`, `InitialTooltip`, `IsPromoted`. No live
-//! state: an icon of an app that is not running is listed too, there is no badge, and a click cannot reach the
+//! 22H2+), one subkey per icon Windows has seen, with `ExecutablePath`, `InitialTooltip`, `IsPromoted`. The key keeps
+//! every app that ever showed an icon, so only apps running now are listed. No live state: there is no badge, and a click cannot reach the
 //! app's own tray menu, so clicking brings the app's window forward or starts it.
 
 use serde::Serialize;
@@ -63,13 +63,13 @@ fn resolve(raw: &str, env: &impl Fn(&str) -> Option<String>) -> Option<String> {
 }
 
 /// The list: resolved, Explorer's own icons (volume, network, battery) dropped, one per exe (promoted wins),
-/// promoted first, then by name. `exists` filters exes that are gone.
-pub fn parse(raw: Vec<RawIcon>, env: impl Fn(&str) -> Option<String>, exists: impl Fn(&str) -> bool) -> Vec<TrayIcon> {
+/// promoted first, then by name. `running` keeps only exes that have a process now.
+pub fn parse(raw: Vec<RawIcon>, env: impl Fn(&str) -> Option<String>, running: impl Fn(&str) -> bool) -> Vec<TrayIcon> {
     let mut out: Vec<TrayIcon> = vec![];
     for r in raw {
         let Some(exe) = r.exe.as_deref().and_then(|e| resolve(e, &env)) else { continue };
         let file = crate::apps::exe_name(&exe);
-        if file == "explorer.exe" || !exists(&exe) {
+        if file == "explorer.exe" || !running(&exe) {
             continue;
         }
         let id = format!("exe:{}", exe.to_lowercase());
@@ -86,6 +86,13 @@ pub fn parse(raw: Vec<RawIcon>, env: impl Fn(&str) -> Option<String>, exists: im
     }
     out.sort_by(|a, b| b.promoted.cmp(&a.promoted).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
     out
+}
+
+/// Is `exe` running? `procs` = every process as (exe file name, full path or "" when it cannot be opened, e.g. an
+/// elevated one); a known path must match exactly, an unknown one falls back to the file name.
+pub fn running(exe: &str, procs: &[(String, String)]) -> bool {
+    let name = crate::apps::exe_name(exe);
+    procs.iter().any(|(n, p)| if p.is_empty() { n.eq_ignore_ascii_case(&name) } else { p.eq_ignore_ascii_case(exe) })
 }
 
 /// What a click on a listed icon does.
@@ -153,6 +160,24 @@ mod tests {
         assert_eq!(names, [("voicemod", true), ("Galaxy Buds2 (0D48)", false), ("nvcontainer", false)]);
         assert_eq!(list[2].exe, r"C:\Program Files\NVIDIA Corporation\NvContainer\nvcontainer.exe");
         assert_eq!(list[0].id, r"exe:c:\users\x\appdata\local\voicemod\voicemod.exe");
+    }
+
+    #[test]
+    fn only_running_exes_are_listed() {
+        let procs = vec![
+            ("Discord.exe".to_string(), r"C:\Users\x\Discord\Discord.exe".to_string()),
+            ("AvAgent.exe".to_string(), String::new()),
+        ];
+        assert!(running(r"c:\users\x\discord\discord.exe", &procs));
+        assert!(!running(r"C:\old\Discord.exe", &procs), "same name, another path: another app");
+        assert!(running(r"C:\Program Files\Av\avagent.exe", &procs), "path unreadable (elevated): matched by name");
+        assert!(!running(r"C:\x\steam.exe", &procs));
+        let list = parse(
+            vec![raw("1", r"C:\Users\x\Discord\Discord.exe", None, None), raw("2", r"C:\x\steam.exe", None, None)],
+            env,
+            |p| running(p, &procs),
+        );
+        assert_eq!(list.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), ["discord"]);
     }
 
     #[test]

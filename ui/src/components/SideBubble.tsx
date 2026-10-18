@@ -1,11 +1,11 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
-import { Calendar, Bell, BatteryLow, Check, Clipboard, Download, Cpu, Gauge, Headphones, Music, ShieldCheck, Terminal, Timer, WifiOff } from "lucide-react";
-import type { Alert, Media, CpuHigh, DownloadDone, MusicStopped, Status, TimerState } from "../bridge";
+import { Calendar, Bell, FilePen, BatteryLow, Check, Clipboard, Download, Cpu, Gauge, Headphones, Music, ShieldCheck, Terminal, Timer, WifiOff } from "lucide-react";
+import type { Alert, CcEdit, Media, CpuHigh, DownloadDone, MusicStopped, Status, TimerState } from "../bridge";
 import type { ProtrusionItem } from "../plugin-api";
 import { timerLeft, useSecond } from "../hooks";
 import { AlertIcon, safeIcon } from "../lib/alertIcon";
 import { fmtTime, trackTitle } from "../lib/media";
-import { burstLabel, type Burst } from "../lib/notes";
+import { burstLabel, editLabel, type Burst } from "../lib/notes";
 import { REMINDER_PLUGIN } from "../lib/meetingReminder";
 import { flat } from "../lib/plugin";
 import type { ActivityKind } from "../lib/priority";
@@ -17,7 +17,7 @@ export const LOCK_MUSIC = "Music playing", LOCK_ALERT = "Alert";
 
 /** One row of the bubble and the "+N" list. No mascot here ever (one-mascot rule): the face is only an icon, cover or ring. */
 export interface BubbleItem { kind: ActivityKind; /** Inside of the 30 px circle. */ face: ReactNode; /** Small icon in the list. */ glyph: ReactNode; label: string; sub?: ReactNode }
-export interface BubbleCtx { away?: string | null; net?: "lost" | "back" | null; media: Media | null; timer: TimerState | null; alert: Alert | null; prot: ProtrusionItem | null; done: { title: string } | null; locked: boolean; battery?: Status["battery"]; burst?: Burst | null; stopped?: MusicStopped | null; dl?: DownloadDone | null; cpu?: CpuHigh | null }
+export interface BubbleCtx { away?: string | null; net?: "lost" | "back" | null; media: Media | null; timer: TimerState | null; alert: Alert | null; prot: ProtrusionItem | null; done: { title: string } | null; locked: boolean; battery?: Status["battery"]; burst?: Burst | null; stopped?: MusicStopped | null; dl?: DownloadDone | null; cpu?: CpuHigh | null; edit?: CcEdit | null }
 
 const R = 13, C = 2 * Math.PI * R;
 /** Thin ring: `y` is the 0..1 filled ratio; `spin` is indeterminate progress (a spinning arc). */
@@ -67,6 +67,7 @@ export function bubbleItem(kind: ActivityKind, c: BubbleCtx): BubbleItem {
     case "burst": return plain(<Bell />, burstLabel(c.burst?.n ?? 0, c.burst?.apps ?? [], locked));
     case "musicStopped": return plain(<Headphones />, locked || !c.stopped ? "Music paused" : `Music paused — ${flat(c.stopped.name, 28)} disconnected`);
     case "cpu": return plain(<Cpu />, locked || !c.cpu?.app ? "CPU is very busy" : `${flat(c.cpu.app, 28)} is using a lot of CPU`);
+    case "edit": return plain(<FilePen />, c.edit ? editLabel(c.edit, locked) : "Claude Code is editing");
     case "rateLimit": return plain(<Gauge />, "Usage limit reached");
     case "net": return plain(<WifiOff />, c.net === "back" ? "Back online" : "Connection lost");
     case "clip": return plain(<Clipboard />, "Copied to clipboard");

@@ -181,6 +181,7 @@ pub fn run() {
             crate::commands::power,
             crate::commands::restore_taskbar,
             crate::commands::quit,
+            crate::commands::demo_restart,
             crate::commands::get_settings,
             crate::commands::set_settings,
             crate::commands::report_hit_rects,
@@ -250,7 +251,12 @@ pub fn run() {
             crate::commands::claude_bridge_state,
             crate::commands::claude_bridge_install,
             crate::commands::claude_bridge_remove,
+            crate::commands::agent_bridges,
+            crate::commands::agent_bridge_install,
+            crate::commands::agent_bridge_remove,
             crate::commands::cc_focus_terminal,
+            crate::commands::cc_diff,
+            crate::commands::cc_diff_open,
             crate::commands::open_task_manager,
             crate::commands::focus_strip,
             crate::commands::focus_island,
@@ -284,7 +290,7 @@ fn setup(app: &AppHandle) -> Result<(), String> {
     // Here, not in main(): the single-instance plugin has already sent a second launch away, so this can never
     // clean up the AppBars of a Notch that is still running.
     let args: Vec<String> = std::env::args().collect();
-    let is_demo = args.iter().any(|a| a == "--demo");
+    let is_demo = args.iter().any(|a| a == supervise::DEMO_ARG);
     DEMO.store(is_demo, Ordering::SeqCst);
     if !is_demo {
         notch_win::taskbar::restore_left_behind();
@@ -446,6 +452,13 @@ fn build(app: &AppHandle, label: &str, url: &str) -> Option<WebviewWindow> {
         notch_win::style::tool_window(hwnd.0 as isize); // not on the taskbar, not in Alt+Tab (skip_taskbar alone is only the taskbar)
         notch_win::style::strip_no_activate(hwnd.0 as isize); // a press on a strip or the island leaves the user's app in front
     }
+    // A file dragged over any strip or the island opens the shelf; the strip is most of what the user sees.
+    let handle = app.clone();
+    w.on_window_event(move |e| {
+        if let tauri::WindowEvent::DragDrop(d) = e {
+            crate::extras::on_drop(&handle, d);
+        }
+    });
     Some(w)
 }
 

@@ -705,7 +705,7 @@ impl ClipHistory {
             _ if locked => Err(ClipErr::Locked),
             Kind::Text { .. } => Err(ClipErr::Kind),
             Kind::Image { file, .. } => {
-                let copy = self.copy_image(file, tmp, &format!("goruntu-{}.png", &id[..id.len().min(8)]))?;
+                let copy = self.copy_image(file, tmp, &format!("image-{}.png", &id[..id.len().min(8)]))?;
                 Ok(sized(copy).into_iter().collect())
             }
             Kind::Files { paths } => {

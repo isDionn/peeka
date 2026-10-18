@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Activity, AppWindow, CircleX, Eye, EyeOff, Lock, PanelBottom, Pin, PinOff, Power, Settings, X } from "lucide-react";
+import { Activity, AppWindow, CircleX, Eye, EyeOff, Lock, PanelBottom, Pin, PinOff, Power, X } from "lucide-react";
 import { bridge, type PinnedApp, type WindowInfo } from "../bridge";
 import { pickWindow } from "./Strip";
 import { mergePins } from "../lib/mergePins";
@@ -10,10 +10,10 @@ import { useIslandHidden } from "../hooks.fidelity";
 import type { MenuState } from "./Strip";
 
 /** Right-click menu. Arrow keys move, Esc closes and focus returns to the opener. App menu: Pin, New window, Close window, Quit app.
- * Strip menu (mockup sr): Peeka settings, Restore taskbar, Hide island for now, Lock Peeka; opens under the center chip. "Quit" opens the confirmation (`onQuit`). */
-export function ContextMenu({ menu, pins, windows, locked, onClose, onPins, onSettings, onQuit }: {
+ * Strip menu (mockup sr): Restore or hide taskbar, Hide island for now, Lock Peeka; opens under the center chip. "Quit" opens the confirmation (`onQuit`). */
+export function ContextMenu({ menu, pins, windows, locked, onClose, onPins, onQuit }: {
   menu: MenuState; pins: PinnedApp[]; windows: WindowInfo[]; /** No "Lock Peeka" item when Peeka is already locked. */ locked?: boolean; onClose: () => void;
-  onPins: (appIds: string[]) => void; onSettings: () => void; /** "Quit": opens Peeka's own confirmation (ADR-0062; "Quit Peeka" in the Status panel is the second route, owner decision 2026-10-17). */ onQuit?: () => void;
+  onPins: (appIds: string[]) => void; /** "Quit": opens Peeka's own confirmation (ADR-0062; "Quit Peeka" in the Status panel is the second route, owner decision 2026-10-17). */ onQuit?: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [armed, setArmed] = useState(false); // "Quit app" can lose unsaved work: the first click asks for confirmation (O10)
@@ -36,8 +36,9 @@ export function ContextMenu({ menu, pins, windows, locked, onClose, onPins, onSe
     return (
       <div ref={ref} className="context open" role="menu" aria-label="Peeka menu" style={{ left: menu.x }} data-hit onKeyDown={arrows}>
         <div className="title"><AppWindow />Peeka</div>
-        <button role="menuitem" data-autofocus onClick={done(onSettings)}><Settings />Peeka settings</button>
-        <button role="menuitem" onClick={done(() => bridge.call("restore_taskbar"))}><PanelBottom />Restore taskbar</button>
+        {settings?.taskbarHide === "off"
+          ? <button role="menuitem" data-autofocus onClick={done(() => { bridge.call("taskbar_set_mode", { mode: "full" }).catch(() => undefined); })}><PanelBottom />Hide taskbar</button>
+          : <button role="menuitem" data-autofocus onClick={done(() => bridge.call("restore_taskbar"))}><PanelBottom />Restore taskbar</button>}
         <button role="menuitem" onClick={done(() => { bridge.call("island_hide", { on: !hidden }).catch(() => undefined); })}>
           {hidden ? <Eye /> : <EyeOff />}{hidden ? "Show island" : "Hide island for now"}<span className="key-hint" style={{ marginLeft: "auto" }}>{hideKeys}</span>
         </button>

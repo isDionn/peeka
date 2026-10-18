@@ -44,3 +44,17 @@ describe("approval_badge (F)", () => {
     expect(a.container.querySelector(".approvalBadge")).toBeNull();
   });
 });
+
+describe("apps from every monitor (Windows' 'All taskbars')", () => {
+  it("each strip lists every monitor's apps once; an app with windows on two screens is one grouped tab", async () => {
+    const all = await fakeBridge.call("list_windows", { monitor: "m1" });
+    fakeBridge.setWindows([...all, { ...all.find((w) => w.appId === "chrome")!, hwnd: 99, active: false, monitor: "m2" }]);
+    for (const m of ["m1", "m2"]) {
+      const a = render(<Shell monitor={m} />);
+      await settle();
+      expect(a.container.querySelectorAll('[data-app="notepad"]')).toHaveLength(1); // notepad sits on m2
+      expect(a.container.querySelectorAll('[data-app="chrome"]')).toHaveLength(1); // windows on m1 and m2: one tab
+      cleanup();
+    }
+  });
+});

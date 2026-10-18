@@ -300,7 +300,7 @@ fn open_and_shelf_take_images_and_files_and_refuse_passwords_text_and_the_lock()
     let shelf = p.shelf_sources(&img_id, false, &out).unwrap();
     assert_eq!(shelf.len(), 1);
     assert_eq!(shelf[0].1, Some(3));
-    assert!(shelf[0].0.file_name().unwrap().to_string_lossy().starts_with("goruntu-"));
+    assert!(shelf[0].0.file_name().unwrap().to_string_lossy().starts_with("image-"));
 
     // locked / password / text
     for id in [&img_id, &text_id] {

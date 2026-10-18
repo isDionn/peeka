@@ -15,7 +15,7 @@ use notch_core::sources::{disconnected_name, HeadsetDrop};
 use notch_core::timer::Timer;
 use parking_lot::Mutex;
 use serde::Serialize;
-use tauri::{AppHandle, DragDropEvent, Emitter, Manager, WindowEvent};
+use tauri::{AppHandle, DragDropEvent, Emitter, Manager};
 
 use crate::app::Notch;
 use crate::live::now_ms;
@@ -77,15 +77,6 @@ pub fn start(app: &AppHandle) {
     });
 
     input_feed(app.clone());
-
-    if let Some(w) = app.get_webview_window("island") {
-        let handle = app.clone();
-        w.on_window_event(move |e| {
-            if let WindowEvent::DragDrop(d) = e {
-                on_drop(&handle, d);
-            }
-        });
-    }
 }
 
 /// `music_stopped` `{name, app}`: the headset left and the music paused ("Music stopped" + "Resume": the page uses
@@ -205,8 +196,9 @@ pub fn emit_timer(app: &AppHandle) {
     let _ = app.emit("timer_changed", view);
 }
 
-/// Files dragged over the island: `shelf_drag` while over it, onto the shelf when dropped.
-fn on_drop(app: &AppHandle, d: &DragDropEvent) {
+/// Files dragged over a strip or the island (`app::build` wires every one): `shelf_drag` while over it, onto the shelf
+/// when dropped.
+pub fn on_drop(app: &AppHandle, d: &DragDropEvent) {
     match d {
         DragDropEvent::Enter { .. } => {
             let _ = app.emit("shelf_drag", true);

@@ -76,7 +76,9 @@ function Appearance({ settings }: { settings: Settings }) {
       </div>
       <div className="list glass" style={NO_INDENT}>
         <Row title="Windows taskbar" sub={`${mode === "off" ? "Windows taskbar is on" : mode === "auto" ? "Auto-hiding" : "Hidden"}. Emergency shortcut: ${settings.shortcuts.emergency}`}>
-          <button className="btn kk glass" onClick={() => bridge.call("restore_taskbar")}>Restore taskbar</button>
+          {mode === "off"
+            ? <button className="btn kk glass" onClick={() => bridge.call("taskbar_set_mode", { mode: "full" }).catch(() => undefined)}>Hide taskbar</button>
+            : <button className="btn kk glass" onClick={() => bridge.call("restore_taskbar")}>Restore taskbar</button>}
         </Row>
         <Row title="Lock Peeka" sub="Hides Clipboard and plugin cards">
           <button className="btn kk glass" onClick={() => bridge.call("lock_now").catch(() => undefined)}><Lock />Lock</button>
@@ -242,6 +244,7 @@ function About({ settings, onQuit }: { settings: Settings; onQuit?: () => void }
         <Row title="Peeka" sub="A strip and island that replace the Windows taskbar. Assistants connect to it as plugins." />
         <Row title="Updates" sub="Opens the latest release on GitHub. Peeka never checks on its own"><button className="btn kk glass" onClick={() => bridge.call("open_windows_settings", { uri: "https://github.com/isDionn/peeka/releases/latest" }).catch(() => undefined)}>Check for updates</button></Row>
         <Row title="Emergency shortcut" sub="Restores the taskbar"><Kbd keys={settings.shortcuts.emergency} /></Row>
+        <Row title="Demo mode" sub={settings.demo ? "Sample data, nothing is saved. Peeka restarts normally" : "Try Peeka with sample data. Nothing is saved; Peeka restarts"}><button className="btn kk glass" style={{ width: 92 }} onClick={() => bridge.call("demo_restart", { on: !settings.demo }).catch(() => undefined)}>{settings.demo ? "Stop demo" : "Try demo"}</button></Row>
         {onQuit && <Row title="Quit Peeka" sub="The Windows taskbar comes back. You'll be asked to confirm first"><button className="btn kk glass destructive" onClick={onQuit}>Quit</button></Row>}
       </div>
     </>

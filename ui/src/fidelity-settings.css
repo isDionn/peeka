@@ -6,6 +6,8 @@ html .body.trayGrid { padding: 6px; gap: 0; }
 .trayIconGrid button { width: 40px; height: 40px; border-radius: 6px; display: grid; place-items: center; position: relative; color: var(--l1); }
 .trayIconGrid button svg.lucide { width: 16px; height: 16px; }
 .trayIconGrid button .appIcon { width: 16px; height: 16px; }
+/* hidden icons: always the app's own colour icon; its alpha silhouette is just a white square or circle */
+.trayIconGrid .appIcon.mono[style*="--icon-color"] { background: var(--icon-color) center / contain no-repeat; -webkit-mask: none; mask: none; }
 @media (hover: hover) and (pointer: fine) { .trayIconGrid button:hover { background: rgba(255,255,255,.08); } }
 .trayIconGrid .noResults { grid-column: 1 / -1; }
 .badge { position: absolute; top: 1px; right: 1px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px; background: var(--redFill); color: #fff; font: 700 11px/15px var(--font); text-align: center; pointer-events: none; }

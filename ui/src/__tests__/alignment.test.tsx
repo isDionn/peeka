@@ -105,7 +105,7 @@ describe("OS focus and the admin window", () => {
 
   it("in an admin window, when close returns 'denied', the menu suggests Task Manager", async () => {
     const w = { appId: "x", name: "X", icon: "", hwnd: 5, title: "t", active: true, monitor: "m1", elevated: true };
-    render(<ContextMenu menu={{ kind: "app", appId: "x", x: 10 }} pins={[]} windows={[w]} onClose={() => undefined} onPins={() => undefined} onSettings={() => undefined} />);
+    render(<ContextMenu menu={{ kind: "app", appId: "x", x: 10 }} pins={[]} windows={[w]} onClose={() => undefined} onPins={() => undefined} />);
     fireEvent.click(screen.getByRole("menuitem", { name: /Task Manager/ }));
     await settle();
     expect(fakeBridge.log.some((l) => l.cmd === "open_task_manager")).toBe(true);

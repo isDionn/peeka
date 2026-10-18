@@ -156,7 +156,7 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
       </Panel>
       {monitor.primary && (
         <Panel side="right" width={360} label="Status" dataKind="status" open={panel === "status"} onClose={close}>
-          {status && <StatusCard monitor={monitor} status={status} setStatus={setStatus} onSettings={() => setPanel("appearance")} onQuit={() => setPanel("quit")} />}
+          {status && <StatusCard monitor={monitor} status={status} setStatus={setStatus} onQuit={() => setPanel("quit")} />}
         </Panel>
       )}
       {monitor.primary && (
@@ -190,7 +190,7 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
       )}
       {menu && (
         <ContextMenu menu={{ ...menu, x: Math.max(8, Math.min(menu.x, window.innerWidth - 248)) }} pins={pins} windows={windows} locked={lock.locked} onClose={() => setMenu(null)}
-          onPins={reorder} onSettings={() => setPanel("appearance")} onQuit={() => setPanel("quit")} />
+          onPins={reorder} onQuit={() => setPanel("quit")} />
       )}
     </>
   );

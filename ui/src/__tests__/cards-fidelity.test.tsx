@@ -146,14 +146,15 @@ describe("Ctrl+Space box", () => {
 });
 
 describe("Modules (j)", () => {
-  it("11 tabs and a gear; General has three boxes: Compass, Claude Code, System; quota bars, session states, Stop", async () => {
+  it("11 tabs, no gear; General has the Compass and Claude Code boxes, then one tile per module; quota bars, session states, Stop", async () => {
     fakeBridge.setSurfaces(SURFACES_J);
     const { container } = render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
     const tabs = within(screen.getByRole("tablist", { name: "Modules" })).getAllByRole("tab").map((t) => t.getAttribute("aria-label") ?? t.textContent);
     expect(tabs).toEqual(["General", "Music", "Clipboard", "Shelf", "Calendar", "Timer", "System", "Notifications", "Compass", "Compass › Claude Code", "Compass › Team"]);
-    expect(screen.getByRole("button", { name: "Module settings" })).toBeTruthy();
-    expect(container.querySelectorAll(".grid.general3 > .box")).toHaveLength(3);
+    expect(screen.queryByRole("button", { name: "Module settings" })).toBeNull(); // owner: settings live in the strip, not in the card
+    expect(container.querySelectorAll(".grid.general3 > .box")).toHaveLength(2);
+    expect([...container.querySelectorAll(".genTiles .genTile h4")].map((h) => h.textContent)).toEqual(["Music", "Clipboard", "Calendar", "Timer", "Notifications", "System"]);
     expect(container.querySelectorAll(".quota .meter")).toHaveLength(2);
     expect(container.querySelector(".quota .threshold")).toBeTruthy();
     expect(screen.getByText("Resets in 2h 14m")).toBeTruthy();
@@ -172,6 +173,14 @@ describe("Modules (j)", () => {
     expect(screen.getByLabelText("Minutes")).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "Music" }));
     expect(screen.getByRole("button", { name: "Previous track" })).toBeTruthy();
+  });
+  it("a General tile opens its own tab in one click; an empty module keeps its tile", async () => {
+    render(<Island monitor="m1" init={{ view: "modules" }} />);
+    await settle();
+    expect(screen.getByText("No timer running")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Timer: open tab" }));
+    expect(screen.getByRole("tab", { name: "Timer" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByLabelText("Minutes")).toBeTruthy();
   });
 });
 

@@ -407,7 +407,7 @@ describe("small peeks (decision 12)", () => {
     expect(document.querySelector(".privacyDot")).toBeNull();
     act(() => fakeBridge.setPrivacy({ mic: ["Chrome"], camera: [] }));
     await settle();
-    expect(screen.getByRole("img", { name: "Microphone: Chrome" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "Microphone in use" })).toBeTruthy();
     act(() => fakeBridge.setPrivacy({ mic: [], camera: ["Teams"] }));
     await settle();
     expect(document.querySelector(".privacyDot")!.getAttribute("data-only")).toBe("camera");
@@ -476,11 +476,11 @@ describe("module management and color icons", () => {
     expect(screen.queryByRole("heading", { name: "System" })).toBeNull();
     expect(screen.queryByText("CPU")).toBeNull();
   });
-  it("with everything on, the Shelf tab and the System box are there", async () => {
+  it("with everything on, the Shelf tab and the System tile are there", async () => {
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
     expect(screen.getByRole("tab", { name: "Shelf" })).toBeTruthy();
-    expect(screen.getByText("CPU")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "System: open tab" })).toBeTruthy();
   });
   it("in Settings › Appearance the color icons switch writes the setting and puts a flag on the page; no flag while off", async () => {
     render(<Shell monitor="m1" init={{ panel: "appearance" }} />);

@@ -822,16 +822,18 @@ fn cc_event_passes_only_known_kinds_and_plain_words() {
         json!({"kind": "stop", "reason": "C:/Users/x"}),
         json!({"kind": "stop", "sid": "9c1d2e3f-raw-session-id"}),
         json!({"kind": "stop", "sid": "ABCDEF01"}),
+        json!({"kind": "stop", "agent": "aider"}),
+        json!({"kind": "stop", "agent": 1}),
     ] {
         assert_eq!(err_code(&h.line(1, &rpc(3, "cc.event", bad.clone()), 1000)), Some(code::INVALID_PARAMS), "{bad}");
     }
     let ev = |kind: &str, tool: Option<&str>, reason: Option<&str>| {
-        Out::Ui(UiEvent::CcEvent { kind: kind.into(), tool: tool.map(Into::into), reason: reason.map(Into::into), sid: None })
+        Out::Ui(UiEvent::CcEvent { agent: "claude".into(), kind: kind.into(), tool: tool.map(Into::into), reason: reason.map(Into::into), sid: None })
     };
     assert!(h.line(1, &rpc(4, "cc.event", json!({"kind": "prompt"})), 1000).contains(&ev("prompt", None, None)));
     assert!(h
         .line(1, &rpc(8, "cc.event", json!({"kind": "stop", "sid": "0a1b2c3d"})), 1000)
-        .contains(&Out::Ui(UiEvent::CcEvent { kind: "stop".into(), tool: None, reason: None, sid: Some("0a1b2c3d".into()) })));
+        .contains(&Out::Ui(UiEvent::CcEvent { agent: "claude".into(), kind: "stop".into(), tool: None, reason: None, sid: Some("0a1b2c3d".into()) })));
     assert!(h
         .line(1, &rpc(5, "cc.event", json!({"kind": "pre_tool", "tool": "mcp__x__web.search"})), 1000)
         .contains(&ev("pre_tool", Some("mcp__x__web.search"), None)));
@@ -848,11 +850,11 @@ fn peekas_own_hook_reaches_the_page_unless_the_main_assistant_sends_cc_event() {
     use crate::plugins::cc_hooks::hook_params;
     let (mut h, _t) = host();
     let ev = |kind: &str, tool: Option<&str>| {
-        Out::Ui(UiEvent::CcEvent { kind: kind.into(), tool: tool.map(Into::into), reason: None, sid: None })
+        Out::Ui(UiEvent::CcEvent { agent: "claude".into(), kind: kind.into(), tool: tool.map(Into::into), reason: None, sid: None })
     };
     // the hook process's line, built from a raw Claude Code payload
     let raw = json!({"hook_event_name": "PreToolUse", "tool_name": "Grep", "tool_input": {"pattern": "password"}});
-    let line = hook_params(&raw, None).unwrap().to_string();
+    let line = hook_params(&crate::plugins::cc_hooks::CLAUDE, &raw, None).unwrap().to_string();
     assert_eq!(h.cc_hook(line.as_bytes(), 1000), Some(vec![ev("pre_tool", Some("Grep"))]), "no main assistant");
     for bad in [&b"{nope"[..], br#"{"kind":"rm"}"#, br#"{"kind":"pre_tool","tool":"C:\\x\\y"}"#, b""] {
         assert_eq!(h.cc_hook(bad, 1000), None, "{}", String::from_utf8_lossy(bad));
@@ -862,10 +864,31 @@ fn peekas_own_hook_reaches_the_page_unless_the_main_assistant_sends_cc_event() {
     assert_eq!(h.cc_hook(prompt, 1000), Some(vec![ev("prompt", None)]), "main assistant connected but silent: ours shows");
     h.line(1, &rpc(2, "cc.event", json!({"kind": "prompt"})), 2000);
     assert_eq!(h.cc_hook(prompt, 3000), Some(vec![]), "the main assistant forwards Claude Code: ours is dropped");
+    let codex = Out::Ui(UiEvent::CcEvent { agent: "codex".into(), kind: "stop".into(), tool: None, reason: None, sid: None });
+    assert_eq!(h.cc_hook(br#"{"agent":"codex","kind":"stop"}"#, 3000), Some(vec![codex]), "it forwards only Claude Code");
+    assert_eq!(h.cc_hook(br#"{"agent":"aider","kind":"stop"}"#, 3000), None);
     assert_eq!(h.cc_hook(prompt, 2000 + 120_000), Some(vec![ev("prompt", None)]), "2 min of main-assistant silence");
     h.line(1, &rpc(3, "cc.event", json!({"kind": "prompt"})), 200_000);
     h.disconnect(1, 200_500);
     assert_eq!(h.cc_hook(prompt, 201_000), Some(vec![ev("prompt", None)]), "main assistant gone: ours again");
+}
+
+#[test]
+fn the_hooks_edit_reaches_the_page_checked_and_even_while_the_main_assistant_wins() {
+    let (mut h, _t) = host();
+    let edit = |file: &str| Out::Ui(UiEvent::CcEdit { sid: Some("0a1b2c3d".into()), file: file.into(), add: 3, del: 1 });
+    let line = |file: &str| json!({"kind": "post_tool", "tool": "Edit", "sid": "0a1b2c3d", "edit": {"file": file, "add": 3, "del": 1}}).to_string();
+    assert!(h.cc_hook(line("src/a.rs").as_bytes(), 1000).unwrap().contains(&edit("src/a.rs")));
+    for bad in ["C:/x/a.rs", "../a.rs", "/etc/passwd", ""] {
+        let outs = h.cc_hook(line(bad).as_bytes(), 1000).unwrap();
+        assert!(!outs.iter().any(|o| matches!(o, Out::Ui(UiEvent::CcEdit { .. }))), "{bad}");
+        assert_eq!(outs.len(), 1, "the event itself still goes");
+    }
+    let pre = json!({"kind": "pre_tool", "edit": {"file": "a.rs", "add": 1, "del": 0}}).to_string();
+    assert_eq!(h.cc_hook(pre.as_bytes(), 1000).unwrap().len(), 1, "an edit only rides on post_tool");
+    pair(&mut h, 1, MAIN, "Compass", &["island.protrusion", "composer.handler"], true, 0);
+    h.line(1, &rpc(2, "cc.event", json!({"kind": "prompt"})), 2000);
+    assert_eq!(h.cc_hook(line("src/a.rs").as_bytes(), 3000), Some(vec![edit("src/a.rs")]), "the main never sends edits");
 }
 
 #[test]

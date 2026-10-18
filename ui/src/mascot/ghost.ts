@@ -150,7 +150,7 @@ export class Ghost {
     this.bodyName = name;
     const [oldB, newB] = [this.bodies[this.bodyIdx], this.bodies[1 - this.bodyIdx]];
     const [w, fx, fy] = BODY_FACE[name];
-    newB.src = `${PARTS}govde-${name}.webp`;
+    newB.src = `${PARTS}body-${name}.webp`;
     Object.assign(newB.style, { left: pct(FX0 - fx, KX), top: pct(FY0 - fy, KY), width: pct(w, KX) });
     newB.classList.remove("hidden"); oldB.classList.add("hidden");
     this.bodyIdx = 1 - this.bodyIdx;

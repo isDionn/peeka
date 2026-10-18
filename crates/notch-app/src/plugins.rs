@@ -41,8 +41,8 @@ pub struct Plugins {
     conns: Mutex<HashMap<u64, mpsc::Sender<Msg>>>,
     next: AtomicU64,
     data_dir: PathBuf,
-    /// When Peeka's own Claude Code hook last delivered a valid line (0 = never); `claude_bridge_state` reads it.
-    pub cc_seen: AtomicU64,
+    /// When Peeka's own hook last delivered a valid line, per agent id (absent = never); the bridge rows read it.
+    pub cc_seen: Mutex<HashMap<String, u64>>,
 }
 
 /// Starts the pipe server and the 50 ms tick. A failure is a notice: Notch runs on without plugins.
@@ -55,7 +55,7 @@ pub fn start(app: &AppHandle, data_dir: PathBuf) {
         conns: Mutex::new(HashMap::new()),
         next: AtomicU64::new(1),
         data_dir,
-        cc_seen: AtomicU64::new(0),
+        cc_seen: Mutex::new(HashMap::new()),
     });
     run(app, demo_outs);
     if crate::app::demo() {
@@ -218,12 +218,16 @@ async fn cc_connection(app: AppHandle, pipe: NamedPipeServer) {
     let line = buf.split(|b| *b == b'\n').next().unwrap_or_default();
     let Some(p) = app.try_state::<Plugins>() else { return };
     let Some(outs) = p.host.lock().cc_hook(line, now_ms()) else { return };
-    p.cc_seen.store(now_ms(), Ordering::SeqCst);
+    // valid, so `agent` is absent (= claude) or a known id
+    let agent = serde_json::from_slice::<serde_json::Value>(line).ok().and_then(|v| v["agent"].as_str().map(str::to_owned));
+    p.cc_seen.lock().insert(agent.unwrap_or_else(|| "claude".into()), now_ms());
     run(&app, outs);
 }
 
-/// `peeka.exe --cc-hook`, run by Claude Code for each hook event (before Tauri starts; `main.rs`). Reads the hook's
-/// JSON on stdin and sends Peeka only `{kind, tool, reason, sid}` (`cc_hooks::hook_params`; `sid` = salted 8-hex tag of the session id). Never holds Claude Code up
+/// `peeka.exe --cc-hook [agent [event]]`, run by a coding agent for each hook event (before Tauri starts; `main.rs`;
+/// no agent = Claude Code, an unknown one sends nothing; `event` only when the payload has no `hook_event_name`, as
+/// Copilot's camelCase one). Reads the hook's JSON on stdin and sends Peeka only `{agent, kind, tool, reason, sid}` (`cc_hooks::hook_params`; `sid` = salted 8-hex tag of the session id),
+/// plus `edit {file, add, del}` for an Edit/Write inside the session cwd; that edit's diff stays in a local cache file (`cc_hooks::hook_line`). Never holds Claude Code up
 /// and never answers: no stdout at all (a PermissionRequest keeps Claude Code's own prompt), every path ends in exit
 /// 0, a 2 s watchdog ends it whatever happens, and a closed or busy pipe (Peeka not running) is given up at once.
 pub fn cc_hook_main() -> ! {
@@ -236,8 +240,18 @@ pub fn cc_hook_main() -> ! {
         let mut raw = Vec::new();
         std::io::stdin().lock().take(4 * 1024 * 1024).read_to_end(&mut raw).ok()?;
         let salt = notch_core::data_dir().and_then(|d| notch_core::plugins::cc_hooks::salt(&d.join("cc-salt.bin")));
-        let line = notch_core::plugins::cc_hooks::hook_params(&serde_json::from_slice(&raw).ok()?, salt.as_deref())?;
-        drop(raw); // the prompt, the command, the output: gone before anything is sent
+        let diffs = notch_core::data_dir().map(|d| d.join("cc-diff"));
+        let args: Vec<String> = std::env::args().skip(2).collect();
+        let agent = match args.first() {
+            None => &notch_core::plugins::cc_hooks::CLAUDE,
+            Some(id) => notch_core::plugins::cc_hooks::agent(id)?,
+        };
+        let mut raw: serde_json::Value = serde_json::from_slice(&raw).ok()?;
+        if let (Some(ev), Some(o)) = (args.get(1), raw.as_object_mut()) {
+            o.entry("hook_event_name").or_insert_with(|| ev.as_str().into());
+        }
+        let line = notch_core::plugins::cc_hooks::hook_line(agent, &raw, salt.as_deref(), diffs.as_deref())?;
+        drop(raw); // the prompt, the command, the output, the edit's text: gone before anything is sent
         let name = pipe::cc_pipe_name(&win::user_sid()?)?;
         let mut pipe = std::fs::OpenOptions::new().read(true).write(true).open(name).ok()?;
         pipe.write_all(format!("{line}\n").as_bytes()).ok()?;
@@ -393,8 +407,13 @@ pub fn run(app: &AppHandle, outs: Vec<Out>) {
                         app.emit("job_done", serde_json::json!({ "title": title, "took": took, "seconds": seconds }));
                 }
             }
-            Out::Ui(UiEvent::CcEvent { kind, tool, reason, sid }) => {
-                let _ = app.emit("cc_event", serde_json::json!({ "kind": kind, "tool": tool, "reason": reason, "sid": sid }));
+            Out::Ui(UiEvent::CcEvent { agent, kind, tool, reason, sid }) => {
+                let _ = app.emit("cc_event", serde_json::json!({ "agent": agent, "kind": kind, "tool": tool, "reason": reason, "sid": sid }));
+            }
+            Out::Ui(UiEvent::CcEdit { sid, file, add, del }) => {
+                // locked or presenting: the page learns only that an edit happened (generic label)
+                let open = !crate::clip_history::hide_passwords(app);
+                let _ = app.emit("cc_edit", serde_json::json!({ "sid": sid, "file": open.then_some(file), "add": open.then_some(add), "del": open.then_some(del) }));
             }
             Out::Ui(UiEvent::FirstConnect) => {
                 let _ = app.emit("first_connect", ());

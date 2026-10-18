@@ -1,5 +1,5 @@
 // Fake back end used outside Tauri: realistic data, in-memory state, the same event path. Used by the preview and tests.
-import type { TrayIconX, CalendarNext, Alert, AssistantCounts, BridgeState, PermissionEvent, RecentItem, AlertsView, AllCommands, AllEvents, CallArgs, CommandName, Commands, ClipChange, ClipItem, ClipPlain, ComposerEvent, ConsentAnswer, LockState, MirrorState, MirrorView, Notice, TrayIcon, ShelfItem, TimerState, PrivacyState, ConsentRequest, ModuleEntry, PluginCommands, PluginInfo, SurfacesView, Media, MonitorInfo, PinnedApp, SearchResult, Settings, Status, SysmonTick, VolumeOsd, WindowInfo } from "./bridge";
+import type { AgentBridge, TrayIconX, CalendarNext, Alert, AssistantCounts, BridgeState, PermissionEvent, RecentItem, AlertsView, AllCommands, AllEvents, CallArgs, CommandName, Commands, ClipChange, ClipItem, ClipPlain, ComposerEvent, ConsentAnswer, LockState, MirrorState, MirrorView, Notice, TrayIcon, ShelfItem, TimerState, PrivacyState, ConsentRequest, ModuleEntry, PluginCommands, PluginInfo, SurfacesView, Media, MonitorInfo, PinnedApp, SearchResult, Settings, Status, SysmonTick, VolumeOsd, WindowInfo } from "./bridge";
 import { APP_NAMES, iconOf } from "./fakeIcons";
 import { EMPTY_SURFACES, MODULES, PLUGINS } from "./plugin.fixtures";
 
@@ -34,9 +34,9 @@ const TRACKS = [
 
 type W4Names = "search_index_state" | "search_open" | "search_ask" | "clip_list" | "clip_copy" | "clip_pin" | "clip_delete" | "clip_clear" | "clip_reveal" | "clip_share" | "clip_edit" | "clip_drag" | "clip_visible" | "lock_state" | "lock_now" | "lock_release";
 type W5Names = "window_preview" | "share_open" | "shelf_list" | "shelf_ask" | "timer_get" | "timer_start" | "timer_control" | "privacy_get" | "tray_open" | "mirror_state" | "mirror_enable" | "mirror_disable" | "mirror_list" | "mirror_dismiss" | "mirror_open_app" | "mirror_ask";
-type W7Names = "recent_files" | "open_recent" | "start_pins" | "open_start_menu" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "cc_focus_terminal" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus";
-/** Peeka Phase C: clipboard, download and copy-code commands. */
-type W8Names = "notif_copy_code" | "clip_open" | "clip_to_shelf" | "clip_preview" | "download_open" | "download_show_in_folder";
+type W7Names = "recent_files" | "open_recent" | "start_pins" | "open_start_menu" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "agent_bridges" | "agent_bridge_install" | "agent_bridge_remove" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "cc_focus_terminal" | "cc_diff" | "cc_diff_open" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus";
+/** Peeka Phase C: clipboard, download and copy-code commands; Settings > About demo restart. */
+type W8Names = "demo_restart" | "notif_copy_code" | "clip_open" | "clip_to_shelf" | "clip_preview" | "download_open" | "download_show_in_folder";
 const svg = (inner: string) => "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${inner}</g></svg>`);
 const GLYPH = {
   bluetooth: svg('<path d="m7 7 10 10-5 5V2l5 5L7 17"/>'),
@@ -80,6 +80,14 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   let firstConnect = false;
   let calendar: CalendarNext = structuredClone(DEFAULT_CALENDAR);
   let bridgeState: BridgeState = { installed: true, healthy: true, lastEventAgoS: 120 };
+  const AGENTS0: AgentBridge[] = [
+    { id: "codex", name: "Codex CLI", file: "~\\.codex\\hooks.json", present: true, installed: false, healthy: false, lastEventAgoS: null },
+    { id: "cursor", name: "Cursor", file: "~\\.cursor\\hooks.json", present: false, installed: false, healthy: false, lastEventAgoS: null },
+    { id: "gemini", name: "Gemini CLI", file: "~\\.gemini\\settings.json", present: true, installed: false, healthy: false, lastEventAgoS: null },
+    { id: "copilot", name: "GitHub Copilot CLI", file: "~\\.copilot\\hooks\\peeka.json", present: false, installed: false, healthy: false, lastEventAgoS: null },
+  ];
+  let agents = structuredClone(AGENTS0);
+  const setAgent = (id: string, on: boolean) => { const a = agents.find((x) => x.id === id); if (!a) throw "unknown"; a.installed = on; a.healthy = on; return { ...a }; };
   const nowMs = () => (fixed ?? new Date()).getTime();
 
   const reset = () => {
@@ -140,7 +148,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   let nextHwnd = 100;
   const handlers: { [K in Exclude<CommandName, W4Names | W5Names | W7Names | W8Names>]: (a: Commands[K]["args"]) => Commands[K]["ret"] } = {
     get_monitor: ({ monitor }): MonitorInfo => ({ id: monitor, primary: monitor === "m1", hasBattery, radios: "ok", brightness: true, user: "Local account", hz: 144 }),
-    list_windows: ({ monitor }) => windows.filter((w) => w.monitor === monitor).map((w) => ({ ...w })),
+    list_windows: () => windows.map((w) => ({ ...w })), // like Rust: every strip lists every monitor's windows
     get_pins: pinned,
     set_pins: ({ appIds }) => { pins = [...appIds]; emit("pins_changed", null); return pinned(); },
     activate_window: ({ hwnd }) => { windows.forEach((w) => (w.active = w.hwnd === hwnd)); emit("windows_changed", { monitor: windows.find((w) => w.hwnd === hwnd)?.monitor ?? "m1" }); },
@@ -341,6 +349,8 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   /** Preview/test: downloads reported by Rust (id -> name). */
   const downloads = new Map<string, string>();
   const w8: { [K in W8Names]: (a: Commands[K]["args"]) => Commands[K]["ret"] } = {
+    // The real app restarts; the fake just flips the mode so the preview shows the other state.
+    demo_restart: (a) => { log.push({ cmd: "demo_restart", args: a }); settings = { ...settings, demo: a.on }; emit("settings_changed", structuredClone(settings)); },
     notif_copy_code: (a) => { if (lock.locked) throw "denied"; if (!notices.some((n) => n.id === a.id && n.hasCode)) throw "missing"; log.push({ cmd: "notif_copy_code", args: a }); },
     clip_open: (a) => { const c = find(a.id); if (!c || lock.locked || c.kind === "password") throw "denied"; if (c.kind === "text") throw "invalid"; log.push({ cmd: "clip_open", args: a }); },
     clip_to_shelf: (a) => { const c = find(a.id); if (!c || lock.locked || c.kind === "password") throw "denied"; if (c.kind === "text") throw "invalid"; log.push({ cmd: "clip_to_shelf", args: a }); emit("shelf_changed", null); },
@@ -366,6 +376,9 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     // Like Rust: `refused` in demo mode; install on a manual click points at this Peeka, remove deletes only Peeka's own entries.
     claude_bridge_install: () => { if (settings.demo) throw "refused"; log.push({ cmd: "claude_bridge_install", args: null }); bridgeState = { ...bridgeState, installed: true, healthy: true }; return { ...bridgeState }; },
     claude_bridge_remove: () => { if (settings.demo) throw "refused"; log.push({ cmd: "claude_bridge_remove", args: null }); bridgeState = { ...bridgeState, installed: false, healthy: false }; return { ...bridgeState }; },
+    agent_bridges: () => structuredClone(agents),
+    agent_bridge_install: ({ agent }) => { if (settings.demo) throw "refused"; log.push({ cmd: "agent_bridge_install", args: { agent } }); return setAgent(agent, true); },
+    agent_bridge_remove: ({ agent }) => { if (settings.demo) throw "refused"; log.push({ cmd: "agent_bridge_remove", args: { agent } }); return setAgent(agent, false); },
     permission_history: (): PermissionEvent[] => {
       const now = Date.now();
       return [
@@ -388,6 +401,8 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     typing_focus: (a) => { log.push({ cmd: "typing_focus", args: a }); },
     cc_focus_terminal: (a) => { if (settings.demo) throw "unsupported"; if (a.sessionId === "none") throw "unknown"; if (!plugins.some((x) => x.main && x.connected)) throw "not_connected"; log.push({ cmd: "cc_focus_terminal", args: a }); },
     composer_attach_file: () => ({ kind: "file", label: "q3-report.xlsx" }),
+    cc_diff: (a) => { if (lock.locked) throw "denied"; if (a.sid === "none") throw "missing"; return { file: "src/lib/notes.ts", add: 2, del: 1, lines: [" export const ccLimit = (on: boolean) =>", "-  on;", "+  on && !resumed;", "+// resumes on the next stop"], more: 0 }; },
+    cc_diff_open: (a) => { if (lock.locked) throw "denied"; log.push({ cmd: "cc_diff_open", args: a }); },
   };
 
   const fake = {
@@ -401,7 +416,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       return () => { set.delete(cb as never); };
     },
     now: () => fixed ?? new Date(),
-    reset: () => { reset(); filesIndex = true; scanDenied = false; surfaces = EMPTY_SURFACES; consent = null; shelf = []; timer = null; privacy = { mic: [], camera: [] }; previewDelay = 0; mirror = { devMode: true, registered: true, access: "allowed", enabled: false, on: false, blocker: null }; notices = []; quiet = false; plugins = structuredClone(PLUGINS); modules = structuredClone(MODULES); log.length = 0; turn = 0; },
+    reset: () => { reset(); filesIndex = true; scanDenied = false; surfaces = EMPTY_SURFACES; consent = null; shelf = []; timer = null; privacy = { mic: [], camera: [] }; previewDelay = 0; mirror = { devMode: true, registered: true, access: "allowed", enabled: false, on: false, blocker: null }; notices = []; quiet = false; agents = structuredClone(AGENTS0); plugins = structuredClone(PLUGINS); modules = structuredClone(MODULES); log.length = 0; turn = 0; },
     /** Test and preview hooks: trigger by hand what Rust would do. */
     emit,
     /** Fidelity 3: the main assistant's bridge state and the "first connection" card. */

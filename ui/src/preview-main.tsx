@@ -66,6 +66,8 @@ if (state === "yk") fakeBridge.setSurfaces({ protrusion: { ...PROTRUSION, title:
 if (state === "yb" || state === "yb2") fakeBridge.setSurfaces({ protrusion: { plugin: COMPASS, title: "Claude · Thinking…", icon: "code", state: "info", mascot: "serious", timer: { startedAt: new Date(Date.now() - 6000).toISOString() } } });
 if (state === "yb2") fakeBridge.setTimer({ label: "Focus", totalS: 1500, remainingS: 1452, running: true });
 if (state === "os") setTimeout(() => { fakeBridge.emit("cc_event", { kind: "session_start" }); fakeBridge.emit("cc_event", { kind: "session_start" }); fakeBridge.emit("cc_event", { kind: "pre_tool", tool: "Edit" }); }, 400);
+// ed: F4 live diff ticker (Claude Code edited "notes.ts +2 −1"); "Show changes" opens the diff card from the fake `cc_diff`.
+if (state === "ed") setTimeout(() => fakeBridge.emit("cc_edit", { sid: "1a2b3c4d", file: "src/lib/notes.ts", add: 2, del: 1 }), 400);
 Object.assign(window, { fakeBridge });
 const CLIP_IMAGE = "data:image/svg+xml;charset=utf-8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5E5CE6"/><stop offset="1" stop-color="#63E6E2"/></linearGradient></defs><rect width="160" height="100" fill="url(#g)"/><circle cx="52" cy="42" r="18" fill="#fff" fill-opacity=".7"/><path d="M0 100 L60 60 L100 84 L130 66 L160 90 V100Z" fill="#000" fill-opacity=".35"/></svg>');
 const CLIPS: Record<string, ClipPlain> = {

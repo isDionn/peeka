@@ -54,6 +54,8 @@ button.peek { color: inherit; cursor: pointer; width: 44px; height: 14px; displa
 .sideRow { display: flex; align-items: center; gap: 10px; width: 100%; height: 32px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent; color: var(--l1); font: 500 13px/1 var(--font); text-align: left; white-space: nowrap; cursor: pointer; }
 .sideRow > svg.lucide { width: 15px; height: 15px; flex: none; }
 .sideRow .sideName { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* a coding agent's accent in the sessions list (only when agents are mixed; never while locked) */
+.sideRow .agentDot { width: 8px; height: 8px; flex: none; border-radius: 50%; }
 .sideRow:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 @media (hover: hover) and (pointer: fine) { .sideRow:hover { background: rgba(255,255,255,.07); } }
 

@@ -130,7 +130,7 @@ describe("menus", () => {
     render(<Shell monitor="m1" init={{ menu: { kind: "strip", x: 700 } }} />);
     await settle();
     expect(document.querySelector<HTMLElement>(".context")!.style.left).toBe("700px");
-    expect((document.activeElement as HTMLElement).textContent).toContain("Peeka settings");
+    expect((document.activeElement as HTMLElement).textContent).toContain("taskbar");
   });
 
   it("O10: Quit app asks for confirmation on the first click", async () => {

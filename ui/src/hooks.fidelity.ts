@@ -44,7 +44,3 @@ export function useFirstConnect(): [boolean, () => void] {
   return [on, () => { setOn(false); bridge.call("first_connect_ack").catch(() => undefined); }];
 }
 
-/** Gear button: Settings › Modules. Shell: the strip page should listen for this message and open the `modules` panel (see report). */
-export function openModuleSettings() {
-  try { const c = new BroadcastChannel("notch-xwin"); c.postMessage({ t: "open-panel", panel: "modules" }); c.close(); } catch { /* no channel */ }
-}

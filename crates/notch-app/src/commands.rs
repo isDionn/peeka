@@ -195,12 +195,12 @@ pub async fn get_monitor(n: State<'_, Notch>, monitor: String) -> Res<MonitorInf
     })
 }
 
-/// The flat per-window view of `items` for one monitor (`monitor` = its index as a string).
-fn windows_on(n: &Notch, items: &[AppItem], monitor: &str, foreground: isize) -> Vec<WindowInfo> {
+/// The flat per-window view of `items` for a strip: every monitor's windows (Windows' "All taskbars", owner decision),
+/// so an app on another screen is one click away; `WindowInfo.monitor` is the window's own monitor.
+fn windows_on(n: &Notch, items: &[AppItem], foreground: isize) -> Vec<WindowInfo> {
     items
         .iter()
         .flat_map(|i| i.windows.iter().map(move |w| (i, w)))
-        .filter(|(_, w)| w.monitor.map(|m| m.to_string()).as_deref() == Some(monitor))
         .map(|(i, w)| {
             let icon = icon(n, &i.app_id);
             WindowInfo {
@@ -211,7 +211,7 @@ fn windows_on(n: &Notch, items: &[AppItem], monitor: &str, foreground: isize) ->
                 hwnd: w.hwnd,
                 title: w.title.clone(),
                 active: w.hwnd == foreground,
-                monitor: monitor.to_string(),
+                monitor: w.monitor.map(|m| m.to_string()).unwrap_or_default(),
                 elevated: w.elevated,
             }
         })
@@ -220,8 +220,9 @@ fn windows_on(n: &Notch, items: &[AppItem], monitor: &str, foreground: isize) ->
 
 #[tauri::command]
 pub async fn list_windows(n: State<'_, Notch>, monitor: String) -> Res<Vec<WindowInfo>> {
+    let _ = monitor; // kept in the signature (contract): every strip lists every monitor's windows
     let items = snapshot(&n);
-    Ok(windows_on(&n, &items, &monitor, notch_win::apps::foreground()))
+    Ok(windows_on(&n, &items, notch_win::apps::foreground()))
 }
 
 #[tauri::command]
@@ -529,6 +530,20 @@ pub fn restore_taskbar(app: AppHandle) {
 #[tauri::command]
 pub fn quit(app: AppHandle) {
     app.exit(0);
+}
+
+/// Settings > About "Try demo" (`on`) / "Stop demo": demo is chosen at launch, so Peeka restarts. The new one waits
+/// for this one to end (`--after`); this one quits cleanly like `quit` (taskbar back, AppBars gone, no alive file, so
+/// the guard does not relaunch the old mode). Nothing is spawned = nothing quits.
+#[tauri::command]
+pub fn demo_restart(app: AppHandle, on: bool) -> Res<()> {
+    let args = notch_core::supervise::restart_args(on, std::process::id());
+    notch_win::taskbar::spawn_self(&args.iter().map(String::as_str).collect::<Vec<_>>()).map_err(|error| {
+        crate::app::notice(&app, &format!("Could not restart Peeka: {error}"));
+        CmdError::Io
+    })?;
+    app.exit(0);
+    Ok(())
 }
 
 #[tauri::command]
@@ -1456,10 +1471,8 @@ fn this_exe() -> Res<String> {
 }
 
 fn own_bridge(app: &AppHandle) -> Res<BridgeState> {
-    let (installed, current) = notch_core::plugins::cc_hooks::file_status(&claude_settings()?, &this_exe()?);
-    let seen = app.try_state::<crate::plugins::Plugins>().map_or(0, |p| p.cc_seen.load(std::sync::atomic::Ordering::SeqCst));
-    let last_event_ago_s = (seen > 0).then(|| crate::live::now_ms().saturating_sub(seen) / 1000);
-    Ok(BridgeState { installed, healthy: installed && current, last_event_ago_s })
+    let a = agent_bridge(app, &notch_core::plugins::cc_hooks::CLAUDE)?;
+    Ok(BridgeState { installed: a.installed, healthy: a.healthy, last_event_ago_s: a.last_event_ago_s })
 }
 
 /// Settings' "Install", only from the owner's click: Peeka's hook for all twelve events into Claude Code's
@@ -1467,27 +1480,110 @@ fn own_bridge(app: &AppHandle) -> Res<BridgeState> {
 /// of an unexpected shape is refused untouched; the reason goes out as a notice.
 #[tauri::command]
 pub fn claude_bridge_install(app: AppHandle) -> Res<BridgeState> {
-    if crate::app::demo() {
-        return Err(CmdError::Refused);
-    }
-    notch_core::plugins::cc_hooks::install(&claude_settings()?, &this_exe()?).map_err(|why| {
-        crate::app::notice(&app, &why);
-        CmdError::Refused
-    })?;
+    agent_bridge_install(app.clone(), "claude".into())?;
     own_bridge(&app)
 }
 
 /// "Remove": only Peeka's own entries go.
 #[tauri::command]
 pub fn claude_bridge_remove(app: AppHandle) -> Res<BridgeState> {
+    agent_bridge_remove(app.clone(), "claude".into())?;
+    own_bridge(&app)
+}
+
+/// One agent row under Settings › Plugins (`docs/plugin-api.md` "Other agents"). `file` is the config Install
+/// changes, `~` for the user folder; `present` = that agent's own folder exists (the page lists only those).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentBridge {
+    id: &'static str,
+    name: &'static str,
+    file: String,
+    present: bool,
+    installed: bool,
+    healthy: bool,
+    last_event_ago_s: Option<u64>,
+}
+
+fn home() -> Res<PathBuf> {
+    std::env::var_os("USERPROFILE").filter(|d| !d.is_empty()).map(PathBuf::from).ok_or(CmdError::Missing)
+}
+
+/// Each agent's user-level hook config, from its official docs (see `cc_hooks` for the URLs). Copilot's is a file of
+/// Peeka's own in its hooks folder (`COPILOT_HOME` as Copilot reads it).
+fn agent_file(id: &str) -> Res<PathBuf> {
+    Ok(match id {
+        "claude" => claude_settings()?,
+        "codex" => home()?.join(".codex").join("hooks.json"),
+        "cursor" => home()?.join(".cursor").join("hooks.json"),
+        "gemini" => home()?.join(".gemini").join("settings.json"),
+        _ => std::env::var_os("COPILOT_HOME")
+            .filter(|d| !d.is_empty())
+            .map(PathBuf::from)
+            .map_or_else(|| home().map(|h| h.join(".copilot")), Ok)?
+            .join("hooks")
+            .join("peeka.json"),
+    })
+}
+
+fn agent_bridge(app: &AppHandle, a: &'static notch_core::plugins::cc_hooks::Agent) -> Res<AgentBridge> {
+    let path = agent_file(a.id)?;
+    let (installed, current) = notch_core::plugins::cc_hooks::file_status(a, &path, &this_exe()?);
+    let seen = app.try_state::<crate::plugins::Plugins>().and_then(|p| p.cc_seen.lock().get(a.id).copied());
+    let dir = if a.id == "copilot" { path.parent().and_then(Path::parent) } else { path.parent() };
+    let file = match home() {
+        Ok(h) => path.strip_prefix(&h).map_or_else(|_| path.display().to_string(), |r| format!("~\\{}", r.display())),
+        Err(_) => path.display().to_string(),
+    };
+    Ok(AgentBridge {
+        id: a.id,
+        name: a.name,
+        file,
+        present: dir.is_some_and(Path::is_dir),
+        installed,
+        healthy: installed && current,
+        last_event_ago_s: seen.map(|t| crate::live::now_ms().saturating_sub(t) / 1000),
+    })
+}
+
+fn agent_of(id: &str) -> Res<&'static notch_core::plugins::cc_hooks::Agent> {
+    notch_core::plugins::cc_hooks::agent(id).ok_or(CmdError::Unknown)
+}
+
+/// The agents other than Claude Code (it has its own row, which can also be the main assistant's report).
+#[tauri::command]
+pub fn agent_bridges(app: AppHandle) -> Res<Vec<AgentBridge>> {
+    notch_core::plugins::cc_hooks::AGENTS.iter().skip(1).map(|a| agent_bridge(&app, a)).collect()
+}
+
+/// "Install" on an agent's row, only from the owner's click: Peeka's status-only hook merged into that agent's config
+/// (a backup `<file>.bak-peeka` first, the owner's own hooks stay); a file of an unexpected shape is refused untouched
+/// and the reason goes out as a notice.
+#[tauri::command]
+pub fn agent_bridge_install(app: AppHandle, agent: String) -> Res<AgentBridge> {
     if crate::app::demo() {
         return Err(CmdError::Refused);
     }
-    notch_core::plugins::cc_hooks::uninstall(&claude_settings()?).map_err(|why| {
+    let a = agent_of(&agent)?;
+    notch_core::plugins::cc_hooks::install(a, &agent_file(a.id)?, &this_exe()?).map_err(|why| {
         crate::app::notice(&app, &why);
         CmdError::Refused
     })?;
-    own_bridge(&app)
+    agent_bridge(&app, a)
+}
+
+/// "Remove": only Peeka's own entries go.
+#[tauri::command]
+pub fn agent_bridge_remove(app: AppHandle, agent: String) -> Res<AgentBridge> {
+    if crate::app::demo() {
+        return Err(CmdError::Refused);
+    }
+    let a = agent_of(&agent)?;
+    notch_core::plugins::cc_hooks::uninstall(a, &agent_file(a.id)?).map_err(|why| {
+        crate::app::notice(&app, &why);
+        CmdError::Refused
+    })?;
+    agent_bridge(&app, a)
 }
 
 /// "Open terminal": the page names a session (a row's `session`), never a pid. Only a pid the main assistant announced
@@ -1501,6 +1597,34 @@ pub async fn cc_focus_terminal(app: AppHandle, session_id: String) -> Res<()> {
         notch_win::session_window::FocusErr::NoWindow => CmdError::Missing,
         notch_win::session_window::FocusErr::Refused => CmdError::Refused,
     })
+}
+
+/// The last edit's diff for session `sid`, read on demand from the hook's local cache (`cc_hooks::read_diff`). Never
+/// while locked or presenting (`denied`); `missing` = no edit cached for it, or older than 30 min.
+#[tauri::command]
+pub fn cc_diff(app: AppHandle, sid: String) -> Res<serde_json::Value> {
+    cmd::unlocked(crate::clip_history::hide_passwords(&app))?;
+    let e = cc_cached(&sid)?;
+    Ok(serde_json::json!({ "file": e.rel, "add": e.add, "del": e.del, "lines": e.lines, "more": e.more }))
+}
+
+/// "Open in editor": that edited file with its default app; not a file Windows would run (`denied`).
+#[tauri::command]
+pub fn cc_diff_open(app: AppHandle, sid: String) -> Res<()> {
+    cmd::unlocked(crate::clip_history::hide_passwords(&app))?;
+    let path = PathBuf::from(cc_cached(&sid)?.abs);
+    if !path.is_file() {
+        return Err(CmdError::Missing);
+    }
+    if notch_core::shelf::runnable(&path) {
+        return Err(CmdError::Denied);
+    }
+    Win32Control.launch(&path.to_string_lossy()).then_some(()).ok_or(CmdError::Refused)
+}
+
+fn cc_cached(sid: &str) -> Res<notch_core::plugins::cc_hooks::Edit> {
+    let dir = notch_core::data_dir().ok_or(CmdError::Missing)?.join("cc-diff");
+    notch_core::plugins::cc_hooks::read_diff(&dir, sid).ok_or(CmdError::Missing)
 }
 
 /// Settings › Permission history, newest first (names and scope names only).
