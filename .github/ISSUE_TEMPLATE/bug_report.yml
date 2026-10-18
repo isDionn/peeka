@@ -1,0 +1,44 @@
+name: Bug report
+description: Something in Peeka does not work as expected.
+labels: [bug]
+body:
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: Settings > System > About, e.g. "Windows 11 24H2 (26100)".
+    validations:
+      required: true
+  - type: input
+    id: peeka
+    attributes:
+      label: Peeka version
+      description: e.g. 0.1.0, and whether you use the installer or the portable exe.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or recordings
+      description: Drag files here. Please hide anything private (notifications, clipboard, window titles).

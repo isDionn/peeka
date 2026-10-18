@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      # MSVC is the default host toolchain on windows-latest; .cargo/config.toml adds the static CRT.
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p notch-core --lib
+      - run: cargo test -p notch-win --lib
+      # Without custom-protocol the app points at devUrl, so ui/dist is not needed for a check.
+      - run: cargo check -p notch-app
+
+  ui:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: npx tsc --noEmit
+      - run: pnpm test
+      # e2e (`pnpm e2e`) is skipped for now: it needs a Playwright Chromium download and its
+      # timing-based checks have only been tuned on a local machine, not on shared CI runners.

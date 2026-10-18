@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+
+      - name: Check tag matches app version
+        run: |
+          $version = (Get-Content crates/notch-app/tauri.conf.json -Raw | ConvertFrom-Json).version
+          if ("v$version" -ne $env:TAG) { throw "Tag $env:TAG does not match tauri.conf.json version $version" }
+          "VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Build UI
+        working-directory: ui
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      # Same command as README "Build from source". custom-protocol embeds ui/dist;
+      # without it the exe would load the dev URL and show nothing.
+      - name: Build portable exe
+        run: cargo build --release -p notch-app --features tauri/custom-protocol
+
+      # The Tauri CLI always adds tauri/custom-protocol, so this normally reuses the exe above; assets are
+      # collected afterwards, so the portable exe and the installed one are the same file either way.
+      # TAURI_APP_PATH: the config lives in crates/notch-app, outside the CLI's default lookup from ui/.
+      - name: Build NSIS installer
+        working-directory: ui
+        env:
+          TAURI_APP_PATH: ${{ github.workspace }}/crates/notch-app
+        run: pnpm exec tauri build --bundles nsis
+
+      - name: Collect assets
+        run: |
+          New-Item -ItemType Directory -Force dist-release | Out-Null
+          Copy-Item target/release/peeka.exe dist-release/peeka.exe
+          $setup = @(Get-ChildItem target/release/bundle/nsis/*-setup.exe)
+          if ($setup.Count -ne 1) { throw "Expected one NSIS setup exe, found $($setup.Count)" }
+          Copy-Item $setup[0].FullName "dist-release/Peeka-$env:VERSION-setup.exe"
+          Push-Location dist-release
+          # sha256sum format: "<hash>  <file>", so `sha256sum -c SHA256SUMS.txt` works.
+          Get-ChildItem *.exe | ForEach-Object { "$((Get-FileHash $_.Name -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } |
+            Set-Content -Encoding ascii SHA256SUMS.txt
+          Get-Content SHA256SUMS.txt
+          Pop-Location
+
+      - name: Publish release
+        run: |
+          gh release view $env:TAG *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $env:TAG --verify-tag --title "Peeka $env:VERSION" --generate-notes
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+          }
+          # Existing release: only (re)upload assets, its notes stay untouched.
+          gh release upload $env:TAG dist-release/peeka.exe "dist-release/Peeka-$env:VERSION-setup.exe" dist-release/SHA256SUMS.txt --clobber
+          exit $LASTEXITCODE
