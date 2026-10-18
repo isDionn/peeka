@@ -42,7 +42,7 @@ test("splitter joins chunks into whole messages", () => {
   assert.deepEqual(got, [{ a: 1 }, { b: 2 }]);
 });
 
-// --- contract checks against eklenti-api.md 3, 6, 11 (same cases as the Python SDK) ---------------------------------
+// --- contract checks against plugin-api.md sections 3, 6 and 11 (same cases as the Python SDK) ---------------------------------
 const SCOPES = new Set(["island.protrusion", "card.module", "alerts.post", "approvals.prompt", "composer.handler", "voice.line",
   "lock.signal", "clipboard.read", "search.provider", "media.read", "windows.read", "notifications.post", "notifications.read", "files.drop"]);
 const GLYPHS = new Set(["ghost", "terminal", "users", "pointer", "brain", "list", "shield"]);
@@ -73,7 +73,7 @@ test("protrusion uses only section 6.1 fields", () => {
   const p = protrusionRequest(2, "t").params;
   assert.ok(Object.keys(p).every((k) => PROTRUSION_KEYS.has(k)));
   assert.ok(STATES.has(p.state));
-  assert.ok(!["yorgun", "dikkat"].includes(p.icon)); // the main assistant's faces: -32602 from anyone else
+  assert.ok(!["tired", "attention"].includes(p.icon)); // the main assistant's faces: -32602 from anyone else
   assert.match(p.timer.started_at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/); // default = UTC "now", no milliseconds
 });
 
@@ -85,7 +85,7 @@ test("card stays within section 6.2 limits", () => {
 });
 
 test("encode keeps unicode, and the 64 KB limit is the whole line", () => {
-  assert.equal(encode({ a: "şğü" }).toString("utf8"), '{"a":"şğü"}\n');
+  assert.equal(encode({ a: "éüñ" }).toString("utf8"), '{"a":"éüñ"}\n');
   const pad = MAX_LINE - encode({ x: "" }).length;
   assert.equal(encode({ x: "a".repeat(pad) }).length, MAX_LINE); // exactly 64 KB passes
   assert.throws(() => encode({ x: "a".repeat(pad + 1) }));

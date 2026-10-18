@@ -15,7 +15,7 @@ export const PLUGIN = {
 const TOKEN_FILE = join(homedir(), ".peeka-hello-plugin-token");
 export const MAX_LINE = 64 * 1024; // spec: 64 KB per message (card.module.set: 256 KB)
 export const MAX_IN = 512 * 1024; // Peeka -> plugin: a line may be up to 512 KB (composer.submit carries a 256 KB clip); plugin -> Peeka stays MAX_LINE
-export const BAD_TOKEN = -32001; // eklenti-api.md 12: wrong token / removed plugin; the only error that clears the stored token
+export const BAD_TOKEN = -32001; // plugin-api.md section 12: wrong token / removed plugin; the only error that clears the stored token
 
 export function endpointPath(env = process.env) {
   return join(env.NOTCH_DATA_DIR || join(env.LOCALAPPDATA || "", "notch"), "endpoint.json");

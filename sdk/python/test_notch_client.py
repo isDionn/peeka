@@ -13,7 +13,7 @@ import notch_client as nc
 SCOPES = {"island.protrusion", "card.module", "alerts.post", "approvals.prompt", "composer.handler", "voice.line",
           "lock.signal", "clipboard.read", "search.provider", "media.read", "windows.read", "notifications.post",
           "notifications.read", "files.drop"}
-GLYPHS = {"ghost", "terminal", "users", "pointer", "brain", "list", "shield"}  # eklenti-api.md 6.2
+GLYPHS = {"ghost", "terminal", "users", "pointer", "brain", "list", "shield"}  # plugin-api.md 6.2
 STATES = {"idle", "info", "attention", "done", "danger", "tired"}  # 6.1
 PROTRUSION_KEYS = {"title", "subtitle", "icon", "state", "progress", "timer", "live_text", "transcript", "note",
                    "mascot", "actions"}
@@ -55,7 +55,7 @@ class Build(unittest.TestCase):
 
 
 class Contract(unittest.TestCase):
-    """The messages the example builds, checked against eklenti-api.md 3, 6 and 11."""
+    """The messages the example builds, checked against plugin-api.md 3, 6 and 11."""
 
     def test_manifest_follows_section_3_1(self):
         m = nc.hello_request()["params"]
@@ -78,7 +78,7 @@ class Contract(unittest.TestCase):
         p = nc.protrusion_request(2, "t")["params"]
         self.assertTrue(set(p) <= PROTRUSION_KEYS)
         self.assertIn(p["state"], STATES)
-        self.assertNotIn(p["icon"], {"yorgun", "dikkat"})  # the main assistant's faces, -32602 from anyone else
+        self.assertNotIn(p["icon"], {"tired", "attention"})  # the main assistant's faces, -32602 from anyone else
         self.assertRegex(p["timer"]["started_at"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")  # default = UTC "now"
 
     def test_card_stays_within_section_6_2_limits(self):
@@ -96,7 +96,7 @@ class Contract(unittest.TestCase):
 
 class Wire(unittest.TestCase):
     def test_encode_keeps_unicode_and_is_compact(self):
-        self.assertEqual(nc.encode({"a": "şğü"}), '{"a":"şğü"}\n'.encode("utf-8"))
+        self.assertEqual(nc.encode({"a": "éüñ"}), '{"a":"éüñ"}\n'.encode("utf-8"))
 
     def test_encode_limit_is_the_whole_line(self):
         pad = nc.MAX_LINE - len(nc.encode({"x": ""}))

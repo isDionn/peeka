@@ -15,7 +15,7 @@ PLUGIN = {"id": "com.example.hello", "name": "Hello Plugin", "publisher": "Examp
 TOKEN_FILE = os.path.join(os.path.expanduser("~"), ".peeka-hello-plugin-token")
 MAX_LINE = 64 * 1024  # spec: 64 KB per message (card.module.set: 256 KB)
 MAX_IN = 512 * 1024  # Peeka -> plugin: a line may be up to 512 KB (composer.submit carries a 256 KB clip); plugin -> Peeka stays MAX_LINE
-BAD_TOKEN = -32001  # eklenti-api.md 12: wrong token / removed plugin; the only error that clears the stored token
+BAD_TOKEN = -32001  # plugin-api.md section 12: wrong token / removed plugin; the only error that clears the stored token
 
 
 def endpoint_path():
