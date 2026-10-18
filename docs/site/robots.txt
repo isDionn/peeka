@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://isdionn.github.io/peeka/sitemap.xml

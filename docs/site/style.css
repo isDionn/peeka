@@ -1,4 +1,8 @@
 /* Radius rule: media frames 20px, buttons 12px, the strip island and small pills fully round. */
+@font-face {
+  font-family: "Bricolage Grotesque"; font-style: normal; font-weight: 500 800; font-display: swap;
+  src: url(fonts/bricolage-grotesque-latin.woff2) format("woff2");
+}
 :root {
   --ink: #0c0920;
   --night: #090719;
@@ -248,3 +252,10 @@ footer .brand { margin-bottom: 14px; }
   footer .wrap { grid-template-columns: 1fr; }
   .screen { border-radius: 14px 14px 0 0; }
 }
+
+/* Download block: version line, trust notes */
+.dl-meta { color: var(--muted); font-size: .9rem; margin: 16px 0 0; }
+.dl-meta a { color: var(--ghost); }
+.trust { list-style: none; margin: 14px auto 0; padding: 0; max-width: 56ch; color: var(--muted); font-size: .9rem; line-height: 1.5; display: grid; gap: 6px; }
+.trust b { color: var(--ghost); font-weight: 650; }
+.trust a { color: var(--ghost); }
