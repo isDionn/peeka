@@ -7,28 +7,27 @@
 <p><b>A Dynamic-Island-style top strip for Windows, with a ghost that keeps you company.</b></p>
 
 <p>
+  <a href="https://github.com/isDionn/peeka/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/isDionn/peeka/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/isDionn/peeka/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/isDionn/peeka"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
-  <img alt="Platform: Windows 10 | 11" src="https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6?logo=windows&logoColor=white">
-  <img alt="Rust" src="https://img.shields.io/badge/Rust-stable-000000?logo=rust&logoColor=white">
-  <img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white">
-  <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black">
-  <img alt="Status: early, 0.2.0" src="https://img.shields.io/badge/status-early%20(0.2.0)-orange">
 </p>
 
 <p>
-  <a href="https://github.com/isDionn/peeka/releases/latest"><b>⬇️ Download for Windows</b></a>
+  <a href="https://github.com/isDionn/peeka/releases/download/v0.2.0/Peeka-0.2.0-setup.exe"><b>Download for Windows</b></a>
+  <!-- TODO: after the next release, use https://github.com/isDionn/peeka/releases/latest/download/Peeka-setup.exe -->
+  <br><sub>v0.2.0 · ~3.6 MB · Windows 10/11 · <a href="#download">other downloads and SmartScreen note</a></sub>
 </p>
 
 <img src="docs/images/demo.gif" alt="Peeka in action: the island grows out of the strip, then a second task moves into the side bubble" width="100%">
 
 <p>
-  <a href="#-download">Download</a> ·
-  <a href="#-features">Features</a> ·
-  <a href="#-privacy">Privacy</a> ·
-  <a href="#-build-from-source">Build</a> ·
-  <a href="#-plugins">Plugins</a> ·
-  <a href="#-license">License</a> ·
-  <a href="#-türkçe">Türkçe</a>
+  <a href="#download">Download</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#privacy">Privacy</a> ·
+  <a href="#build-from-source">Build</a> ·
+  <a href="#plugins">Plugins</a> ·
+  <a href="#license">License</a> ·
+  <a href="#türkçe">Türkçe</a>
 </p>
 
 </div>
@@ -43,7 +42,7 @@ It runs locally, sends nothing anywhere, and other programs can add their own ca
   <img src="docs/images/showcase.png" alt="Peeka showcase: strip, island, side bubble and mascot" width="100%">
 </p>
 
-## ✨ Features
+## Features
 
 ### The shell
 
@@ -64,9 +63,9 @@ It runs locally, sends nothing anywhere, and other programs can add their own ca
 ### For developers
 
 - 🤖 **Claude Code integration**: one button in Settings adds Peeka's hook entries to Claude Code's `settings.json`, and another removes exactly those entries. Sessions, tool use and permission requests then show up in the island. The hook only reports events and prints nothing, so Claude Code's own prompts stay unchanged.
-- 🧩 **Plugins**: any program can add island items, cards, search results and alerts over a local named pipe. You approve each plugin scope by scope and can disconnect it at any time. See [Plugins](#-plugins).
+- 🧩 **Plugins**: any program can add island items, cards, search results and alerts over a local named pipe. You approve each plugin scope by scope and can disconnect it at any time. See [Plugins](#plugins).
 
-## 🔒 Privacy
+## Privacy
 
 - 🏠 **Everything stays local.** Peeka's own code makes no outbound network requests: no HTTP client, no update check, no analytics or telemetry. The web UI's content security policy only allows `self` and Tauri IPC.
 - 🙈 **Lock and presentation modes.** Peeka locks when Windows locks, on demand, or when a plugin asks (a plugin can never unlock). While locked, or while Windows is in presentation mode, the strip and bubble show generic labels instead of content, password rows are hidden, and nothing is sent to plugins.
@@ -78,14 +77,18 @@ It runs locally, sends nothing anywhere, and other programs can add their own ca
 
 Plugins may use their own internet connection; Peeka cannot control that, and the approval window says so.
 
-## ⬇️ Download
+## Download
 
 From the [latest release](https://github.com/isDionn/peeka/releases/latest), download **`Peeka-<version>-setup.exe`** (installer, adds a Start menu entry and an uninstaller) or **`peeka.exe`** (portable, just run it). Windows 10/11; WebView2 is already part of Windows 11.
 
 > [!NOTE]
-> The exe is not code-signed yet, so Windows SmartScreen may say "Windows protected your PC". Click **More info → Run anyway**. You can always [build it from source](#-build-from-source) instead.
+> The exe is not code-signed yet, so Windows SmartScreen may say "Windows protected your PC". Click **More info → Run anyway**. You can always [build it from source](#build-from-source) instead.
 
-## 📦 Build from source
+Not happy with it? Press **Restore taskbar** in the Start panel and your normal taskbar is back.
+
+## Build from source
+
+Built with Rust, Tauri 2 and React 19.
 
 ### Prerequisites
 
@@ -114,18 +117,18 @@ The app is `target/release/peeka.exe`.
 
 </details>
 
-## 🧩 Plugins
+## Plugins
 
 Plugins talk to Peeka over JSON-RPC 2.0 on a user-only named pipe. They send data; Peeka draws it. No HTML, CSS or scripts from plugins, scoped permissions, and an approval window that Peeka draws itself.
 
 - 📜 Contract: [`docs/plugin-api.md`](docs/plugin-api.md)
 - 🛠️ SDK examples in Python and Node: [`sdk/README.md`](sdk/README.md)
 
-## 🤝 Contributing
+## Contributing
 
 Issues and pull requests are welcome. Please keep changes small and focused, and run `cargo test` and `pnpm test` in `ui/` before opening a PR. Forks must replace the mascot with their own artwork (see below).
 
-## 📄 License
+## License
 
 The source code is MIT, see [`LICENSE`](LICENSE).
 
@@ -133,7 +136,7 @@ The mascot is not: the ghost character and its artwork are © 2026 isDionn, all 
 
 ---
 
-## 🇹🇷 Türkçe
+## Türkçe
 
 Peeka, Windows görev çubuğunun yerine geçen ince bir üst şerit ve ondan açılan "ada" (Dynamic Island benzeri) arayüzüdür. Şerit, ada, yan baloncuk, pano geçmişi, medya, bildirimler, zamanlayıcı, sistem durumu, hayalet maskot, Claude Code bağlayıcısı ve herkese açık eklenti API'si içerir.
 
