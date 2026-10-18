@@ -408,9 +408,11 @@ pub fn run(app: &AppHandle, outs: Vec<Out>) {
                 }
             }
             Out::Ui(UiEvent::CcEvent { agent, kind, tool, reason, sid }) => {
+                crate::recap::count(app, notch_core::recap::Ev::Agent { kind: &kind, sid: sid.as_deref() });
                 let _ = app.emit("cc_event", serde_json::json!({ "agent": agent, "kind": kind, "tool": tool, "reason": reason, "sid": sid }));
             }
             Out::Ui(UiEvent::CcEdit { sid, file, add, del }) => {
+                crate::recap::count(app, notch_core::recap::Ev::Edit { sid: sid.as_deref(), file: &file });
                 // locked or presenting: the page learns only that an edit happened (generic label)
                 let open = !crate::clip_history::hide_passwords(app);
                 let _ = app.emit("cc_edit", serde_json::json!({ "sid": sid, "file": open.then_some(file), "add": open.then_some(add), "del": open.then_some(del) }));

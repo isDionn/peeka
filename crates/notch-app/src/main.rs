@@ -18,6 +18,8 @@ mod clip_history;
 #[cfg(windows)]
 mod plugins;
 #[cfg(windows)]
+mod recap;
+#[cfg(windows)]
 mod taskbar;
 
 fn main() {

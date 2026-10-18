@@ -7,6 +7,8 @@ import { Mascot, type MascotHandle, type Mood } from "../mascot";
 import { useDelayed } from "../hooks.fidelity";
 import { plain, pluginName } from "../lib/plugin";
 import { useMainAssistant } from "../hooks";
+import { bridge, type RecapWeek } from "../bridge";
+import { recapRows, shareImage, weekRange } from "../lib/recap";
 import "./cards.css";
 
 const Center = ({ children, narrow }: { children: ReactNode; narrow?: boolean }) => <div className="body"><div className={"mkCenter" + (narrow ? " narrow" : "")}>{children}</div></div>;
@@ -86,3 +88,40 @@ export function EmptyBoard({ title = "Clipboard is empty", hint = "Things you co
     </div>
   );
 }
+
+/**
+ * F8 `recap`: last week's counts, offered on the first unlock of a new week. "Copy image" draws the 1080x1350 share
+ * image from an offscreen, still mascot (`single={false}`: it never takes the one on-screen slot) and copies it as a PNG.
+ * The button keeps its size while its label changes.
+ */
+export function RecapCard({ week, onDone }: { week: RecapWeek; onDone: () => void }) {
+  const [state, setState] = useState<"idle" | "busy" | "done" | "error">("idle");
+  const shot = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (state !== "busy") return;
+    let live = true;
+    // two frames: the offscreen mascot is laid out and its parts have their sources
+    requestAnimationFrame(() => requestAnimationFrame(async () => {
+      const ghost = shot.current?.querySelector<HTMLElement>(".mascot");
+      const png = ghost ? await shareImage(week, ghost).catch(() => null) : null;
+      const ok = png ? await bridge.call("recap_copy_image", { png: Array.from(png) }).then(() => true, () => false) : false;
+      if (live) setState(ok ? "done" : "error");
+    }));
+    return () => { live = false; };
+  }, [state, week]);
+  return (
+    <div className="body" data-recap>
+      <div className="mkHead"><Mascot size={56} mood="done" isMainAssistant /><div className="textCol"><div className="t15 b6">Your week</div><div className="t12 l3 num">{weekRange(week)}</div></div></div>
+      <div className="recapRows">
+        {recapRows(week).map((r) => <div key={r.label} className="row"><span className="text t13 l2">{r.label}</span><span className="t13 b6 num">{r.value}</span></div>)}
+      </div>
+      <div className="buttons" style={{ justifyContent: "flex-end" }}>
+        <button className="btn glass recapCopy" disabled={state === "busy"} onClick={() => setState("busy")}>{state === "done" ? "Copied" : "Copy image"}</button>
+        <button className="btn primary" data-autofocus onClick={onDone}>OK</button>
+      </div>
+      {state === "error" && <div className="alertRow t12" role="status"><TriangleAlert aria-hidden="true" />Couldn't copy the image. Try again.</div>}{/* below the buttons: they stay put */}
+      {state === "busy" && <div ref={shot} aria-hidden="true" style={{ position: "fixed", left: -10_000, top: 0 }}><Mascot size={300} mood="done" still single={false} isMainAssistant /></div>}
+    </div>
+  );
+}
+export const RecapCenter = () => <span className="ms"><span className="b6">Your week</span></span>;

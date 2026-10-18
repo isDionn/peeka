@@ -2,7 +2,8 @@
  * PLUGIN BLOCK (Wave 3, docs/plugin-api.md). The Rust commands and events (commands.generated.ts) match these
  * exactly; bridge.ts checks via `AllCommands` / `AllEvents`. Extra fields Rust sends (e.g. `protrusionActions`) aren't listed here.
  * A plugin sends data only; no HTML, links or icons. The identity (`plugin`) comes from Peeka's own registry, not the plugin payload.
- * ================================================================================================================== */
+' * ================================================================================================================== */
+import type { ComposerKind } from "./bridge";
 
 /** Plugin identity kept by Peeka. `main` = the main assistant the owner chose (only it gets the mascot). */
 export interface PluginRef { id: string; name: string; main: boolean }
@@ -42,7 +43,7 @@ export interface SurfacesView {
   tabs: ModuleTab[]; summary: SummaryRows[];
   /** Owner of Ctrl+Space (composer.handler); null if none. `voice` = the same plugin also holds voice.line. */ composer: (PluginRef & { voice: boolean }) | null;
 }
-export type ComposerAttachment = { kind: "window_image" | "clipboard_link" };
+export type ComposerAttachment = { kind: ComposerKind };
 export interface ComposerEvent { turn: number; kind: "delta" | "chip" | "done" | "error"; text?: string; label?: string; chipKind?: "source" | "reminder" | "note"; message?: string }
 export type Decision = "allow" | "always" | "deny" | "choice";
 /** Consent window request. Only name, publisher, version, id and plain-text `why` come from the plugin; Peeka writes scope descriptions and levels from its own table. */

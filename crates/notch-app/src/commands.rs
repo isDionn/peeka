@@ -835,6 +835,11 @@ pub fn approval_answer(
     text: Option<String>,
     surface: Option<Surface>,
 ) -> Res<()> {
+    let counted = match decision {
+        Decision::Allow | Decision::Always => Some(notch_core::recap::Ev::Allowed),
+        Decision::Deny => Some(notch_core::recap::Ev::Denied),
+        Decision::Choice => None,
+    };
     on_host(&app, |h, now| {
         just(h.approval_respond(
             &plugin_id,
@@ -845,7 +850,11 @@ pub fn approval_answer(
             surface.unwrap_or(Surface::Card),
             now,
         ))
-    })
+    })?;
+    if let Some(ev) = counted {
+        crate::recap::count(&app, ev);
+    }
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -855,8 +864,7 @@ pub struct Turn {
 
 /// Ctrl+Space's box to the main assistant. The page sends only each attachment's kind; Rust resolves it from what
 /// Notch itself holds (`fidelity::resolve`: the owner's scans and picked files, the newest clipboard link, the shelf).
-/// `not_connected` = nobody to send to ("Assistant not connected"); `not_yet` for `window_image`; `invalid` for a kind
-/// with nothing behind it.
+/// `not_connected` = nobody to send to ("Assistant not connected"); `invalid` for a kind with nothing behind it.
 #[tauri::command]
 pub fn composer_submit(
     app: AppHandle,
@@ -1759,9 +1767,115 @@ pub fn composer_attach_file(app: AppHandle) -> Res<Option<Attached>> {
     Ok(Some(Attached { kind: "file", label: name }))
 }
 
+/// F7, the mascot pressed (the page calls this on pointerdown): follows the mouse until it is released. A drag frames
+/// the app window under the cursor (`notch_win::outline`); Esc cancels. On release over a window its app name and
+/// title (as `window_info`, sent as `clip` text) and a picture of that window only (`screen_image`, the owner's
+/// one-time share like `composer_scan`, not taken in demo mode) wait for the next `composer_submit`.
+/// None = no drag (a plain click: the page's click runs), `[]` = cancelled. `denied` while locked or for a sensitive
+/// app (with `composer_scan`'s notice; nothing is kept).
+#[tauri::command]
+pub async fn window_pick(app: AppHandle) -> Res<Option<Vec<Attached>>> {
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    let own = std::env::current_exe().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+    let windows = Win32Desktop.windows();
+    let start = notch_win::style::cursor().ok_or(CmdError::Refused)?;
+    let (windows, step) = tauri::async_runtime::spawn_blocking(move || {
+        let mut outline: Option<notch_win::outline::Outline> = None; // made on the first frame: a click makes no window
+        let mut picker = cmd::Picker::new(start);
+        let mut framed = None;
+        let step = loop {
+            std::thread::sleep(Duration::from_millis(16));
+            let cursor = notch_win::style::cursor().unwrap_or(start);
+            let root = notch_win::style::root_at(cursor.0, cursor.1);
+            let target = cmd::pick_target(&windows, root, &own).map(|w| w.hwnd);
+            let tick = cmd::PickTick {
+                down: notch_win::style::mouse_down(),
+                esc: notch_win::style::esc_down(),
+                cursor,
+                target,
+            };
+            match picker.step(tick) {
+                cmd::PickStep::Going(t) if t != framed => {
+                    framed = t;
+                    if outline.is_none() {
+                        outline = notch_win::outline::Outline::new();
+                    }
+                    outline.as_ref().inspect(|o| o.show(t));
+                }
+                cmd::PickStep::Going(_) => {}
+                done => break done,
+            }
+            outline.as_ref().inspect(|o| o.pump());
+        };
+        (windows, step)
+    })
+    .await
+    .map_err(|_| CmdError::Unknown)?;
+    let hwnd = match step {
+        cmd::PickStep::Click => return Ok(None),
+        cmd::PickStep::Drop(h) => h,
+        _ => return Ok(Some(vec![])),
+    };
+    let w = windows.iter().find(|w| w.hwnd == hwnd).ok_or(CmdError::Missing)?;
+    cmd::not_sensitive(w).inspect_err(|_| {
+        crate::app::notice(&app, "This window belongs to a sensitive app (password manager, bank); it was not scanned.");
+    })?;
+    let n = app.try_state::<Notch>().ok_or(CmdError::Unknown)?;
+    let name = apps::find_window(&n.items.lock(), hwnd).map(|(i, _)| i.name.clone()).unwrap_or_else(|| {
+        Path::new(&w.exe_path).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "App".into())
+    });
+    let text = Some(cmd::window_context(&name, &w.title));
+    // the box is closed whenever the mascot shows, so nothing pending has a chip: an old pick or scan must not go instead
+    *n.composer_files.lock() = vec![Attachment { kind: AttachKind::Clip, path: None, text }];
+    let mut out = vec![Attached { kind: "window_info", label: format!("Window: {name}") }];
+    let png = share_dir(&app).ok().and_then(|dir| Some((dir, notch_win::preview::capture_png(hwnd)?)));
+    if let Some((_, path)) = png.and_then(|(dir, png)| notch_core::plugins::share::put(&dir, &png, "png").ok()) {
+        keep_for_composer(&app, AttachKind::Screenshot, path);
+        out.push(Attached { kind: "screen_image", label: "Screenshot".into() });
+    }
+    Ok(Some(out))
+}
+
 fn keep_for_composer(app: &AppHandle, kind: AttachKind, path: PathBuf) {
     if let Some(n) = app.try_state::<Notch>() {
         let path = Some(path.to_string_lossy().into_owned());
         n.composer_files.lock().push(Attachment { kind, path, text: None });
     }
+}
+
+/// The weekly recap card's numbers (last week), while it is still to be offered this week; None otherwise or while
+/// locked.
+#[tauri::command]
+pub fn recap_get(app: AppHandle) -> Res<Option<notch_core::recap::Week>> {
+    if crate::plugins::locked(&app) {
+        return Ok(None);
+    }
+    let s = app.try_state::<crate::recap::RecapState>().ok_or(CmdError::Unknown)?;
+    let mut r = s.0.lock();
+    let week = r.due(crate::recap::today());
+    crate::recap::save(&app, &r); // the week may have rolled over
+    Ok(week)
+}
+
+/// The owner closed the recap card: not again this week.
+#[tauri::command]
+pub fn recap_ack(app: AppHandle) -> Res<()> {
+    let s = app.try_state::<crate::recap::RecapState>().ok_or(CmdError::Unknown)?;
+    let mut r = s.0.lock();
+    r.ack(crate::recap::today());
+    crate::recap::save(&app, &r);
+    Ok(())
+}
+
+/// "Copy image": the recap picture the page drew (a 1080x1350 PNG) onto the clipboard. Never written to disk.
+#[tauri::command]
+pub fn recap_copy_image(app: AppHandle, png: Vec<u8>) -> Res<()> {
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    if notch_win::clip_image::png_size(&png) != Some((1080, 1350)) {
+        return Err(CmdError::Invalid);
+    }
+    if !notch_win::clipboard::write(&notch_core::clip::Payload::Png(png)) {
+        return Err(CmdError::Refused);
+    }
+    Ok(())
 }

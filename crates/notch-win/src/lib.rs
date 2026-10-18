@@ -21,6 +21,7 @@ pub mod keyboard;
 pub mod media;
 pub mod monitors;
 pub mod notifications;
+pub mod outline;
 pub mod picker;
 pub mod power;
 pub mod presence;
@@ -104,6 +105,14 @@ impl notch_core::ports::Desktop for Win32Desktop {
     fn foreground_covers(&self) -> bool {
         apps::foreground_covers()
     }
+}
+
+/// Today's local date (year, month, day) from `GetLocalTime`.
+#[cfg(windows)]
+pub fn local_date() -> (i32, u32, u32) {
+    // SAFETY: no arguments; returns the struct by value.
+    let t = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
+    (i32::from(t.wYear), u32::from(t.wMonth), u32::from(t.wDay))
 }
 
 #[cfg(test)]

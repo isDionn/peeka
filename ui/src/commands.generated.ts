@@ -116,10 +116,14 @@ export const COMMAND_NAMES = [
   "composer_kinds",
   "composer_scan",
   "composer_attach_file",
+  "window_pick",
   "open_task_manager",
   "focus_strip",
   "focus_island",
   "typing_focus",
+  "recap_get",
+  "recap_ack",
+  "recap_copy_image",
 ] as const;
 export const EVENT_NAMES = [
   "windows_changed",

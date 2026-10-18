@@ -22,6 +22,7 @@ pub mod ports;
 pub mod presence;
 pub mod preview;
 pub mod privacy;
+pub mod recap;
 pub mod screens;
 pub mod search;
 pub mod session_window;

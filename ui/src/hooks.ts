@@ -146,7 +146,7 @@ export function useSysmon(active: boolean) {
 
 /* ---- plugin surfaces (plugin-api.ts) ---- */
 import { EMPTY_SURFACES } from "./plugin.fixtures";
-import type { ComposerEvent, ConsentRequest, PluginInfo, SurfacesView } from "./plugin-api";
+import type { ComposerAttachment, ComposerEvent, ConsentRequest, PluginInfo, SurfacesView } from "./plugin-api";
 
 /** What plugins show on screen: peek, approvals, Modules tabs, the Ctrl+Space owner. */
 export function useSurfaces(): SurfacesView {
@@ -241,7 +241,7 @@ export function useComposer() {
     }));
     return () => { off.then((f) => f()); };
   }, [upd]);
-  const send = useCallback(async (text: string, attachments: { kind: "window_image" }[]) => {
+  const send = useCallback(async (text: string, attachments: ComposerAttachment[]) => {
     const { turn } = await bridge.call("composer_submit", { text, attachments });
     upd(turn, (t) => ({ ...t, ask: text }));
   }, [upd]);

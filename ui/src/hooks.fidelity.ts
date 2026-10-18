@@ -1,6 +1,6 @@
 // Fidelity 3 hooks (without touching hooks.ts): the island's temporary hidden state, card load delay, attachment kinds, first connection.
-import { useEffect, useState } from "react";
-import { bridge, type ComposerKind } from "./bridge";
+import { useCallback, useEffect, useState } from "react";
+import { bridge, type ComposerKind, type RecapWeek } from "./bridge";
 
 /** Is the island temporarily hidden (Rust `island_hidden` + `island_hidden_changed`). The strip's middle and the island page read it. */
 export function useIslandHidden(): boolean {
@@ -25,9 +25,9 @@ export function useDelayed(on: boolean, ms = 800): boolean {
   return on && shown;
 }
 
-/** Attachment kinds: without the command (Rust doesn't know it yet) only `window_image`. */
+/** Attachment kinds Rust accepts; none until it answers. */
 export function useComposerKinds(): ReadonlySet<ComposerKind> {
-  const [k, setK] = useState<ReadonlySet<ComposerKind>>(new Set<ComposerKind>(["window_image"]));
+  const [k, setK] = useState<ReadonlySet<ComposerKind>>(() => new Set<ComposerKind>());
   useEffect(() => { let live = true; bridge.call("composer_kinds").then((l) => { if (live) setK(new Set(l)); }).catch(() => undefined); return () => { live = false; }; }, []);
   return k;
 }
@@ -44,3 +44,15 @@ export function useFirstConnect(): [boolean, () => void] {
   return [on, () => { setOn(false); bridge.call("first_connect_ack").catch(() => undefined); }];
 }
 
+/** F8 weekly recap: asked on start and on every unlock (the first unlock of a new week offers it). The second returned function closes it for the week. */
+export function useRecap(locked: boolean): [RecapWeek | null, () => void] {
+  const [w, setW] = useState<RecapWeek | null>(null);
+  useEffect(() => {
+    if (locked) return;
+    let live = true;
+    bridge.call("recap_get").then((v) => { if (live) setW(v); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [locked]);
+  const ack = useCallback(() => { setW(null); bridge.call("recap_ack").catch(() => undefined); }, []);
+  return [w, ack];
+}

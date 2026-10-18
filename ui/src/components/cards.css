@@ -146,3 +146,8 @@
 .editCount .add, .diffLines .add { color: var(--green); }
 .editCount .del, .diffLines .del { color: var(--redText); }
 .diffCard .diffLines { max-height: 260px; margin: 8px 0; white-space: pre; overflow: auto; }
+
+/* F8 weekly recap card */
+[data-recap] .recapRows { margin: 10px 0 12px; --indent: 0px; }
+[data-recap] .row { min-height: 34px; padding: 4px 0; }
+[data-recap] .recapCopy { min-width: 112px; } /* "Copy image" / "Copied": same width */

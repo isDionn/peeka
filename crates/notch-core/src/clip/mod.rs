@@ -216,6 +216,8 @@ pub enum ClipErr {
 pub enum Payload {
     Text(Secret),
     Image(PathBuf),
+    /// PNG bytes made by Peeka itself (the weekly recap image); never touches the disk.
+    Png(Vec<u8>),
     Files(Vec<String>),
 }
 

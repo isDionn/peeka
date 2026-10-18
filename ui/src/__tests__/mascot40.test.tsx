@@ -37,6 +37,24 @@ describe("strip mascot 40 px", () => {
     await settle(200);
     expect(document.querySelector("[data-composer]")).not.toBeNull(); // the composer, not Modules
   });
+  it("F7: dragging the mascot onto a window opens the composer with that window attached; a cancelled drag opens nothing", async () => {
+    fakeBridge.setSurfaces({ composer: { ...COMPASS, voice: true } });
+    render(<Island monitor="m1" init={{ view: null }} />);
+    await settle();
+    const hit = () => document.querySelector<HTMLElement>(".mascot-hit")!;
+    fakeBridge.setWindowPick([]);
+    fireEvent.pointerDown(hit());
+    fireEvent.click(hit()); // the drag's release
+    await settle(250);
+    expect(document.querySelector("[data-composer]")).toBeNull();
+    fakeBridge.setWindowPick([{ kind: "window_info", label: "Window: Notepad" }, { kind: "screen_image", label: "Screenshot" }]);
+    fireEvent.pointerDown(hit());
+    await settle(250);
+    expect(document.querySelector("[data-composer]")).not.toBeNull();
+    const added = Array.from(document.querySelectorAll(".chip.added")).map((c) => c.textContent);
+    expect(added).toEqual(["Window: Notepad", "Screenshot"]);
+    expect(fakeBridge.log.filter((l) => l.cmd === "window_pick")).toHaveLength(2);
+  });
   it("the mascot's clickable rectangle is included in the reported boxes", async () => {
     render(<Island monitor="m1" init={{ view: null }} />);
     await settle();

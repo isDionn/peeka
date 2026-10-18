@@ -134,6 +134,7 @@ export function ShelfCard({ items, main }: { items: ShelfItem[]; main: PluginInf
         <div className="drop"><Download />Drop here</div>
       </div>
       {items.length === 0 && <div className="t13 l2 b4">Shelf is empty. Drag a file onto the island to keep it here.</div>}
+      {items.length > 0 && !main && <div className="t12 l3 b4" role="note">Connect an assistant to ask about these files.</div>}
     </div>
   );
 }

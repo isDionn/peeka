@@ -402,20 +402,19 @@ function ApprovalRow({ a, onDetail, done, onAnswered }: { a: ApprovalItem; onDet
 
 /* ---- composer.handler (Ctrl+Space) ---- */
 
-export interface Suggestion { id: "window_image"; label: string }
 interface Added { key: string; kind: ComposerKind; label: string }
 const LINK = /^https?:\/\/\S+$/i;
 const shelfLabel = (n: number) => (n === 1 ? "1 file on Shelf" : `${n} files on Shelf`);
 
 /**
  * Ctrl+Space box: text, suggestion chips (added on click), streaming answer, source chips. Peeka draws the bubbles and chips.
- * Chips: "This window" (from Island), "Link on clipboard" and "N files on Shelf" (the card reads them itself); scan and paperclip buttons appear once Rust reports the attachment kinds.
+ * Chips: "Link on clipboard" and "N files on Shelf" (the card reads them itself), `picked` window chips (F7); scan and paperclip buttons appear once Rust reports the attachment kinds.
  */
 /** Typed but unsent draft: survives closing and reopening the card (Esc, ×, click outside); cleared on send (O4). */
 let draftKeep = "";
 export const resetComposerDraft = () => { draftKeep = ""; };
 
-export function ComposerCard({ owner, turns, send, suggestions, autoShelf }: { owner: PluginRef & { voice: boolean }; turns: Turn[]; send: (text: string, attachments: { kind: "window_image" }[]) => void; suggestions: Suggestion[]; /** A file was dropped on the mascot: Shelf files are added automatically. */ autoShelf?: boolean }) {
+export function ComposerCard({ owner, turns, send, autoShelf, picked }: { owner: PluginRef & { voice: boolean }; turns: Turn[]; send: (text: string, attachments: { kind: ComposerKind }[]) => void; /** A file was dropped on the mascot: Shelf files are added automatically. */ autoShelf?: boolean; /** The mascot was dropped on a window (`window_pick`): its chips arrive added; a new array = a new pick. */ picked?: Attached[] }) {
   const [text, setTextRaw] = useState(draftKeep);
   const setText = (v: string) => { draftKeep = v; setTextRaw(v); };
   const [added, setAdded] = useState<Added[]>([]);
@@ -426,11 +425,11 @@ export function ComposerCard({ owner, turns, send, suggestions, autoShelf }: { o
   const clips = useClips(), shelf = useShelf();
   const hasLink = clips.some((c) => c.kind === "text" && (c.hint === "link" || (c.text !== null && LINK.test(c.text.trim()))));
   const offers: Added[] = [
-    ...suggestions.map((s): Added => ({ key: s.id, kind: s.id, label: s.label })),
     ...(hasLink && kinds.has("clipboard_link") ? [{ key: "clipboard_link", kind: "clipboard_link" as const, label: "Link on clipboard" }] : []),
     ...(shelf.length > 0 && kinds.has("shelf") ? [{ key: "shelf", kind: "shelf" as const, label: shelfLabel(shelf.length) }] : []),
   ];
   useEffect(() => { if (autoShelf && shelf.length > 0 && kinds.has("shelf")) setAdded((cur) => (cur.some((x) => x.key === "shelf") ? cur : [...cur, { key: "shelf", kind: "shelf", label: shelfLabel(shelf.length) }])); }, [autoShelf, shelf.length, kinds]);
+  useEffect(() => { if (picked?.length) setAdded((cur) => [...cur, ...picked.map((r, i) => ({ key: `${r.kind}:${cur.length + i}`, kind: r.kind, label: plain(r.label, 40) }))]); }, [picked]);
   const toggle = (o: Added) => setAdded((cur) => (cur.some((x) => x.key === o.key) ? cur.filter((x) => x.key !== o.key) : [...cur, o]));
   // Rust refuses a scan of a sensitive window with `denied` and reports why via notch://notice (Rust's own text, shown as is)
   const [scanNote, setScanNote] = useState("");
@@ -442,8 +441,7 @@ export function ComposerCard({ owner, turns, send, suggestions, autoShelf }: { o
   const go = () => {
     const t = text.trim();
     if (!t) return;
-    // shortcut: hooks.ts only types window_image; other kinds get no chip/button until Rust reports them via composer_kinds, so this casts to the narrow type
-    send(t, added.map(({ kind }) => ({ kind })) as { kind: "window_image" }[]);
+    send(t, added.map(({ kind }) => ({ kind })));
     setText(""); setAdded([]);
   };
   const name = pluginName(owner), ask = `Ask ${owner.name}`;

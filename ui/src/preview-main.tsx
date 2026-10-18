@@ -37,6 +37,8 @@ const ISLAND_STATES: Record<string, IslandInit> = {
   sy: { away: { notif: 3, approval: 1, done: 2 }, pin: true },
   // notification burst (by), two Claude Code sessions (os: two session_start), error card + "Why?" (hn)
   by: { burst: { n: 6, apps: ["Discord", "Outlook", "Teams"] }, pin: true }, os: { pin: true }, hn: { view: "error", err: "Bash" },
+  // F8 weekly recap card ("Your week"; the fake bridge offers last week's counts)
+  rc: {},
   sarj: { charge: true, pin: true }, pil: {}, bt: { bt: { name: "Buds Pro", battery: 80 }, pin: true }, zam: {}, dik: {}, tik: {}, kay: {}, f0: {}, g0: { shelfDrag: true, pin: true }, g: { view: "shelf" },
 };
 const state = param("state", "a");
@@ -45,6 +47,7 @@ const APPROVALS = { c1: APPROVAL_LOW, c2: APPROVAL_LOW, t3: APPROVAL_LOW, c1r: A
 if (state in APPROVALS) { const a = APPROVALS[state as keyof typeof APPROVALS]; fakeBridge.setSurfaces({ approvals: [a], approvalTop: a.id, dropStripMs: state === "t3" ? 4000 : null }); }
 // mockup DINLEN(): "1 approval" count at rest (opens no card or peek: the attention budget didn't move the approval to the peek)
 if (["a", "hov", "mz", "i", "m", "n", "n2", "t1", "t2", "dnd"].includes(state)) fakeBridge.setSurfaces({ approvals: [APPROVAL_LOW], approvalTop: null });
+if (state === "rc") fakeBridge.setRecap({ startDay: 20_738, sessions: 14, sessionMs: 23_400_000, allowed: 37, denied: 3, files: 58, clips: 112, days: [9, 14, 31, 12, 18, 2, 0] });
 if (state === "dnd") fakeBridge.setStatus({ dnd: true, dndUntil: "until 6:00 PM" });
 // x0: assistant installed but not connected (mascot sleeps); ?noplugins none installed at all
 if (state === "x0" || state === "x1") fakeBridge.setPlugins(PLUGINS.map((p) => (p.main ? { ...p, connected: false } : p)));

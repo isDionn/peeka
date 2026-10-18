@@ -68,6 +68,9 @@ pub fn emit(app: &AppHandle, changes: Vec<Change>) {
     if changes.is_empty() {
         return;
     }
+    if changes.iter().any(|c| c.reason == "added") {
+        crate::recap::count(app, notch_core::recap::Ev::Clip);
+    }
     let hide = hide_passwords(app);
     for c in changes {
         let _ = app.emit("clip_changed", c.hiding_passwords(hide));

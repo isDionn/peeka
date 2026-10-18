@@ -398,6 +398,12 @@ describe("small peeks (decision 12)", () => {
     const bump = render(<ShelfBump main={main} />);
     expect(bump.container.querySelectorAll(".dropSmall")).toHaveLength(2);
   });
+  it("shelf: without an assistant, no Ask button but a hint row (no dead end)", async () => {
+    fakeBridge.setShelf([{ id: "f1", name: "a.pdf", sub: "1 MB", kind: "pdf" }]);
+    const { container } = render(<ShelfCard items={await fakeBridge.call("shelf_list")} main={null} />);
+    expect(container.querySelector(".mini.ask")).toBeNull();
+    expect(container.textContent).toMatch(/Connect an assistant/);
+  });
   it("shelf: share_open is rejected for a file that does not exist (fake bridge)", async () => {
     await expect(fakeBridge.call("share_open", { id: "missing" })).rejects.toBe("denied");
   });

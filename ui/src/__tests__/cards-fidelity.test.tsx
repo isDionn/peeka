@@ -114,13 +114,13 @@ describe("Ctrl+Space box", () => {
     fakeBridge.setShelf([{ id: "a", name: "a.pdf", sub: "", kind: "pdf" }, { id: "b", name: "b.pdf", sub: "", kind: "pdf" }]);
     fakeBridge.addClip({ id: "k1", createdAt: Date.now(), pinned: false, source: "Chrome", kind: "text", text: "https://example.com/x", hint: "link", sub: null, thumb: null, screenshot: false });
     const send = vi.fn();
-    const { container } = render(<ComposerCard owner={owner} turns={[]} send={send} suggestions={[{ id: "window_image", label: "This window: Chrome" }]} />);
+    const { container } = render(<ComposerCard owner={owner} turns={[]} send={send} />);
     await settle();
     expect(screen.getByPlaceholderText("Ask Compass anything: a question, a task, a reminder")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Attach screenshot" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Attach file" })).toBeTruthy();
     expect(container.querySelector(".slot.accent")).toBeTruthy();
-    expect(screen.getByText("This window: Chrome")).toBeTruthy();
+    expect(screen.queryByText(/This window/)).toBeNull(); // the old chip (never worked) is gone
     expect(screen.getByText("Link on clipboard")).toBeTruthy();
     expect(screen.getByText("2 files on Shelf")).toBeTruthy();
     fireEvent.click(screen.getByText("Link on clipboard"));
@@ -130,17 +130,17 @@ describe("Ctrl+Space box", () => {
     fireEvent.keyDown(screen.getByPlaceholderText(/Ask Compass/), { key: "Enter" });
     expect(send).toHaveBeenCalledWith("summarize", [{ kind: "clipboard_link" }, { kind: "screen_image" }]);
   });
-  it("when Rust reports no attachment kinds only the window chip exists (no out-of-contract kind is sent)", async () => {
+  it("when Rust reports no attachment kinds there are no chips or attach buttons (no out-of-contract kind is sent)", async () => {
     { const real = fakeBridge.call.bind(fakeBridge) as (c: string, ...a: unknown[]) => Promise<unknown>; vi.spyOn(fakeBridge, "call").mockImplementation(((c: string, ...a: unknown[]) => (c === "composer_kinds" ? Promise.reject("unknown") : real(c, ...a))) as never); }
     fakeBridge.setShelf([{ id: "a", name: "a.pdf", sub: "", kind: "pdf" }]);
-    render(<ComposerCard owner={owner} turns={[]} send={() => undefined} suggestions={[{ id: "window_image", label: "This window: Chrome" }]} />);
+    render(<ComposerCard owner={owner} turns={[]} send={() => undefined} />);
     await settle();
     expect(screen.queryByText(/Raftaki/)).toBeNull();
     expect(screen.queryByRole("button", { name: "Attach file" })).toBeNull();
-    expect(screen.getByText("This window: Chrome")).toBeTruthy();
+    expect(screen.queryByText("1 file on Shelf")).toBeNull();
   });
   it("another plugin's name stays as a prefix", async () => {
-    render(<ComposerCard owner={{ ...OTHER, voice: false }} turns={[]} send={() => undefined} suggestions={[]} />);
+    render(<ComposerCard owner={{ ...OTHER, voice: false }} turns={[]} send={() => undefined} />);
     expect(screen.getByPlaceholderText("Ask Sample Assistant anything: a question, a task, a reminder")).toBeTruthy();
   });
 });

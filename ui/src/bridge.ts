@@ -180,9 +180,11 @@ export interface TrayIconX extends TrayIcon { badge?: number; colorIcon?: string
 /** `start`: ISO time (absent on all-day rows); `link`: https only on meeting hosts (Rust filters). Both absent on the old bridge. */
 export interface CalendarNext { detail: string | null; next: { time: string; title: string; source: string; start?: string; link?: string }[] }
 export interface ShelfSuggestion { id: string; text: string }
-/** Ctrl+Space attachment kinds; the page sends only the kind, Rust resolves the path. `window_image` is `not_yet` in Rust. */
-export type ComposerKind = "window_image" | "screen_image" | "file" | "clipboard_link" | "shelf";
+/** Ctrl+Space attachment kinds; the page sends only the kind, Rust resolves the path. `window_info` only comes from `window_pick`. */
+export type ComposerKind = "screen_image" | "file" | "clipboard_link" | "shelf" | "window_info";
 export interface Attached { kind: ComposerKind; label: string }
+/** F8: one week's counts (Rust `notch_core::recap::Week`). `startDay` = its Monday, local days since 1970-01-01; `days` = coding activity per weekday, Monday first. */
+export interface RecapWeek { startDay: number; sessions: number; sessionMs: number; allowed: number; denied: number; files: number; clips: number; days: number[] }
 
 /* ---------- commands: Rust #[tauri::command] name = key ---------- */
 export interface Commands {
@@ -350,12 +352,20 @@ export interface Commands {
   focus_strip: { args: { monitor: string }; ret: void };
   /** When the strip hands focus back with Tab, focus goes to the island window (one for all screens). */
   focus_island: { args: void; ret: void };
+  /** F8 weekly recap: last week's counts while the card is still to be offered this week (a new week began, not closed yet, anything counted); null otherwise or while locked. */
+  recap_get: { args: void; ret: RecapWeek | null };
+  /** The card was closed: not again this week. */
+  recap_ack: { args: void; ret: void };
+  /** "Copy image": a 1080x1350 PNG (bytes) onto the clipboard; never saved. `invalid` for another size, `denied` while locked, `refused` when the clipboard is busy. */
+  recap_copy_image: { args: { png: number[] }; ret: void };
   /** `on` true when a typing panel (Search, Ask box) opens: only now may the window take keyboard focus; false on close: focus returns to the previous app. `label` = "island" | "strip-<monitor>". Errors: `unknown` (no other label/window) or `refused`. */
   typing_focus: { args: { label: string; on: boolean }; ret: void };
   /** Take a screenshot; cancel = null. */
   composer_scan: { args: void; ret: Attached | null };
   /** File picker; cancel = null. */
   composer_attach_file: { args: void; ret: Attached | null };
+  /** Called on pointerdown on the mascot; resolves on release. null = no drag (a plain click), [] = cancelled (Esc, or released over no app window), else the chips for the window it was dropped on (already kept by Rust for the next send). */
+  window_pick: { args: void; ret: Attached[] | null };
 }
 export type CommandName = keyof Commands;
 // Must match Rust's list (commands.generated.ts) exactly: tsc stops here if one is missing or extra. Plugin commands and

@@ -295,6 +295,14 @@ pub fn mouse_down() -> bool {
     [VK_LBUTTON, VK_RBUTTON, VK_MBUTTON].iter().any(|k| unsafe { GetAsyncKeyState(i32::from(k.0)) } as u16 & 0x8000 != 0)
 }
 
+/// Esc is held right now (the mascot drag's cancel; read anywhere, no focus needed).
+#[cfg(windows)]
+pub fn esc_down() -> bool {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_ESCAPE};
+    // SAFETY: a plain key-state read; the high bit = held now.
+    unsafe { GetAsyncKeyState(i32::from(VK_ESCAPE.0)) as u16 & 0x8000 != 0 }
+}
+
 /// The top-level window under a screen point (window regions respected: a strip's clipped-away area is not it).
 #[cfg(windows)]
 pub fn root_at(x: i32, y: i32) -> isize {

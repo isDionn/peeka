@@ -433,6 +433,10 @@ mod win {
                 let Some(pic) = clip_image::decode_png(&png) else { return false };
                 vec![(CF_DIB.0 as u32, clip_image::to_dib(&pic)), (f.png, png)]
             }
+            Payload::Png(png) => {
+                let Some(pic) = clip_image::decode_png(png) else { return false };
+                vec![(CF_DIB.0 as u32, clip_image::to_dib(&pic)), (f.png, png.clone())]
+            }
             Payload::Files(paths) => {
                 vec![(CF_HDROP.0 as u32, drop_files(paths)), (f.drop_effect, 1u32.to_le_bytes().to_vec())]
             }

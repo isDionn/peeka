@@ -270,6 +270,10 @@ pub fn run() {
             crate::commands::composer_kinds,
             crate::commands::composer_scan,
             crate::commands::composer_attach_file,
+            crate::commands::window_pick,
+            crate::commands::recap_get,
+            crate::commands::recap_ack,
+            crate::commands::recap_copy_image,
         ])
         .setup(|app| {
             setup(app.handle()).map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
@@ -371,6 +375,7 @@ fn setup(app: &AppHandle) -> Result<(), String> {
     crate::extras::start(app);
     crate::mirror::start(app);
     crate::plugins::start(app, data_dir.clone());
+    crate::recap::start(app, &data_dir);
     crate::clip_history::start(app, data_dir);
     ticks(app.clone());
     click_through(app.clone());

@@ -196,21 +196,21 @@ describe("O4: Ctrl+Space box", () => {
   const send = vi.fn();
   const owner = { ...COMPASS, voice: false };
   it("after sending, the box stays the same element, with focus and position preserved", () => {
-    const view = render(<ComposerCard owner={owner} turns={[]} send={send} suggestions={[]} />);
+    const view = render(<ComposerCard owner={owner} turns={[]} send={send} />);
     const inp = screen.getByRole("textbox") as HTMLInputElement;
     inp.focus();
     fireEvent.change(inp, { target: { value: "hello" } });
     fireEvent.keyDown(inp, { key: "Enter" });
-    view.rerender(<ComposerCard owner={owner} turns={[{ id: 1, ask: "hello", answer: "", chips: [], state: "wait" }]} send={send} suggestions={[]} />);
+    view.rerender(<ComposerCard owner={owner} turns={[{ id: 1, ask: "hello", answer: "", chips: [], state: "wait" }]} send={send} />);
     expect(screen.getByRole("textbox")).toBe(inp);
     expect(document.activeElement).toBe(inp);
     expect(inp.closest("[data-composer]")!.firstElementChild!.contains(inp)).toBe(true);
   });
   it("a written draft is not lost when closing and reopening; it is cleared when sent", () => {
-    const a = render(<ComposerCard owner={owner} turns={[]} send={send} suggestions={[]} />);
+    const a = render(<ComposerCard owner={owner} turns={[]} send={send} />);
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "half written" } });
     a.unmount();
-    render(<ComposerCard owner={owner} turns={[]} send={send} suggestions={[]} />);
+    render(<ComposerCard owner={owner} turns={[]} send={send} />);
     const inp = screen.getByRole("textbox") as HTMLInputElement;
     expect(inp.value).toBe("half written");
     fireEvent.keyDown(inp, { key: "Enter" });

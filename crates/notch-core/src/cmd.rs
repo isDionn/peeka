@@ -86,8 +86,9 @@ pub fn unlocked(locked: bool) -> Result<(), CmdError> {
 }
 
 /// The commands in `crates/notch-app/src/commands.rs` that must start with `cmd::unlocked`.
-pub const SENDS_OWNER_CONTENT: [&str; 16] = [
+pub const SENDS_OWNER_CONTENT: [&str; 17] = [
     "composer_scan",
+    "window_pick",
     "composer_attach_file",
     "composer_submit",
     "share_open",
@@ -130,14 +131,96 @@ pub fn pins_order(current: &[Pin], items: &[AppItem], ids: &[String]) -> Result<
 /// case-insensitively). `denied` when that window is a sensitive app (password manager, bank, Windows security: the
 /// clipboard's `clip::secret` lists); the next window down is never taken instead, the owner meant this one.
 pub fn scan_target(windows: &[crate::apps::RawWindow], own_exe: &str) -> Result<isize, CmdError> {
+    let w = windows.iter().find(|w| pickable(w, own_exe)).ok_or(CmdError::Missing)?;
+    not_sensitive(w)?;
+    Ok(w.hwnd)
+}
+
+/// An app window the owner can point at: shown, not minimised, not Notch's own (`own_exe`, case-insensitive).
+fn pickable(w: &crate::apps::RawWindow, own_exe: &str) -> bool {
+    let own = !own_exe.is_empty() && w.exe_path.eq_ignore_ascii_case(own_exe);
+    crate::apps::is_app_window(w) && !w.minimized && !own
+}
+
+/// `denied` for a sensitive app (password manager, bank, Windows security: the clipboard's `clip::secret` lists).
+pub fn not_sensitive(w: &crate::apps::RawWindow) -> Result<(), CmdError> {
     use crate::clip::secret::{sensitive_exe, sensitive_title};
-    let own = |w: &crate::apps::RawWindow| !own_exe.is_empty() && w.exe_path.eq_ignore_ascii_case(own_exe);
-    let w =
-        windows.iter().find(|w| crate::apps::is_app_window(w) && !w.minimized && !own(w)).ok_or(CmdError::Missing)?;
     if sensitive_exe(&w.exe_path) || sensitive_title(&w.title) {
         return Err(CmdError::Denied);
     }
-    Ok(w.hwnd)
+    Ok(())
+}
+
+/// `window_pick`'s target: the app window whose top-level `root` (`WindowFromPoint` + `GA_ROOT`) is under the
+/// cursor. None for the desktop, the taskbar, Notch's own island and strips, a tool window.
+pub fn pick_target<'a>(
+    windows: &'a [crate::apps::RawWindow],
+    root: isize,
+    own_exe: &str,
+) -> Option<&'a crate::apps::RawWindow> {
+    windows.iter().find(|w| root != 0 && w.hwnd == root && pickable(w, own_exe))
+}
+
+/// One poll of the mascot drag (`window_pick`): mouse button held, Esc held, cursor, and the pick target under it.
+#[derive(Clone, Copy, Debug)]
+pub struct PickTick {
+    pub down: bool,
+    pub esc: bool,
+    pub cursor: (i32, i32),
+    pub target: Option<isize>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum PickStep {
+    /// Still held; the window to outline (None = no outline).
+    Going(Option<isize>),
+    /// Released without moving: an ordinary click on the mascot.
+    Click,
+    /// Esc, or released over no app window.
+    Cancel,
+    /// Released over this window.
+    Drop(isize),
+}
+
+/// A press that moves more than this many px from where it started is a drag, not a click.
+pub const PICK_SLOP: i32 = 6;
+
+/// The drag from the mascot. Esc cancels it for good: the release then does nothing.
+#[derive(Debug)]
+pub struct Picker {
+    start: (i32, i32),
+    dragged: bool,
+    cancelled: bool,
+}
+
+impl Picker {
+    pub fn new(start: (i32, i32)) -> Self {
+        Self { start, dragged: false, cancelled: false }
+    }
+
+    pub fn step(&mut self, t: PickTick) -> PickStep {
+        let (dx, dy) = (t.cursor.0 - self.start.0, t.cursor.1 - self.start.1);
+        self.dragged |= dx.abs() > PICK_SLOP || dy.abs() > PICK_SLOP;
+        self.cancelled |= t.esc;
+        let target = if self.dragged && !self.cancelled { t.target } else { None };
+        match (t.down, target) {
+            (true, _) => PickStep::Going(target),
+            (false, Some(h)) => PickStep::Drop(h),
+            (false, None) if !self.dragged && !self.cancelled => PickStep::Click,
+            (false, None) => PickStep::Cancel,
+        }
+    }
+}
+
+/// The text attached for a picked window: its app name and title (the owner pointed at it; a sensitive app is
+/// refused before this).
+pub fn window_context(app: &str, title: &str) -> String {
+    let title = title.trim();
+    if title.is_empty() || title == app {
+        format!("The owner pointed at this window. App: {app}")
+    } else {
+        format!("The owner pointed at this window. App: {app}. Title: {title}")
+    }
 }
 
 /// `path` is `dir` or inside it, the Windows way: case-insensitive, `/` or `\`, whole components only. Ctrl+K hides
@@ -255,6 +338,66 @@ mod tests {
         let small = crate::apps::RawWindow { minimized: true, ..editor.clone() };
         assert_eq!(scan_target(&[notch, small], own), Err(CmdError::Missing));
         assert_eq!(scan_target(&[editor], ""), Ok(2));
+    }
+
+    #[test]
+    fn pick_target_is_the_app_window_under_the_cursor_never_notchs_own() {
+        let w = |hwnd: isize, exe: &str| crate::apps::RawWindow {
+            hwnd,
+            title: "T".into(),
+            class: "Chrome_WidgetWin_1".into(),
+            visible: true,
+            exe_path: exe.into(),
+            ..Default::default()
+        };
+        let own = r"C:\Program Files\Peeka\peeka.exe";
+        let ws =
+            [w(1, own), w(2, r"C:\Windows\notepad.exe"), crate::apps::RawWindow { minimized: true, ..w(3, "x.exe") }];
+        assert_eq!(pick_target(&ws, 2, own).map(|w| w.hwnd), Some(2));
+        assert_eq!(pick_target(&ws, 1, own).map(|w| w.hwnd), None, "the island or a strip");
+        assert_eq!(pick_target(&ws, 3, own).map(|w| w.hwnd), None, "minimised");
+        assert_eq!(pick_target(&ws, 9, own).map(|w| w.hwnd), None, "desktop, taskbar, unknown");
+        assert_eq!(pick_target(&ws, 0, own).map(|w| w.hwnd), None);
+    }
+
+    #[test]
+    fn picker_click_drag_drop_and_esc() {
+        let t = |down: bool, x: i32, target: Option<isize>| PickTick { down, esc: false, cursor: (x, 0), target };
+        let mut p = Picker::new((0, 0));
+        assert_eq!(p.step(t(true, 3, Some(7))), PickStep::Going(None), "inside the slop: no outline yet");
+        assert_eq!(p.step(t(false, 3, Some(7))), PickStep::Click);
+
+        let mut p = Picker::new((0, 0));
+        assert_eq!(p.step(t(true, 40, Some(7))), PickStep::Going(Some(7)));
+        assert_eq!(p.step(t(true, 2, None)), PickStep::Going(None), "back over the island");
+        assert_eq!(p.step(t(false, 2, None)), PickStep::Cancel, "a drag released over nothing is not a click");
+
+        let mut p = Picker::new((0, 0));
+        p.step(t(true, 40, Some(7)));
+        assert_eq!(p.step(t(false, 40, Some(8))), PickStep::Drop(8));
+
+        let mut p = Picker::new((0, 0));
+        p.step(t(true, 40, Some(7)));
+        assert_eq!(
+            p.step(PickTick { esc: true, ..t(true, 40, Some(7)) }),
+            PickStep::Going(None),
+            "Esc drops the outline"
+        );
+        assert_eq!(p.step(t(false, 40, Some(7))), PickStep::Cancel, "and the release after Esc does nothing");
+
+        let mut p = Picker::new((0, 0));
+        p.step(PickTick { esc: true, ..t(true, 0, None) });
+        assert_eq!(p.step(t(false, 0, None)), PickStep::Cancel, "Esc then release in place is not a click");
+    }
+
+    #[test]
+    fn window_context_names_app_and_title() {
+        assert_eq!(
+            window_context("Notepad", " Report.txt "),
+            "The owner pointed at this window. App: Notepad. Title: Report.txt"
+        );
+        assert_eq!(window_context("Notepad", "Notepad"), "The owner pointed at this window. App: Notepad");
+        assert_eq!(window_context("Notepad", ""), "The owner pointed at this window. App: Notepad");
     }
 
     #[test]

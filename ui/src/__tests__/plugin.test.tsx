@@ -216,17 +216,19 @@ function Harness() {
   const c = useComposer();
   const [, force] = useState(0);
   void force;
-  return <ComposerCard owner={{ ...COMPASS, voice: false }} turns={c.turns} send={c.send} suggestions={[{ id: "window_image", label: "This window: Chrome" }]} />;
+  return <ComposerCard owner={{ ...COMPASS, voice: false }} turns={c.turns} send={c.send} />;
 }
 describe("Ctrl+Space flow", () => {
   it("the chip is attached only when clicked; the answer streams in pieces, then source chips and the end arrive", async () => {
     vi.useFakeTimers();
+    fakeBridge.addClip({ id: "k1", createdAt: Date.now(), pinned: false, source: "Chrome", kind: "text", text: "https://example.com/x", hint: "link", sub: null, thumb: null, screenshot: false });
     render(<Harness />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
     fireEvent.change(screen.getByLabelText(/Ask/), { target: { value: "What is on tomorrow?" } });
-    fireEvent.click(screen.getByRole("button", { name: /This window: Chrome/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Link on clipboard/ }));
     fireEvent.keyDown(screen.getByLabelText(/Ask/), { key: "Enter" });
     await act(async () => { await vi.advanceTimersByTimeAsync(100); });
-    expect(fakeBridge.log.at(-1)).toMatchObject({ cmd: "composer_submit", args: { text: "What is on tomorrow?", attachments: [{ kind: "window_image" }] } });
+    expect(fakeBridge.log.at(-1)).toMatchObject({ cmd: "composer_submit", args: { text: "What is on tomorrow?", attachments: [{ kind: "clipboard_link" }] } });
     expect(screen.getByText("What is on tomorrow?")).toBeTruthy();
     expect(screen.getByText(/9:30 AM design review\s*$/)).toBeTruthy(); // first chunk
     await act(async () => { await vi.advanceTimersByTimeAsync(300); });

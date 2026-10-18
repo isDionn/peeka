@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ArrowUpRight, Clipboard, LayoutGrid, Lock, Search, Settings as SettingsIcon, ShieldCheck, Volume2, VolumeX, X } from "lucide-react";
-import { bridge, UNSUPPORTED_EVENT, type Alert, type ApprovalItem, type AssistantCounts, type BluetoothEvent, type CcEdit, type ClipPlain, type CpuHigh, type DownloadDone, type Media, type MusicStopped, type ProtrusionItem, type Status, type TimerState, type VolumeOsd } from "../bridge";
+import { bridge, UNSUPPORTED_EVENT, type Alert, type Attached, type ApprovalItem, type AssistantCounts, type BluetoothEvent, type CcEdit, type ClipPlain, type CpuHigh, type DownloadDone, type Media, type MusicStopped, type ProtrusionItem, type Status, type TimerState, type VolumeOsd } from "../bridge";
 import { timerLeft, useAlerts, useBluetooth, useComposer, useConsent, useHitRects, useInput, useLock, useMainAssistant, useMedia, useMirror, useNow, usePlugins, useMeetingReminder, useSecond, useSettings, useShelf, useShelfDrag, useStatus, useSurfaces, useSysmon, useTimer } from "../hooks";
 import { pickProtrusion } from "../lib/alerts";
 import { addHitProvider } from "../lib/hitRects";
@@ -29,18 +29,18 @@ import { BurstBump, BurstCenter, CpuBump, CpuCenter, DiffCard, DownloadBump, Dow
 /** Keep the card shadow (notch-extra.css: 0 28px 72px) from being clipped by the window region: this much room at the sides and bottom (CSS px). */
 const SHADOW_SIDE = 72, SHADOW_BOTTOM = 110;
 import { useSpring } from "../motion/useSpring";
-import { ApprovalBump, ApprovalCard, ApprovalCenter, ApprovalShort, ComposerCard, Lead, ProtrusionBump, ProtrusionCenter, type Suggestion } from "./Plugin";
+import { ApprovalBump, ApprovalCard, ApprovalCenter, ApprovalShort, ComposerCard, Lead, ProtrusionBump, ProtrusionCenter } from "./Plugin";
 import { LockCard, LockCenter, ClipboardCenter, ClipboardView, ShotBump, ShotCenter, STRIP_TXT, stripKind } from "./Pano";
 import { Bars, FirstRunCard, ModulesCard, modulesKw, MusicBump, MusicCard, OsdBump } from "./IslandCards";
 import { IslandLine, AlertBumpFid, AlertCenter, AssistantOfflineCard, DndRest, LoadingBody, HiddenCenter, JobDoneCenter, MeetingCard, MeetingCenter, OfflineRest, ShelfOpenCenter, ShelfSuggestRow } from "./Fidelity";
 import { announceLine, announceNotif, announceWave } from "../lib/lineChan";
 import { AMBER, CYAN, lineOf } from "../lib/line";
 import { installKbModality } from "../lib/kbModality";
-import { useFirstConnect, useIslandHidden } from "../hooks.fidelity";
-import { EmptyBoard, ErrorCard, ErrorCenter, FirstConnectCard, FirstConnectCenter, LoadingCenter } from "./CardsExtra";
+import { useFirstConnect, useIslandHidden, useRecap } from "../hooks.fidelity";
+import { EmptyBoard, ErrorCard, ErrorCenter, FirstConnectCard, FirstConnectCenter, LoadingCenter, RecapCard, RecapCenter } from "./CardsExtra";
 
 /** Cards the user opens. Peeks that appear on their own (volume, alert, new track) stay below these. */
-export type IslandView = "diff" | "music-card" | "modules" | "noassistant" | "welcome" | "approval-card" | "composer" | "clipboard" | "shelf" | "meeting" | "firstconnect" | "error";
+export type IslandView = "diff" | "music-card" | "modules" | "noassistant" | "welcome" | "approval-card" | "composer" | "clipboard" | "shelf" | "meeting" | "firstconnect" | "recap" | "error";
 export interface IslandInit {
   view?: IslandView | null;
   /** Preview: self-closing peeks (volume, new track) stay open so screenshots are stable. */
@@ -120,7 +120,7 @@ function Marquee({ text }: { text: string }) {
 }
 
 /** Card layer: focus moves in on open, Tab cycles inside, Esc calls `onClose`, focus returns to the opener on unmount. Peeks don't take focus (they appear on their own). */
-const NO_MODULES_BTN = new Set(["modules", "lock", "welcome", "firstconnect", "ky"]);
+const NO_MODULES_BTN = new Set(["modules", "lock", "welcome", "firstconnect", "recap", "ky"]);
 function Layer({ spec, onClose, onModules, measure }: { spec: Spec; onClose: () => void; onModules: () => void; measure: (el: HTMLDivElement | null) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useFocusTrap(ref, onClose, spec.mode === "card", () => document.querySelector<HTMLElement>(".islandCenter"));
@@ -186,6 +186,7 @@ const centerOf = (kind: Kind, o: CenterOpts): ReactNode => {
     case "jobdone": return o.done && <JobDoneCenter title={o.done.title} took={o.done.took} />;
     case "meeting": return <MeetingCenter main={main} />;
     case "firstconnect": return <FirstConnectCenter />;
+    case "recap": return <RecapCenter />;
     case "ky": return <LoadingCenter title="Clipboard" />;
     case "kb": return <LoadingCenter title="Clipboard" icon={<Clipboard />} />;
     case "kh": return <ErrorCenter />;
@@ -254,7 +255,6 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   // while the chat is open the strip says what's really happening (Peeka's text, name from Peeka's records): "replying" while answering, else "ready"
   const last = composer.turns.at(-1);
   const composerLabel = last && surf.composer ? `${pluginName(surf.composer)} ${last.state === "wait" ? "is replying" : "ready"}` : null;
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const seeded = useRef(false);
   useEffect(() => { if (init?.ask && !seeded.current) { seeded.current = true; composer.send(init.ask, []); } }, [init?.ask, composer]);
   const pin = !!init?.pin;
@@ -331,12 +331,15 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const alertRaw = pickProtrusion(alerts.filter((a) => a.id === top), seen);
   // Presentation mode (row 37): no automatic peeks, content always uses generic labels (same path as lock: `priv`). The count stays on the strip as "N notifications".
   const priv = lock.locked || input.presentation;
+  // F8 weekly recap: offered on the first unlock of a new week, never while locked or presenting, never over another card
+  const [recap, ackRecap] = useRecap(lock.locked);
+  useEffect(() => { if (recap && !priv) setUser((u) => (u === null ? "recap" : u)); }, [recap, priv]);
   const alert = alertRaw && input.presentation ? null : alertRaw && lock.locked ? { ...alertRaw, title: LOCK_ALERT, subtitle: null } : alertRaw; // while locked, a generic label instead of the alert text; the buttons (Open/Later) still work
   // Plugins: approval (highest priority) > volume > alert > plugin peek > music. Rust's attention budget decided which one shows (`approvalTop`, `protrusion`).
   const approvalTop = surf.approvals.find((a) => a.id === surf.approvalTop) ?? null;
   const approvalCard = surf.approvals.find((a) => a.id === detailId) ?? approvalTop ?? surf.approvals[0] ?? null;
   // while Peeka is locked, the Clipboard and Modules cards don't open; the lock card stands in (ADR-0063 §6); no screenshot peek either
-  const view: IslandView | "lock" | null = lock.locked && (user === "diff" || user === "clipboard" || user === "modules" || user === "music-card") ? "lock" : user === "meeting" && !surf.protrusion ? null : user;
+  const view: IslandView | "lock" | null = lock.locked && (user === "diff" || user === "recap" || user === "clipboard" || user === "shelf" || user === "modules" || user === "music-card") ? "lock" : user === "meeting" && !surf.protrusion ? null : user;
   // presentation mode / busy (Windows, `input_tick`): automatic peeks (screenshot, Bluetooth, charging, music) stay quiet; Rust's attention budget already filters approvals, volume and alerts
   const calm = input.presentation || input.busy;
   const shotNow = shot && !lock.locked && !calm ? shot : null;
@@ -500,7 +503,29 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   // mascot: click = ask box; dropping a file = it swallows it and the box opens with the Shelf files attached; hover shows counts
   const [autoShelf, setAutoShelf] = useState(false);
   const feed = () => { if (!owner.current) return; setAutoShelf(true); openAsk("composer"); };
-  useEffect(() => { if (user !== "composer") setAutoShelf(false); }, [user]);
+  const [picked, setPicked] = useState<Attached[]>();
+  useEffect(() => { if (user !== "composer") { setAutoShelf(false); setPicked(undefined); } }, [user]);
+  // F7: pressing the mascot hands the mouse to Rust (`window_pick`); a drag outlines the window under the cursor and
+  // dropping on it opens the box with that window attached. A drag's release may still fire a click: it is ignored.
+  const pickRun = useRef<Promise<Attached[] | null> | null>(null); // Rust is following a press
+  const pickAt = useRef(0); // when the last drag ended
+  // a click runs only if it was no drag: while Rust still follows the press, wait for its answer (null = a plain click)
+  const afterPick = (act: () => void) => {
+    const run = pickRun.current;
+    if (run) void run.then((r) => { if (r === null) act(); }, act);
+    else if (Date.now() - pickAt.current >= 600) act();
+  };
+  const pick = () => {
+    if (!owner.current) return;
+    const run = bridge.call("window_pick");
+    pickRun.current = run;
+    run.then((r) => {
+      pickRun.current = null;
+      if (r !== null) pickAt.current = Date.now();
+      if (!r?.length) return;
+      mascotRef.current?.swallow(); setPicked(r); openAsk("composer");
+    }, () => { pickRun.current = null; });
+  };
   // while the Ask box is open the island takes keyboard focus; on close it hands it back to the previous app (ADR-0062 §1)
   const asking = user === "composer";
   useEffect(() => {
@@ -536,11 +561,6 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     return () => clearInterval(t);
   }, [lastInputAgoMs]);
 
-  // Ctrl+Space chips: suggestions only; added on click (only "This window" here; Clipboard and Shelf in later waves)
-  useEffect(() => {
-    if (user !== "composer") return;
-    bridge.call("list_windows", { monitor }).then((ws) => { const w = ws.find((x) => x.active); setSuggestions(w ? [{ id: "window_image", label: `This window: ${w.name}` }] : []); }).catch(() => undefined);
-  }, [user, monitor]);
   // the open approval card closes once the approval is answered (or expires)
   const hadApproval = useRef(false); // surfaces load async: the card only closes if the approval disappears after having been seen once
   if (approvalCard) hadApproval.current = true;
@@ -576,6 +596,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     if (more) return setMore(false);
     if (user === "music-card") { setUser(null); if (media) setMusicAuto(true); return; }
     if (user === "welcome") markFirstRun(); // Esc / × / clicking outside counts as "Skip": the card shouldn't come back on every launch
+    if (user === "recap") ackRecap(); // closing it any way counts: not again this week
     if (user) return setUser(null);
     if (osd) return setOsd(null);
     if (done) return setDone(null);
@@ -595,7 +616,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     if (charge) return setCharge(false);
     if (musicAuto) return setMusicAuto(false);
     if (pinned) return setPinned(null);
-  }, [user, osd, done, alert, shot, timerDone, closeTimerDone, netNote, dismissNet, summary, kind, musicAuto, media, battTier, burst, quota, stopped, dl, edit, cpuHigh, bt, charge, dismissBt, more, pinned]);
+  }, [user, osd, done, alert, shot, timerDone, closeTimerDone, netNote, dismissNet, summary, kind, musicAuto, media, battTier, burst, quota, stopped, dl, edit, cpuHigh, bt, charge, dismissBt, more, pinned, ackRecap]);
   useEffect(() => {
     const down = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.defaultPrevented) back(); };
     document.addEventListener("keydown", down);
@@ -638,10 +659,11 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       case "approval": return approvalTop && { key: "approval:" + approvalTop.id, mode: "bump", label: approvalTop.title, node: <ApprovalBump a={approvalTop} dropMs={surf.dropStripMs} onlyDetail={surf.dropStripMs !== null} generic={priv} onDetail={() => { setDetailId(approvalTop.id); setUser("approval-card"); }} /> };
       case "plugin": return surf.protrusion && { key: "plugin:" + surf.protrusion.plugin.id, mode: "bump", label: surf.protrusion.title, node: <ProtrusionBump item={surf.protrusion} /> };
       case "approval-card": return approvalCard && { key: "approval-card:" + approvalCard.id, mode: "card", kw: 620, label: approvalCard.title, node: <ApprovalCard a={approvalCard} generic={priv} /> };
-      case "composer": return surf.composer && { key: "composer", mode: "card", kw: 620, label: "Ask", node: <ComposerCard owner={surf.composer} turns={composer.turns} send={composer.send} suggestions={suggestions} autoShelf={autoShelf} /> };
+      case "composer": return surf.composer && { key: "composer", mode: "card", kw: 620, label: "Ask", node: <ComposerCard owner={surf.composer} turns={composer.turns} send={composer.send} autoShelf={autoShelf} picked={picked} /> };
       case "music-card": return musicCard && { key: "music-card", mode: "card", kw: 520, label: "Music", node: musicCard };
       case "modules": return { key: "modules", mode: "card", kw: modPage === "general" && !surf.tabs.length && !surf.summary.length ? 620 : modulesKw(modPage, innerWidth), label: "Modules: " + modName, node: <ModulesCard start={modStart} meeting={meetingItem} onPage={onModPage} onClose={back} media={media} pos={pos} sys={sys.tick} cpu={sys.cpu} surf={surf} shelf={shelf} main={main} onApproval={openApproval} timer={timer} /> };
       case "meeting": return meetingItem && { key: "meeting", mode: "card", kw: 520, label: "Meeting", node: <MeetingCard item={meetingItem} /> };
+      case "recap": return recap && { key: "recap", mode: "card", kw: 520, label: "Your week", node: <RecapCard week={recap} onDone={() => { ackRecap(); setUser(null); }} /> };
       case "firstconnect": return { key: "firstconnect", mode: "card", kw: 520, label: `${mainP ? pluginName(mainP) : "Assistant"} connected`, node: <FirstConnectCard onDone={() => { ackFc(); setUser(null); }} /> };
       case "ky": return { key: "ky", mode: "card", kw: 620, label: "Reading clipboard", node: <LoadingBody what="Reading clipboard" /> };
       case "kb": return { key: "kb", mode: "card", kw: 620, label: "Clipboard", node: <div className="body"><EmptyBoard /></div> };
@@ -664,7 +686,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       const card = kind === "modules" || plainPanel; // while a card is open, counts and mascot live in the card (say it once)
       return (
         <>
-          <span className="ms">{lockIcon}{!card && <Mascot ref={mascotRef} size={40} mood={moodShown} isMainAssistant cursor={input.cursor} onFileDrop={feed} />}<span className="l2" title={composerLabel ?? `${pluginName(mainP)} ready`}>{composerLabel ?? `${pluginName(mainP)} ready`}</span></span>
+          <span className="ms">{lockIcon}{!card && <Mascot ref={mascotRef} size={40} mood={moodShown} isMainAssistant cursor={input.cursor} onFileDrop={feed} onPoke={pick} />}<span className="l2" title={composerLabel ?? `${pluginName(mainP)} ready`}>{composerLabel ?? `${pluginName(mainP)} ready`}</span></span>
           {!card && approvalsN > 0 && <span className="t12 b6 approvalCount num">{cap99(approvalsN)} {approvalsN === 1 ? "approval" : "approvals"}</span>}
           {alerts.length > 0 && <span className="t12 l3 num">{cap99(alerts.length)} {alerts.length === 1 ? "notification" : "notifications"}</span>}
         </>
@@ -809,7 +831,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       {ambient && <div id="halo" style={{ width: W * 1.1, height: H * 1.15, ["--amb1" as string]: ambient[0], ["--ambO" as string]: 1 }} />}
       <button ref={center} className="islandCenter" data-hit aria-expanded={mode === "card" ? true : bump ? undefined : false} aria-label={ariaOverride ?? (bump ? `${say}. Open Modules` : `${parts.join(", ")}${mode === "card" ? "" : ". Open card"}`)}
         style={{ width: mw + 24, transform: `translateX(-50%) translateY(${hv * 0.5}px)`, filter: hv > 0.001 ? `brightness(${1 + hv * 0.28})` : undefined }}
-        title={bumpHover ? "Open Modules" : undefined} onClick={(e) => { if (!(e.target as Element).closest?.(".mascot")) return onCenter(); setTimeout(moodShown === "error" && restShown ? () => setUser("error") : owner.current ? () => openAsk("composer") : onCenter, SLAP_OPEN_MS); }}
+        title={bumpHover ? "Open Modules" : undefined} onClick={(e) => { if (!(e.target as Element).closest?.(".mascot")) return afterPick(onCenter); const act = moodShown === "error" && restShown ? () => setUser("error") : owner.current ? () => openAsk("composer") : onCenter; setTimeout(() => afterPick(act), SLAP_OPEN_MS); }}
         onPointerEnter={() => hoverIntent(true)} onPointerLeave={() => { hoverIntent(false); setMkHover(false); }}
         onPointerOver={(e) => { const on = !!(e.target as Element).closest?.(".mascot-hit"); if (on && !mkHover) loadCounts(); setMkHover(on); }}>
         {centerOld !== null && <span className="islandMascot leaving" data-leaving aria-hidden="true" style={{ maxWidth: centerMax }}>{centerOld.node}</span>}

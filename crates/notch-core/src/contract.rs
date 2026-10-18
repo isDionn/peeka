@@ -129,6 +129,8 @@ pub const COMMANDS: &[&str] = &[
     "composer_kinds",
     "composer_scan",
     "composer_attach_file",
+    // F7: drag the mascot onto a window (its app, title and picture go to the Ctrl+Space box)
+    "window_pick",
     // Scope tracking: an elevated window's "Open Task Manager" (`WindowInfo.elevated`)
     "open_task_manager",
     // Tab order strip <-> island, only while a Notch window holds the focus
@@ -136,6 +138,10 @@ pub const COMMANDS: &[&str] = &[
     "focus_island",
     // A typing panel (Search, the composer) is open or closed: the focus is taken only meanwhile and given back
     "typing_focus",
+    // F8: weekly recap (counts only, `notch_core::recap`)
+    "recap_get",
+    "recap_ack",
+    "recap_copy_image",
 ];
 
 /// Every event Rust emits to the pages. Payloads: see the header of `crates/notch-app/src/app.rs`.

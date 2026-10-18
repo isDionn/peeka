@@ -106,7 +106,7 @@ pub fn recent_target<'a>(paths: &'a [PathBuf], id: &str) -> Option<&'a Path> {
 }
 
 /// What `composer_submit` resolves from a page attachment that carries only its kind (`fidelity-cards-api.ts`
-/// `ComposerKind`). `window_image` stays `not_yet` (no "this window" capture), so it is not offered.
+/// `ComposerKind`).
 pub const COMPOSER_KINDS: [&str; 4] = ["screen_image", "file", "clipboard_link", "shelf"];
 
 /// A file the owner picked may be copied into the share folder up to this size (the main assistant reads only that folder).
@@ -133,11 +133,12 @@ pub struct Attached {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UiAttachKind {
-    WindowImage,
     ScreenImage,
     File,
     ClipboardLink,
     Shelf,
+    /// The app and title of a window the owner dragged the mascot onto (`window_pick`); goes as `clip` text.
+    WindowInfo,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
@@ -147,7 +148,7 @@ pub struct UiAttachment {
 
 /// The page's kinds -> the host's attachments: a screenshot or file the owner made with `composer_scan` /
 /// `composer_attach_file` (taken from `pending` in order), the newest clipboard link, every shelf file (once).
-/// `NotYet` for `window_image`; `Invalid` when a kind has nothing behind it.
+/// `Invalid` when a kind has nothing behind it.
 pub fn resolve(
     asked: &[UiAttachment],
     pending: &mut Vec<Attachment>,
@@ -162,9 +163,9 @@ pub fn resolve(
             Ok(pending.remove(i))
         };
         match a.kind {
-            UiAttachKind::WindowImage => return Err(OwnerErr::NotYet),
             UiAttachKind::ScreenImage => out.push(take(AttachKind::Screenshot)?),
             UiAttachKind::File => out.push(take(AttachKind::File)?),
+            UiAttachKind::WindowInfo => out.push(take(AttachKind::Clip)?),
             UiAttachKind::ClipboardLink => {
                 let text = link.ok_or(OwnerErr::Invalid)?.to_string();
                 out.push(Attachment { kind: AttachKind::Clip, path: None, text: Some(text) });
@@ -270,10 +271,21 @@ mod tests {
         assert_eq!((got[1].clone(), got.len()), (file, 4), "shelf files once");
         assert_eq!(pending, [shot("s-2.png")]);
         assert_eq!(resolve(&[ask(UiAttachKind::File)], &mut pending, None, &[]), Err(OwnerErr::Invalid), "none picked");
-        assert_eq!(resolve(&[ask(UiAttachKind::WindowImage)], &mut pending, None, &[]), Err(OwnerErr::NotYet));
         assert_eq!(resolve(&[ask(UiAttachKind::ClipboardLink)], &mut pending, None, &[]), Err(OwnerErr::Invalid));
         let l = resolve(&[ask(UiAttachKind::ClipboardLink)], &mut pending, Some("https://x.test/a"), &[]).unwrap();
         assert_eq!(l[0].text.as_deref(), Some("https://x.test/a"));
+        assert_eq!(
+            resolve(&[ask(UiAttachKind::WindowInfo)], &mut pending, None, &[]),
+            Err(OwnerErr::Invalid),
+            "nothing picked"
+        );
+        let info = Attachment { kind: AttachKind::Clip, path: None, text: Some("App: Notepad".into()) };
+        pending.push(info.clone());
+        assert_eq!(
+            resolve(&[ask(UiAttachKind::WindowInfo)], &mut pending, None, &[]),
+            Ok(vec![info]),
+            "the picked window's text"
+        );
         // A page that sends a path anyway: serde drops the field, the path never reaches the plugin.
         let a: UiAttachment = serde_json::from_str(r#"{"kind":"file","path":"x/secret.txt"}"#).unwrap();
         assert_eq!(a, ask(UiAttachKind::File));

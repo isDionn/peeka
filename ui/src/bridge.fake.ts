@@ -1,5 +1,5 @@
 // Fake back end used outside Tauri: realistic data, in-memory state, the same event path. Used by the preview and tests.
-import type { AgentBridge, TrayIconX, CalendarNext, Alert, AssistantCounts, BridgeState, PermissionEvent, RecentItem, AlertsView, AllCommands, AllEvents, CallArgs, CommandName, Commands, ClipChange, ClipItem, ClipPlain, ComposerEvent, ConsentAnswer, LockState, MirrorState, MirrorView, Notice, TrayIcon, ShelfItem, TimerState, PrivacyState, ConsentRequest, ModuleEntry, PluginCommands, PluginInfo, SurfacesView, Media, MonitorInfo, PinnedApp, SearchResult, Settings, Status, SysmonTick, VolumeOsd, WindowInfo } from "./bridge";
+import type { AgentBridge, Attached, TrayIconX, CalendarNext, Alert, AssistantCounts, BridgeState, PermissionEvent, RecentItem, AlertsView, AllCommands, AllEvents, CallArgs, CommandName, Commands, ClipChange, ClipItem, ClipPlain, ComposerEvent, ConsentAnswer, LockState, MirrorState, MirrorView, Notice, TrayIcon, ShelfItem, TimerState, PrivacyState, RecapWeek, ConsentRequest, ModuleEntry, PluginCommands, PluginInfo, SurfacesView, Media, MonitorInfo, PinnedApp, SearchResult, Settings, Status, SysmonTick, VolumeOsd, WindowInfo } from "./bridge";
 import { APP_NAMES, iconOf } from "./fakeIcons";
 import { EMPTY_SURFACES, MODULES, PLUGINS } from "./plugin.fixtures";
 
@@ -34,7 +34,7 @@ const TRACKS = [
 
 type W4Names = "search_index_state" | "search_open" | "search_ask" | "clip_list" | "clip_copy" | "clip_pin" | "clip_delete" | "clip_clear" | "clip_reveal" | "clip_share" | "clip_edit" | "clip_drag" | "clip_visible" | "lock_state" | "lock_now" | "lock_release";
 type W5Names = "window_preview" | "share_open" | "shelf_list" | "shelf_ask" | "timer_get" | "timer_start" | "timer_control" | "privacy_get" | "tray_open" | "mirror_state" | "mirror_enable" | "mirror_disable" | "mirror_list" | "mirror_dismiss" | "mirror_open_app" | "mirror_ask";
-type W7Names = "recent_files" | "open_recent" | "start_pins" | "open_start_menu" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "agent_bridges" | "agent_bridge_install" | "agent_bridge_remove" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "cc_focus_terminal" | "cc_diff" | "cc_diff_open" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus";
+type W7Names = "recent_files" | "open_recent" | "start_pins" | "open_start_menu" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "agent_bridges" | "agent_bridge_install" | "agent_bridge_remove" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "window_pick" | "cc_focus_terminal" | "cc_diff" | "cc_diff_open" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus";
 /** Peeka Phase C: clipboard, download and copy-code commands; Settings > About demo restart. */
 type W8Names = "demo_restart" | "notif_copy_code" | "clip_open" | "clip_to_shelf" | "clip_preview" | "download_open" | "download_show_in_folder";
 const svg = (inner: string) => "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${inner}</g></svg>`);
@@ -78,6 +78,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   let lock: LockState = { locked: false, reason: null };
   let hidden = false;
   let firstConnect = false;
+  let recap: RecapWeek | null = null;
   let calendar: CalendarNext = structuredClone(DEFAULT_CALENDAR);
   let bridgeState: BridgeState = { installed: true, healthy: true, lastEventAgoS: 120 };
   const AGENTS0: AgentBridge[] = [
@@ -131,7 +132,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       plain("c11", "text", 180, { text: "git switch -c feature/notch", hint: "command" }),
     ];
     lock = { locked: false, reason: null };
-    hidden = false; firstConnect = false; calendar = structuredClone(DEFAULT_CALENDAR); bridgeState = { installed: true, healthy: true, lastEventAgoS: 120 };
+    hidden = false; firstConnect = false; recap = null; calendar = structuredClone(DEFAULT_CALENDAR); bridgeState = { installed: true, healthy: true, lastEventAgoS: 120 };
     settings = {
       autostart: true, taskbarHide: "full", clipHistory: true, clipMedia: true, clipPasswordMin: 60,
       secondaryStrips: true, captureVolumeKeys: true, alertsApi: false, mascotPranks: true, celebrate: true, watchDownloads: true, colorIcons: false,
@@ -147,6 +148,9 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   const pinned = (): PinnedApp[] => pins.map(ref);
   let nextHwnd = 100;
   const handlers: { [K in Exclude<CommandName, W4Names | W5Names | W7Names | W8Names>]: (a: Commands[K]["args"]) => Commands[K]["ret"] } = {
+    recap_get: () => (lock.locked ? null : structuredClone(recap)),
+    recap_ack: () => { recap = null; },
+    recap_copy_image: ({ png }) => { if (lock.locked) throw "denied"; log.push({ cmd: "recap_copy_image", args: { bytes: png.length } }); },
     get_monitor: ({ monitor }): MonitorInfo => ({ id: monitor, primary: monitor === "m1", hasBattery, radios: "ok", brightness: true, user: "Local account", hz: 144 }),
     list_windows: () => windows.map((w) => ({ ...w })), // like Rust: every strip lists every monitor's windows
     get_pins: pinned,
@@ -290,6 +294,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   let mirror: MirrorState = { devMode: true, registered: true, access: "allowed", enabled: false, on: false, blocker: null };
   let notices: Notice[] = [];
   let scanDenied = false;
+  let picked: Attached[] | null = null;
   let quiet = false;
   const mirrorView = (): MirrorView => ({ items: structuredClone(notices), quiet });
   const mirrorEmit = () => emit("notifications_changed", mirrorView());
@@ -392,9 +397,9 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     shelf_suggest: ({ id }) => (shelf.find((f) => f.id === id)?.kind === "pdf" ? { id, text: "This looks like a presentation draft. Want me to summarize it into Notes?" } : null),
     shelf_memory: (a) => { log.push({ cmd: "shelf_memory", args: a }); },
     assistant_start: () => { log.push({ cmd: "assistant_start", args: null }); },
-    // `window_image` is `not_yet` in Rust: not offered.
     composer_kinds: () => ["screen_image", "file", "clipboard_link", "shelf"],
     composer_scan: () => { if (scanDenied) throw "denied"; return { kind: "screen_image", label: "Screenshot" }; },
+    window_pick: () => { log.push({ cmd: "window_pick", args: undefined }); const r = picked; picked = null; return r; },
     open_task_manager: () => { log.push({ cmd: "open_task_manager", args: undefined }); },
     focus_strip: (a) => { log.push({ cmd: "focus_strip", args: a }); },
     focus_island: () => { log.push({ cmd: "focus_island", args: undefined }); },
@@ -416,13 +421,15 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       return () => { set.delete(cb as never); };
     },
     now: () => fixed ?? new Date(),
-    reset: () => { reset(); filesIndex = true; scanDenied = false; surfaces = EMPTY_SURFACES; consent = null; shelf = []; timer = null; privacy = { mic: [], camera: [] }; previewDelay = 0; mirror = { devMode: true, registered: true, access: "allowed", enabled: false, on: false, blocker: null }; notices = []; quiet = false; agents = structuredClone(AGENTS0); plugins = structuredClone(PLUGINS); modules = structuredClone(MODULES); log.length = 0; turn = 0; },
+    reset: () => { reset(); filesIndex = true; scanDenied = false; picked = null; surfaces = EMPTY_SURFACES; consent = null; shelf = []; timer = null; privacy = { mic: [], camera: [] }; previewDelay = 0; mirror = { devMode: true, registered: true, access: "allowed", enabled: false, on: false, blocker: null }; notices = []; quiet = false; agents = structuredClone(AGENTS0); plugins = structuredClone(PLUGINS); modules = structuredClone(MODULES); log.length = 0; turn = 0; },
     /** Test and preview hooks: trigger by hand what Rust would do. */
     emit,
     /** Fidelity 3: the main assistant's bridge state and the "first connection" card. */
     setBridge: (s: BridgeState) => { bridgeState = s; },
     setCalendar: (c: CalendarNext) => { calendar = c; },
     setFirstConnect: (v: boolean) => { firstConnect = v; },
+    /** F8: the weekly recap Rust would offer (null = none due). */
+    setRecap: (w: RecapWeek | null) => { recap = w; },
     setSurfaces,
     /** Set a consent window request (`expiresAt` defaults to now + 112 s). */
     setConsent: (c: ConsentRequest | null) => { consent = c && { ...c, expiresAt: c.expiresAt || Date.now() + 112_000 }; emit("consent_changed", null); },
@@ -446,6 +453,8 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     setFilesIndex: (on: boolean) => { filesIndex = on; },
     /** Sensitive window: `composer_scan` returns `denied`. */
     setScanDenied: (on: boolean) => { scanDenied = on; },
+    /** The next mascot press is a drag that ends on a window (`window_pick` result once; default null = a plain click). */
+    setWindowPick: (r: Attached[] | null) => { picked = r; },
     setPlugins: (list: PluginInfo[]) => { plugins = structuredClone(list); emit("plugins_changed", null); },
     /** Wave 5 hooks: trigger Rust's timer, shelf and privacy events by hand; `previewDelay` mimics preview load time. */
     /** Fidelity hook: change status fields (quiet, end time) by hand. */
