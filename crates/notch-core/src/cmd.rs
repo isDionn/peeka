@@ -286,7 +286,7 @@ mod tests {
                 .find_map(|sig| src.find(sig.as_str()))
                 .unwrap_or_else(|| panic!("{name} not in commands.rs"));
             let body = &src[at..];
-            let body = &body[body.find(" {\n").expect("body")..];
+            let body = &body[body.find(" {").expect("body")..]; // not " {\n": CI checks out CRLF
             let first = body.lines().nth(1).unwrap_or_default().trim();
             assert_eq!(first, "cmd::unlocked(crate::plugins::locked(&app))?;", "{name}");
         }

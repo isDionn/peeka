@@ -207,8 +207,8 @@ mod tests {
         let app = include_str!("../../../crates/notch-app/src/app.rs");
         let at = app.find("fn build(").expect("fn build in app.rs");
         let body = &app[at..];
-        let body = &body[body.find(" {\n").unwrap() + 3..];
-        let first = body.lines().next().unwrap_or_default().trim();
+        let body = &body[body.find(" {").unwrap()..]; // not " {\n": CI checks out CRLF
+        let first = body.lines().nth(1).unwrap_or_default().trim();
         assert_eq!(first, "if let Some(w) = app.get_webview_window(label) {", "build must return the existing window first");
     }
 }
