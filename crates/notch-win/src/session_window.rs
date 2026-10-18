@@ -1,57 +1,63 @@
-//! "Terminali aç" on the real desktop: a process snapshot (Toolhelp32), the taskbar-worthy windows (`apps`), and the
-//! rule from `notch_core::session_window`. Adapted from CouCou (`windows/src-tauri/src/platform/windows.rs`
-//! `process_table`, commit ff825663, MIT; see `docs/THIRD_PARTY_NOTICES.md`).
+// Peeka — original implementation (MIT).
+//! "Open terminal" against the live desktop: a Toolhelp process list and the taskbar-worthy windows from `apps`,
+//! fed to the decision in `notch_core::session_window`.
 
+/// Why the session's window could not be raised.
 #[derive(Debug, PartialEq, Eq)]
 pub enum FocusErr {
-    /// No ancestor of the session's process owns a window (a classic console, or the process is gone).
+    /// None of the session's ancestors owns an app window (classic console, or the process has exited).
     NoWindow,
-    /// Windows refused to bring it forward.
+    /// Windows declined to bring the window forward.
     Refused,
 }
 
-/// Brings the window of the terminal or editor `pid` runs in to the front.
+/// Raises the terminal or editor window that session process `pid` runs under.
 #[cfg(windows)]
 pub fn focus(pid: u32) -> Result<(), FocusErr> {
     use notch_core::ports::AppControl;
-    let windows: Vec<(isize, u32)> = crate::apps::enumerate(&[])
+
+    // Topmost first, so the first match below is the window the owner used last.
+    let wins: Vec<(isize, u32)> = crate::apps::enumerate(&[])
         .into_iter()
         .filter(notch_core::apps::is_app_window)
         .map(|w| (w.hwnd, crate::apps::pid_of_window(w.hwnd)))
         .collect();
     let owner = notch_core::session_window::window_owner(&process_table(), pid, |p| {
-        windows.iter().any(|(_, owner)| *owner == p)
+        wins.iter().any(|&(_, owner)| owner == p)
     })
     .ok_or(FocusErr::NoWindow)?;
-    // Z-order: the owner's frontmost window (an editor with several projects open gets its last-used one).
-    let hwnd = windows.iter().find(|(_, o)| *o == owner).map(|(h, _)| *h).ok_or(FocusErr::NoWindow)?;
-    crate::apps::Win32Control.focus(hwnd).then_some(()).ok_or(FocusErr::Refused)
+    let &(hwnd, _) = wins.iter().find(|&&(_, p)| p == owner).ok_or(FocusErr::NoWindow)?;
+    if crate::apps::Win32Control.focus(hwnd) {
+        Ok(())
+    } else {
+        Err(FocusErr::Refused)
+    }
 }
 
-/// Every process by id: its parent and exe file name.
+/// Every running process keyed by pid, with its parent pid and exe file name. Empty if no snapshot can be taken.
 #[cfg(windows)]
 fn process_table() -> std::collections::HashMap<u32, notch_core::session_window::Proc> {
+    use notch_core::session_window::Proc;
     use windows::Win32::Foundation::CloseHandle;
     use windows::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
     };
-    let mut out = std::collections::HashMap::new();
-    // SAFETY: a snapshot handle we close below; the entry struct carries its own size as Toolhelp requires.
-    unsafe {
-        let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return out };
-        let mut entry = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
-        let mut more = Process32FirstW(snapshot, &mut entry).is_ok();
-        while more {
-            out.insert(
-                entry.th32ProcessID,
-                notch_core::session_window::Proc {
-                    parent: entry.th32ParentProcessID,
-                    exe: crate::wide_to_string(&entry.szExeFile),
-                },
-            );
-            more = Process32NextW(snapshot, &mut entry).is_ok();
-        }
-        let _ = CloseHandle(snapshot);
+
+    let mut table = std::collections::HashMap::new();
+    // SAFETY: plain snapshot call; a failure is returned as an error, not a handle.
+    let Ok(snap) = (unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) }) else { return table };
+    let mut entry = PROCESSENTRY32W { dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
+    // SAFETY: `snap` is a live snapshot handle and `entry` is a correctly sized PROCESSENTRY32W the API fills in.
+    let mut ok = unsafe { Process32FirstW(snap, &mut entry) }.is_ok();
+    while ok {
+        table.insert(
+            entry.th32ProcessID,
+            Proc { parent: entry.th32ParentProcessID, exe: crate::wide_to_string(&entry.szExeFile) },
+        );
+        // SAFETY: as above.
+        ok = unsafe { Process32NextW(snap, &mut entry) }.is_ok();
     }
-    out
+    // SAFETY: the snapshot was opened above and is closed exactly once; nothing uses it afterwards.
+    let _ = unsafe { CloseHandle(snap) };
+    table
 }

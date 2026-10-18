@@ -1,26 +1,21 @@
-//! "Terminali aç": from a Claude Code session's process, walk up the process tree to the terminal or editor that
-//! owns its window (Windows Terminal, VS Code, conhost's host shell…). The pid comes only from the main assistant
-//! (`cc.sessions.set`, `plugins::host::assistant`), never from the page. The OS calls live in
-//! `notch_win::session_window`; this file is the rule, tested on fixed process tables.
-//!
-//! Adapted from CouCou (`windows/src-tauri/src/session_window.rs`, commit ff825663a959faf09310b571c6c8245d7e7cd1ee,
-//! MIT, Copyright (c) 2026 Louis Raillé; see `docs/THIRD_PARTY_NOTICES.md`): the Windows tree tops, the depth cap,
-//! the loop guard and "the nearest ancestor that owns a window".
+// Peeka — original implementation (MIT).
+//! "Open terminal": which process above a Claude Code session owns the window the owner sees it in (a terminal,
+//! an editor, a console host). The session pid is supplied by the main assistant (`cc.sessions.set`,
+//! `plugins::host::assistant`), never by the page. This module only decides, on a process table handed to it; the
+//! Windows snapshot and window list are in `notch_win::session_window`.
 
 use std::collections::HashMap;
 
-/// One process as a snapshot lists it.
+/// A row of the process table: parent pid and exe file name (no path).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Proc {
     pub parent: u32,
-    /// The executable's file name as the snapshot gives it (`Code.exe`).
     pub exe: String,
 }
 
-/// Never the window of a session: the desktop shell and the services at the top of every tree. Reaching one means
-/// the terminal window was no ancestor (a classic console's window belongs to conhost), and raising the taskbar
-/// would be wrong.
-const TREE_TOPS: &[&str] = &[
+/// Processes every tree hangs from (desktop shell, session and service hosts). The climb stops below them: if the
+/// window was not found by then, it belongs to something outside the session's ancestry.
+const TREE_TOPS: [&str; 10] = [
     "explorer.exe",
     "services.exe",
     "wininit.exe",
@@ -33,47 +28,39 @@ const TREE_TOPS: &[&str] = &[
     "userinit.exe",
 ];
 
-/// How far up we look; a session sits a handful of levels below its window.
+/// Most ancestors `lineage` climbs past the start; sessions are only a few levels under their window.
 pub const MAX_DEPTH: usize = 16;
 
-/// The process itself and then its ancestors, nearest first, stopping before a tree top. The session's own process
-/// comes first: `claude` started straight from a terminal may own nothing, but an editor-hosted one might. A loop in
-/// the parent links (a parent id reused by a newer process) or a missing parent ends the walk.
+fn tree_top(exe: &str) -> bool {
+    TREE_TOPS.iter().any(|t| t.eq_ignore_ascii_case(exe))
+}
+
+/// `start` and then its parent, grandparent… nearest first. Empty when `start` is unknown or itself a tree top; the
+/// climb ends at pid 0, a parent missing from the table, a pid already seen, or a tree top (left out).
 pub fn lineage(procs: &HashMap<u32, Proc>, start: u32) -> Vec<u32> {
-    let Some(first) = procs.get(&start) else { return vec![] };
-    if is_top(first) {
-        return vec![];
-    }
-    let mut out = vec![start];
-    let mut current = start;
-    while out.len() <= MAX_DEPTH {
-        let Some(proc) = procs.get(&current) else { break };
-        let parent = proc.parent;
-        if parent == 0 || out.contains(&parent) {
-            break;
+    let Some(first) = procs.get(&start).filter(|p| !tree_top(&p.exe)) else { return Vec::new() };
+    let mut chain = vec![start];
+    let mut next = first.parent;
+    while chain.len() <= MAX_DEPTH && next != 0 && !chain.contains(&next) {
+        match procs.get(&next) {
+            Some(p) if !tree_top(&p.exe) => {
+                chain.push(next);
+                next = p.parent;
+            }
+            _ => break,
         }
-        let Some(up) = procs.get(&parent) else { break };
-        if is_top(up) {
-            break;
-        }
-        out.push(parent);
-        current = parent;
     }
-    out
+    chain
 }
 
-fn is_top(p: &Proc) -> bool {
-    TREE_TOPS.contains(&p.exe.to_ascii_lowercase().as_str())
-}
-
-/// The nearest process in the lineage that owns a top-level window: the terminal or the editor.
+/// First pid of the lineage, nearest first, for which `has_window` holds.
 pub fn window_owner(procs: &HashMap<u32, Proc>, start: u32, has_window: impl Fn(u32) -> bool) -> Option<u32> {
-    lineage(procs, start).into_iter().find(|pid| has_window(*pid))
+    lineage(procs, start).into_iter().find(|&pid| has_window(pid))
 }
 
-/// A session id as Claude Code sends it (a UUID): ASCII letters, digits, `-` and `_`, at most 128 characters.
+/// Accepts a plain session id (a UUID in practice): 1 to 128 ASCII letters, digits, `-` or `_`.
 pub fn valid_session(id: &str) -> bool {
-    !id.is_empty() && id.len() <= 128 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    !id.is_empty() && id.len() <= 128 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 
 #[cfg(test)]
