@@ -63,6 +63,8 @@ jobs:
           $setup = @(Get-ChildItem target/release/bundle/nsis/*-setup.exe)
           if ($setup.Count -ne 1) { throw "Expected one NSIS setup exe, found $($setup.Count)" }
           Copy-Item $setup[0].FullName "dist-release/Peeka-$env:VERSION-setup.exe"
+          # Stable name, so /releases/latest/download/Peeka-setup.exe always works.
+          Copy-Item $setup[0].FullName "dist-release/Peeka-setup.exe"
           Push-Location dist-release
           # sha256sum format: "<hash>  <file>", so `sha256sum -c SHA256SUMS.txt` works.
           Get-ChildItem *.exe | ForEach-Object { "$((Get-FileHash $_.Name -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } |
@@ -78,5 +80,5 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit 1 }
           }
           # Existing release: only (re)upload assets, its notes stay untouched.
-          gh release upload $env:TAG dist-release/peeka.exe "dist-release/Peeka-$env:VERSION-setup.exe" dist-release/SHA256SUMS.txt --clobber
+          gh release upload $env:TAG dist-release/peeka.exe "dist-release/Peeka-$env:VERSION-setup.exe" dist-release/Peeka-setup.exe dist-release/SHA256SUMS.txt --clobber
           exit $LASTEXITCODE
