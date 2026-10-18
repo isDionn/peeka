@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "consent",
+  "description": "The plugin consent window (Wave 3): events only, like the strips. It reads and answers through app commands (consent_get, consent_answer); Rust decides.",
+  "windows": ["consent"],
+  "permissions": ["core:event:default"]
+}

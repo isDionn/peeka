@@ -1,0 +1,67 @@
+/* Ada penceresi (760x620 saydam, sabit boy): şeridin ortasındaki içerik + çıkıntı + kart. Saydam alan tıklamayı geçirir (Rust, report_hit_rects). */
+.adaStage { position: absolute; inset: 0; pointer-events: none; }
+.adaStage > .adaMerkez, .adaStage > .sarkan, .adaStage > .yanBal, .adaStage > .oturumChip { pointer-events: auto; }
+.adaMerkez { position: absolute; left: 50%; top: 0; height: var(--BAR); z-index: 6; border-radius: 8px; color: var(--l1); cursor: pointer; display: block; }
+.adaMerkez:focus-visible { outline: 2px solid var(--odak); outline-offset: -2px; }
+.adaMk { position: absolute; left: 50%; top: 0; height: var(--BAR); transform: translateX(-50%); display: flex; align-items: center; gap: 12px; white-space: nowrap; animation: adaGir .28s var(--ease) 40ms backwards; }
+.adaMk .ms svg.lucide, .ikK svg { width: 15px; height: 15px; }
+.ikK { display: inline-grid; place-items: center; }
+.adaIc { position: absolute; top: 0; left: 50%; transform: translateX(-50%); animation: adaGir .28s var(--ease) 40ms backwards; }
+.adaMk.eski, .adaIc.eski { animation: adaCik .13s var(--ease) forwards; pointer-events: none; }
+@keyframes adaGir { from { opacity: 0; filter: blur(6px); } to { opacity: 1; filter: none; } }
+@keyframes adaCik { from { opacity: 1; filter: none; } to { opacity: 0; filter: blur(4px); } }
+/* uçan öğeyi taşıyan kartta sıralı giriş yok: uçuş ölçümü kayık yerden başlamasın */
+.govde:has([data-paylas]) { animation: none; }
+.adaHit { position: absolute; left: 50%; top: var(--BAR); transform: translateX(-50%); opacity: 0; pointer-events: none; }
+button.peek { color: inherit; cursor: pointer; width: 44px; height: 14px; display: grid; place-items: center; padding: 0 0 2px; position: relative; }
+.adaIc.mpeek { width: 100%; text-align: center; display: grid; justify-items: center; }
+#hale { left: 50%; }
+
+.izgara.modul { grid-template-columns: 1fr 1fr; }
+.izgara.modul:has(> .kutu:only-child) { grid-template-columns: 1fr; }
+.baslikDug { display: inline-flex; align-items: center; gap: 6px; color: inherit; font: inherit; letter-spacing: inherit; min-height: 24px; }
+.baslikDug svg.lucide:last-child { width: 12px; height: 12px; opacity: .7; }
+.bild .mini { opacity: 0; transition: opacity .16s ease; }
+.bild:is(:hover, :focus-within) .mini { opacity: 1; }
+.kont button:disabled, .mini:disabled { opacity: .35; pointer-events: none; }
+.sarkan input[type=range]:focus-visible { outline: 2px solid var(--odak); outline-offset: 2px; border-radius: 4px; }
+
+/* tarayıcı önizlemesi: ada penceresi şeridin ortasında, 760x620 */
+.adaPencere { position: absolute; left: 50%; top: 0; width: 760px; height: 620px; margin-left: -380px; pointer-events: none; }
+
+/* Yan baloncuk (sahip kararı 2026-10-17): adanın sağında 30 px yuvarlak ikinci canlı iş. Konumu adanın kenarından hesaplanır (akışta değil): ada hiç kaymaz. */
+.yanBal { position: absolute; top: 0; width: var(--BAR); height: var(--BAR); z-index: 8; transform-origin: 0 50%; color: var(--l1); }
+.yanDug { position: relative; display: block; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 50%; overflow: hidden; background: var(--strip); color: inherit; cursor: pointer;
+  box-shadow: inset 0 0 0 .5px var(--kenar), 0 2px 8px rgba(0,0,0,.28); transition: transform .14s var(--ease), filter .14s ease; }
+.yanDug:active { transform: scale(.94); }
+@media (hover: hover) and (pointer: fine) { .yanDug:hover { filter: brightness(1.28); } }
+.yanDug:focus-visible { outline: 2px solid var(--odak); outline-offset: 1px; }
+.yanYuz { position: absolute; inset: 0; display: grid; place-items: center; animation: adaGir .28s var(--ease) backwards; }
+.yanYuz > svg.lucide { width: 14px; height: 14px; }
+.yanKapak { width: 100%; height: 100%; object-fit: cover; display: block; }
+.yanHalka { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); fill: none; stroke-width: 2; pointer-events: none; }
+.yanHalka .iz { stroke: rgba(255,255,255,.14); }
+.yanHalka .ilr { stroke: var(--l1); stroke-linecap: round; transition: stroke-dasharray 1s linear; }
+.yanHalka.don { animation: yanDon 1.3s linear infinite; }
+@keyframes yanDon { to { transform: rotate(270deg); } }
+.yanSure { position: relative; font: 600 9px/1 var(--font); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.yanArti { position: absolute; right: -5px; bottom: -5px; z-index: 1; min-width: 16px; height: 16px; padding: 0 4px; border: 0; border-radius: 8px; background: var(--l1); color: var(--strip);
+  font: 700 10px/16px var(--font); font-variant-numeric: tabular-nums; cursor: pointer; box-shadow: 0 0 0 2px var(--strip); }
+.yanArti::before { content: ""; position: absolute; inset: -4px; }
+.yanArti:focus-visible { outline: 2px solid var(--odak); outline-offset: 2px; }
+.yanListe { position: absolute; top: calc(100% + 10px); right: 0; z-index: 2; display: flex; flex-direction: column; gap: 2px; min-width: 200px; max-width: 280px; padding: 6px; border-radius: 16px;
+  background: rgba(24, 24, 28, .96); box-shadow: inset 0 .5px 0 rgba(255,255,255,.14), 0 8px 28px rgba(0,0,0,.4); transform-origin: 100% 0; animation: adaGir .18s var(--ease) backwards; }
+.yanSat { display: flex; align-items: center; gap: 10px; width: 100%; height: 32px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent; color: var(--l1); font: 500 13px/1 var(--font); text-align: left; white-space: nowrap; cursor: pointer; }
+.yanSat > svg.lucide { width: 15px; height: 15px; flex: none; }
+.yanSat .yanAd { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.yanSat:focus-visible { outline: 2px solid var(--odak); outline-offset: -2px; }
+@media (hover: hover) and (pointer: fine) { .yanSat:hover { background: rgba(255,255,255,.07); } }
+
+/* "N oturum" çipi (Claude Code, >= 2): adanın solunda mutlak konumlu, akışta değil; ada kaymaz. */
+.oturumChip { position: absolute; top: 0; height: var(--BAR); z-index: 8; display: flex; align-items: center; color: var(--l1); }
+.oturumDug { height: 26px; padding: 0 11px; border: 0; border-radius: 13px; background: var(--strip); color: inherit; font: 600 12px/1 var(--font); white-space: nowrap; cursor: pointer;
+  box-shadow: inset 0 0 0 .5px var(--kenar), 0 2px 8px rgba(0,0,0,.28); transition: transform .14s var(--ease), filter .14s ease; }
+.oturumDug:active { transform: scale(.96); }
+@media (hover: hover) and (pointer: fine) { .oturumDug:hover { filter: brightness(1.28); } }
+.oturumDug:focus-visible { outline: 2px solid var(--odak); outline-offset: 1px; }
+.oturumListe { left: auto; right: 0; }

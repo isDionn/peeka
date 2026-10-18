@@ -1,0 +1,37 @@
+[package]
+name = "notch-app"
+description = "Notch: the Tauri shell (windows, commands, events); logic lives in notch-core / notch-win"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Bin only: `cargo test --workspace --lib` covers the two crates, and generate_context! is not compiled there.
+[[bin]]
+name = "peeka"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+notch-core.workspace = true
+notch-win.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+parking_lot.workspace = true
+tauri = { version = "2", features = [] }
+tauri-plugin-single-instance = "2.4.4"
+tauri-plugin-global-shortcut = "2.3.2"
+# Plugin pipe server (Wave 3). Both already in Cargo.lock (Tauri's own tokio, the workspace windows): no download.
+tokio = { version = "1.53.1", features = ["net", "io-util", "rt", "sync"] }
+windows = { workspace = true, features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_Security_Cryptography",
+  "Win32_Security_Cryptography_Catalog",
+  "Win32_Security_Cryptography_Sip",
+  "Win32_Security_WinTrust",
+  "Win32_System_Pipes",
+  "Win32_System_Threading",
+] }

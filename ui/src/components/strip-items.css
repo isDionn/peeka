@@ -1,0 +1,24 @@
+/* Şerit öğeleri: simge + ad, SABİT genişlikli yuva (maket a / w0). Pencere açılıp kapanınca hiçbir öğenin x'i ya da genişliği değişmez;
+   açık = nokta + parlak ton, kapalı sabit = soluk ton. Dar ekranda (data-dar, <=1400) HEPSİ birden 30 px yalnız simge olur. */
+.cubuk { --yuva: 104px; }
+.cubuk :is(.sabit, .sekmeA) { width: var(--yuva); min-width: 0; padding: 0 8px 0 6px; justify-content: flex-start; gap: 6px; }
+.cubuk .ikK { position: relative; display: inline-flex; flex: none; }
+.cubuk .sabitAd { min-width: 0; flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 16px; font-weight: 500; }
+/* adet simgenin köşesinde */
+.cubuk .ikK .say { top: -5px; right: -6px; }
+.cubuk .sabit:not(.acikSabit):not(.aktif) { color: var(--l3); }
+.cubuk .sabit.acikSabit:not(.aktif) { color: var(--l2); }
+.cubuk .sabit.tutuyor .sabitAd { display: none; }
+html[data-dar] .cubuk, .cubuk[data-kisa] { --yuva: 30px; }
+html[data-dar] .cubuk :is(.sabit, .sekmeA), .cubuk[data-kisa] :is(.sabit, .sekmeA) { padding: 0; justify-content: center; }
+html[data-dar] .cubuk .sabitAd, .cubuk[data-kisa] .sabitAd { display: none; }
+html[data-dar] .cubuk .ikK .say, .cubuk[data-kisa] .ikK .say { top: -3px; right: -4px; }
+
+/* hit alanı: sekmeler adanın solunda biter (Strip --sekmeMax); sığmayınca sekmeler birlikte daralır, adın üzerine binmez */
+.cubuk .sekmeler { min-width: 0; }
+.cubuk .sekmeA { flex: 0 1 auto; }
+
+/* S-1: yalnız simgeli şerit düğmeleri (Başlat, Ara, gizli simgeler, sık tepsi) tek ölçü: 30 px, dolgu yok */
+.cubuk :is(.tusIk, .favTray .tus) { width: 30px; min-width: 0; padding: 0; }
+/* S-2: adet rozeti sabitte de sekmede de 11 px, l3 */
+.cubuk .ikK .say { font-size: 11px; line-height: 13px; color: var(--l3); }

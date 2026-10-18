@@ -1,0 +1,44 @@
+/* Panel yüzeyi düzeltmeleri (sürtünme 2 + tutarlılık): kendi dosyasında, notch.css'e dokunmadan. */
+.panoNot{position:fixed;top:38px;left:50%;translate:-50% 0;z-index:30;pointer-events:none;padding:5px 12px;border-radius:14px;font:500 12px/16px var(--font);color:var(--l1);background:var(--e2,rgba(40,40,44,.92));box-shadow:inset 0 .5px 0 rgba(255,255,255,.16);animation:panoNotGir .16s ease both}
+@keyframes panoNotGir{from{opacity:0}to{opacity:1}}
+
+/* T-1: Pano ömrü sekmeleri eşit genişlikte (5/15/30/60 dk yazıya göre değil) */
+.segKucuk.segEsit .segb{width:54px;padding:0;justify-content:center}
+
+/* R2-O6: uzun eklenti adı üç nokta ile kısalır, düğme etiketi kesilmez */
+.pluginAd{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pluginEylem{gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.pluginEylem .btn{flex:none;white-space:nowrap}
+.pluginEylem .tutIpucu{white-space:nowrap}
+.sat .t12.l3.b4{overflow-wrap:anywhere}
+
+/* Kısayollar: uygulama listesi tek satıra sığmazsa sarılır (F-26) */
+.istisnaGrup .metin{white-space:normal;overflow:visible;text-overflow:clip}
+
+/* C-1: kapat düğmesi 28 px ve üst 8 / sağ 8; panelin ilk satırı onun altına binmesin (R2-D4) */
+.panelKapat ~ .ic > .govde > :first-child:not(.ayar){margin-right:36px}
+.btn.cam.tut .tutIpucu{color:var(--l2)}
+.btn.cam.tut.dolu2 .tutIpucu{color:var(--l1)}
+
+/* B-2: tepsi düğmeleri yarıçap merdiveninde (6 yerine 8) */
+.tepsiIzgara .trayIzgara button{border-radius:8px}
+
+/* H-2: kurulum sihirbazında adım değişince Geri / İleri yerinde kalır */
+.kurum .kurumAdim{min-height:152px;display:flex;flex-direction:column;gap:12px}
+.kurum .dugmeler .btn{min-width:84px;justify-content:center}
+
+/* K-3: Ayarlar sayfaları değişince panelin alt kenarı oynamaz (en uzun sayfa Modüller) */
+.govde .ayar{min-height:566px}
+/* T-2 / R-4 / Y-2: tek seçili dolgu, Eklentiler eylem satırında 12 aralık, küçük düğme satır yüksekliği t12 */
+.seg.segKucuk .segb.on{background:rgba(255,255,255,.13)}
+.pluginEylem{gap:12px}
+.btn.kk,.segb,.cip,.kucukLink{line-height:16px}
+
+/* R1-5: silinen bildirimin yeri kısa süre tutulur */
+.bildBos{flex:none}
+/* R1-6: bağımlı satır silinmez, anahtarı soluk ve basılmaz */
+.anahtar[aria-disabled="true"]{opacity:.4;pointer-events:none}
+/* R2: Gizli simgeler başlığı; köşe × (28, üst 8 / sağ 8) ile aynı çizgide */
+.trayBas{height:28px;margin-top:2px;padding:0 4px;display:flex;align-items:center}
+/* R1-8: kurulum adımları aynı yükseklikte, Geri / İleri hiçbir adımda oynamaz (en uzun adım 156) */
+.kurum .kurumAdim{min-height:156px}

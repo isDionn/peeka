@@ -1,0 +1,15 @@
+/* Yalnız tarayıcı önizlemesi (preview.html): maketteki duvar kâğıdı ve ekran çerçevesi. Gerçek pencerelerde yok. */
+html, body { background: #050506; }
+.ekran { position: relative; width: 100vw; height: 100vh; overflow: clip; /* hidden değil: odak kaydırması sayfayı oynatmasın (dar önizlemede içerik taşar) */  background: #101116; }
+.duvar { position: absolute; inset: 0; background:
+  radial-gradient(70% 60% at 76% 82%, #2b4470 0%, rgba(43,68,112,0) 70%),
+  radial-gradient(55% 55% at 18% 38%, #6e4a30 0%, rgba(110,74,48,0) 70%),
+  radial-gradient(45% 35% at 52% 8%, #3a2c52 0%, rgba(58,44,82,0) 72%),
+  linear-gradient(180deg,#1a1c23 0%,#252932 58%,#191b21 100%); }
+.duvar::after { content: ""; position: absolute; inset: auto 0 0 0; height: 44%; background: linear-gradient(176deg,rgba(0,0,0,0) 30%,rgba(9,10,13,.82) 31%,#08090c 100%); }
+.coklu { position: fixed; inset: 0; display: grid; place-items: center; background: #08080a; }
+.monitorler { display: flex; gap: 48px; align-items: flex-end; }
+.mon .yuz { position: relative; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 7px #18181b, 0 30px 60px rgba(0,0,0,.5); }
+.mon iframe { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; border: 0; transform-origin: 0 0; }
+.mon p { margin-top: 22px; color: var(--l2); max-width: 560px; font-weight: 400; }
+.mon p b { color: var(--l1); display: block; margin-bottom: 2px; font-weight: 600; }

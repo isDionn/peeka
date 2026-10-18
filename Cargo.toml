@@ -1,0 +1,27 @@
+# Peeka workspace: shares nothing with other projects. tools/probe stays standalone.
+[workspace]
+resolver = "2"
+members = ["crates/*", "src-tauri"]
+exclude = ["tools/probe"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+# Pinned versions; Cargo.lock keeps them reproducible.
+[workspace.dependencies]
+notch-core = { path = "crates/notch-core" }
+notch-win = { path = "crates/notch-win" }
+serde = { version = "1", features = ["derive"] }
+# preserve_order: Claude Code's settings.json keeps the owner's key order when Peeka adds its hooks (indexmap is already locked).
+serde_json = { version = "1", features = ["preserve_order"] }
+parking_lot = "0.12.5"
+windows = "0.61.3"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

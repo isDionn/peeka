@@ -1,0 +1,76 @@
+/* Dalga 4: pano kartı, Pano sekmesi, ekran alıntısı çıkıntısı, Ctrl+K dosya/ayar/eklenti sonuçları, Ayarlar › Pano.
+   Kurallar yon-3d-son.html'deki .pg / .tip2 / .gozAcik bloklarından; eylemler yalnız .etkin (üstüne gelinen, odaklı, seçili satır) iken çizilir (karar 15). */
+.panoIc{display:flex;flex-direction:column;gap:12px}
+.panoGorseller{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.pg{position:relative;border-radius:var(--rPlat);corner-shape:squircle;padding:4px;cursor:grab;touch-action:none;transition:opacity .2s ease,transform .16s var(--ease)}
+.pg img,.pgYok{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:var(--rIc);corner-shape:squircle}
+.pgYok{display:grid;place-items:center;background:rgba(255,255,255,.08);color:var(--l3)}
+.pg .alt{display:flex;justify-content:space-between;gap:6px;padding:6px 4px 2px;font-size:12px;color:var(--l2)}
+.pg .alt span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pg .alt span:last-child{color:var(--l3);white-space:nowrap}
+.pg .eylem{position:absolute;right:8px;top:8px;display:flex;gap:6px;animation:eylemGir .16s ease both}
+.pg .eylem button{width:28px;height:28px;border-radius:14px;display:grid;place-items:center;color:#fff;background:rgba(20,20,22,.55);-webkit-backdrop-filter:blur(12px) saturate(180%);backdrop-filter:blur(12px) saturate(180%);box-shadow:inset 0 .5px 0 rgba(255,255,255,.2)}
+.pg .eylem button svg.lucide{width:12px;height:12px}
+.pg .eylem .sor,.mini.sor{color:var(--mint)}
+.pg .eylem .acik,.mini.acik{color:var(--sari)}
+.pg.sec{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.5)}
+.pg:focus-visible{outline-offset:-2px}
+@keyframes eylemGir{from{opacity:0}to{opacity:1}}
+
+/* liste: zaman sağa yaslı; eylemler gelince zaman söner (karar 15) */
+.panoListe{max-height:340px;overflow:auto}
+.sonuclar{max-height:500px}
+.panoListe .sat[data-clip]{cursor:default}
+.panoListe .sat.etkin .mini{opacity:1}
+.panoListe .sat .satEylem{animation:eylemGir .16s ease both}
+.panoListe .sat.etkin .satEylem{opacity:1}
+.panoListe .sat.etkin .zaman{opacity:0}
+.panoListe .sat.soluk>:not(.satEylem){opacity:.45}
+.panoListe .sat:focus-visible{outline-offset:-2px;border-radius:var(--rIc)}
+.sat .tip2{width:26px;height:26px;border-radius:var(--rIc);corner-shape:squircle;display:grid;place-items:center;flex:none;background:rgba(255,255,255,.08);color:var(--l2)}
+.sat .tip2 svg.lucide{width:14px;height:14px}
+.sat .renkKare{width:26px;height:26px;border-radius:var(--rIc);corner-shape:squircle;flex:none}
+.sat .kucukResim{object-fit:cover;box-shadow:0 0 0 .5px rgba(255,255,255,.2)}
+.sat .sabitIk{width:12px;height:12px;color:var(--l3);flex:none}
+.sat .komut,.komut{font-family:var(--mono);font-size:12px;letter-spacing:.06em;font-variant-ligatures:none}
+.k-pdf{background:color-mix(in srgb,var(--kirmizi) 18%,transparent)!important;color:var(--kirmiziYazi)!important}
+.k-video{background:color-mix(in srgb,var(--camgobegi) 18%,transparent)!important;color:var(--camgobegi)!important}
+.k-sheet{background:color-mix(in srgb,var(--yesil) 18%,transparent)!important;color:var(--yesil)!important}
+.k-image{background:color-mix(in srgb,var(--mor) 18%,transparent)!important;color:var(--mor)!important}
+.k-parola{background:color-mix(in srgb,var(--turuncu) 16%,transparent)!important;color:var(--turuncu)!important}
+/* parola: yer tutucu bulanık; üstüne gelince düz metin bulanıklığı açar (aynı kutu, aynı yazı tipi: kayma yok; uzun parola üç nokta) */
+.sat.gizli .metin{font-family:var(--mono);letter-spacing:0;color:var(--l2);filter:blur(5px);user-select:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:filter .18s cubic-bezier(.23,1,.32,1),color .18s}
+.sat.gizli.acik .metin{filter:none;color:var(--l1);user-select:text}
+.mini.gozAcik{background:rgba(255,255,255,.12);color:var(--l1)}
+.mini.sil{color:var(--l3)}
+/* göz düğmesinin halkası 5 sn'de boşalır (maket h3'te sabit 72 %; gerçekte sayaç) */
+@property --g{syntax:"<number>";inherits:false;initial-value:100}
+.gozAcik{position:relative}
+.gozAcik::after{content:"";position:absolute;inset:-2px;border-radius:50%;--g:100;animation:gozHalka 5s linear forwards;background:conic-gradient(var(--l1) calc(var(--g) * 1%),transparent 0);-webkit-mask:radial-gradient(closest-side,transparent calc(100% - 2px),#000 calc(100% - 1.5px));mask:radial-gradient(closest-side,transparent calc(100% - 2px),#000 calc(100% - 1.5px))}
+@keyframes gozHalka{to{--g:0}}
+
+/* ekran alıntısı çıkıntısı (h1) */
+.alintiKucuk{width:64px;height:40px;border-radius:8px;corner-shape:squircle;object-fit:cover;box-shadow:0 0 0 .5px rgba(255,255,255,.2)}
+.cik.shotCik{padding-bottom:10px;flex-direction:column;align-items:stretch;gap:8px;width:360px;box-sizing:border-box}
+.shotUst{display:flex;align-items:center;justify-content:center;gap:10px;min-width:0}
+.shotUst .t12{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.shotIk{width:26px;height:26px;border-radius:var(--rIc);corner-shape:squircle;display:grid;place-items:center;flex:none;background:rgba(255,255,255,.08);color:var(--l2)}
+.shotIk svg.lucide{width:14px;height:14px}
+/* üstüne gelince alta eklenir; üst satır yerinde kalır (imlecin altında kayma yok) */
+.shotBuyuk{display:flex;flex-direction:column;align-items:center;gap:8px;animation:shotGir .2s cubic-bezier(.23,1,.32,1)}
+.shotBuyukResim{width:100%;height:190px;object-fit:contain;border-radius:12px;corner-shape:squircle;background:rgba(255,255,255,.05);box-shadow:0 0 0 .5px rgba(255,255,255,.16)}
+.shotEylem{display:flex;gap:8px}
+@keyframes shotGir{from{opacity:0}to{opacity:1}}
+
+/* Ctrl+K: dosya/ayar/eklenti kutucukları */
+.sonuc .tile.ikBrain{color:var(--camgobegi)}
+.sonuc .tile.k-pdf,.sonuc .tile.k-video,.sonuc .tile.k-sheet,.sonuc .tile.k-image{background:rgba(255,255,255,.08)!important}
+
+/* Ayarlar: küçük seçili düğme kapsülü */
+.segKucuk .segb.on{background:rgba(255,255,255,.14);border-radius:12px;corner-shape:squircle}
+
+/* süzgeç kutusu (R2-O5): 40 yüksek yazkutu yerine kompakt; satır gövdesi tıklanınca kopyalar */
+.panoSuz{height:32px;border-radius:16px;flex:none}
+.panoSuz svg.lucide{width:14px;height:14px}
+.panoListe .sat[data-clip]{cursor:pointer}
+.mini:disabled{opacity:.4;cursor:default}

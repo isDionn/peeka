@@ -1,0 +1,126 @@
+/* Sadakat denetimi 2: kartlar. Yalnız yeni kurallar; notch.css, plugin.css ve island.css'e dokunmaz. Hareket her zaman açık (reduced-motion okunmaz). */
+
+/* Genel: asistan | Claude Code | Sistem (maket j). Sütun sayısı kutu sayısına göre satır içinde verilir. */
+.izgara.modul.genel3 { grid-template-columns: 1.3fr 1fr .9fr; }
+.sat .oneriTag { margin-left: auto; }
+/* sekme çubuğu ada orta çizgisinde sabit genişlikte ortalanır: kart genişliği değişse de çubuğun ekran x'i değişmez (Y4) */
+/* sağ köşe grubu: genişliği sabit (464), kartın ortasında; × her kartta ve Modüller sekmelerinde aynı ekran noktasında (kart genişliği ≥ 520) (R1-1) */
+.modUst { display: flex; align-items: center; justify-content: flex-end; gap: 10px; width: 464px; max-width: 100%; margin-inline: auto; }
+.modUst .seg { flex: none; max-width: 388px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.modUst .seg::-webkit-scrollbar { display: none; }
+.modUst { position: relative; }
+.modUst .seg .segb { flex: none; width: 32px; padding: 0; justify-content: center; }
+.modUst .seg .segb.on { background: none; box-shadow: none; }
+/* etkin sekmenin hapı: simgenin altında kayar, konumu IslandCards ölçer */
+.segPil { position: absolute; z-index: 0; left: 0; top: 2px; height: 28px; border-radius: 12px; corner-shape: squircle; background: rgba(255,255,255,.13); box-shadow: inset 0 .5px 0 rgba(255,255,255,.16); transition: transform .25s cubic-bezier(.32,.72,0,1), width .25s cubic-bezier(.32,.72,0,1); pointer-events: none; }
+.segTip { position: absolute; top: calc(100% + 4px); transform: translateX(-50%); z-index: 5; padding: 4px 8px; border-radius: 8px; background: var(--e1); color: var(--l1); font: 11px/13px var(--font); white-space: nowrap; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+/* Sığmazsa satır kayar; kenarlar kayma konumuna göre solar (kayma yoksa solma da yok). Dişli satırın dışında, sabit. */
+@property --fl { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --fr { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@keyframes segSolma { 0% { --fl: 0px; --fr: 22px; } 6% { --fl: 22px; } 94% { --fr: 22px; } 100% { --fl: 22px; --fr: 0px; } }
+.modUst .seg { animation: segSolma linear both; animation-timeline: scroll(self inline); -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--fl), #000 calc(100% - var(--fr)), transparent); mask-image: linear-gradient(90deg, transparent, #000 var(--fl), #000 calc(100% - var(--fr)), transparent); }
+.modUst > .mini { flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 14px; color: var(--l2); }
+.modUst > .mini svg.lucide { width: 15px; height: 15px; }
+@media (hover: hover) and (pointer: fine) { .modUst > .mini:hover { background: rgba(255,255,255,.1); color: var(--l1); } }
+
+/* özet satırı simgeleri ve oturum durumları */
+.sat > .turuncuIk, .sat > .soluk { display: grid; place-items: center; flex: none; }
+.sat > .turuncuIk { color: var(--turuncu); }
+.sat > .soluk { color: var(--l3); opacity: 1; } /* .soluk .5 ile çarpılınca 2,4:1 kalıyordu (F-11) */
+.sat > .turuncuIk svg.lucide, .sat > .soluk svg.lucide { width: 16px; height: 16px; }
+.oturumlar .sat { --girinti: 22px; min-height: 40px; padding: 6px 0; } /* R3-1: tek satır 40, dolgu 6 */
+.oturumlar .sat:first-child { margin-top: 6px; }
+.tikYesil { color: var(--yesil); display: grid; place-items: center; flex: none; }
+.tikYesil svg.lucide { width: 16px; height: 16px; }
+.durumBos { width: 12px; flex: none; }
+
+/* kota çubuğu (ADR-0059) */
+.kota .kotaSat { display: flex; justify-content: space-between; }
+.kota .olc { position: relative; margin: 6px 0 4px; }
+.kota .esik { position: absolute; top: 0; bottom: 0; width: 1.5px; background: var(--l2); }
+.kota + .kota { margin-top: 4px; }
+.blokKutu .kota + .t13, .blokKutu .kota + .t12 { margin-top: 6px; }
+.kutu h4 .leadMk { margin-block: -6px; }
+
+/* kartlar: boş, hata, yükleme */
+.mkOrta.dar { max-width: 460px; }
+.hataAyrinti { max-width: 400px; text-align: left; }
+.yuzGir { display: inline-flex; animation: yuzGir .6s var(--ease) both; }
+@keyframes yuzGir { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* Ctrl+Space: sol ataş ve çip satırı */
+.yazkutu .solIk { display: grid; place-items: center; flex: none; }
+.yazkutu .solIk svg.lucide { width: 16px; height: 16px; }
+.yuv svg.lucide { width: 16px; height: 16px; }
+
+/* Modüller sekme gövdesi: sekmenin kendi kartı (.govde) iç içe ek dolgu açmaz; geçiş kısa */
+.modBody { display: flex; flex-direction: column; gap: 12px; animation: modGir .13s ease-out both; }
+@keyframes modGir { from { opacity: 0; } to { opacity: 1; } }
+/* Pano sekmesi çizilmeye hazır olana dek görünmez bekler; eski sekme yerinde kalır, kart tek yayla büyür */
+.modBody.bekle { position: absolute; left: 0; right: 0; top: 0; visibility: hidden; pointer-events: none; animation: none; }
+/* Modüller kökü giriş animasyonunu kendisi çalıştırmaz: kart katmanı (adaGir) yeter; :has(data-paylas) açılıp kapanınca kök yeniden oynayıp sekme çubuğunu kaydırıyordu */
+.govde.modKok { animation: none; }
+.modBody > .govde { padding: 0; animation: none; }
+
+/* kart çıkışı: × her kartta; sekme çubuğu olmayan kartlarda üstte ince bir şerit (Modüller + ×) */
+.adaIc.conBar { display: flex; flex-direction: column; }
+.kartBar { position: relative; z-index: 2; order: -1; display: flex; justify-content: flex-end; gap: 6px; width: 464px; max-width: 100%; margin: 0 auto -16px; padding-top: 16px; }
+.kapat { height: 28px; min-width: 28px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 14px; color: var(--l2); font: 500 12px/16px var(--font); }
+.kapat svg.lucide { width: 15px; height: 15px; }
+.kapat.modGit { padding: 0 10px; }
+@media (hover: hover) and (pointer: fine) { .kapat:hover { background: rgba(255,255,255,.1); color: var(--l1); } }
+
+/* çıkıntıda imleç üstündeyken "aç" işareti */
+.adaMerkez .acIk { position: absolute; right: 2px; top: 50%; translate: 0 -50%; width: 12px; height: 12px; display: grid; place-items: center; color: var(--l2); pointer-events: none; animation: girdi .18s var(--ease) both; }
+.adaMerkez .acIk svg.lucide { width: 10px; height: 10px; }
+
+/* zamanlayıcı sekmesi: çalışan sayaç + kontroller formun üstünde */
+.calisanSat { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; }
+.calisanSat .cik { padding: 0; }
+
+/* CPU geçmişi: henüz örnek gelmeyen çubuklar soluk kısa çizgi */
+.spark i.bos { opacity: .25; }
+
+/* ilk açılış: metin alanı ve düğme yuvaları sabit, sayfa değişince hiçbir şey kaymaz (O8) */
+.frMetin { min-height: 104px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.frDugme { justify-content: center; }
+.frDugme .btn { min-width: 84px; }
+
+/* ---- sürtünme 2 + tutarlılık + erişilebilirlik ---- */
+/* korumadaki onay düğmesi (useGuard): soluk, tıklama yutulur */
+[data-bekle] { opacity: .5; transition: opacity .15s ease; }
+.srOnly { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* ortadaki içerik ekranın ~%40'ı kadar (genişlik Island'dan, max-width satır içi); uzun başlık üç nokta, sanatçı önce kısalır (R2-Y1) */
+.adaMk { width: max-content; }
+.adaMk > .ms { min-width: 0; flex: 0 1 auto; }
+.adaMk .ms > :is(.b6, .l1, .l2, .l3):not(.num) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adaMk .ms > .l3 { flex-shrink: 20; }
+/* "Ad › Başlık" kimlik satırı (onay kaynağı, eklenti adı) da kısalır; başlık değil, o önce küçülür */
+.adaMk .ms > .onEk { min-width: 0; flex-shrink: 20; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adaMk .ms > :is(svg, img, .kapak, .leadMk, .gor, .dalga, .nab, .ikK, .basHarf, .kayNokta, .sayac, .num) { flex: none; }
+
+/* küçük düğme her yerde 26 (çıkıntıda da); satır yüksekliği t12 */
+.btn.kk { line-height: 16px; }
+.cik .btn.kk { height: 26px; padding: 0 11px; border-radius: 13px; }
+
+/* sekme çubuğunda odak halkası kırpılmaz: halka sekmenin içinde (F-02) */
+.modUst .seg .segb:focus-visible { outline-offset: -2px; }
+.modUst > .kapat { flex: none; width: 28px; padding: 0; }
+
+/* Modüller: her sekme aynı alt sınırda; Müzik 179 ile Genel 404 arasında kart soluk almaz (H-1). Genel 404 = 14 + 32 + 12 + gövde 330 + 16 */
+/* tek yükseklik (R1-10): uzun sekme (Pano, eklenti) kendi içinde kayar, kart büyümez; odak halkası kırpılmasın diye 2 px pay */
+.modBody { height: 330px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; padding: 2px; margin: -2px; box-sizing: content-box; }
+
+/* bildirim listesi: son satır ortada kesilmez, altta solar (R2-D2) */
+.bilds { -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); padding-bottom: 14px; }
+
+/* kart yay ile boyutlanırken pahalı boyama durur: buzlu cam, büyük gölge ve hale (kart oturunca geri gelir) */
+[data-yay] .sarkan .cam { -webkit-backdrop-filter: none; backdrop-filter: none; }
+[data-yay] .sarkan { box-shadow: inset .5px 0 0 var(--kn), inset -.5px 0 0 var(--kn), inset 0 -.5px 0 var(--kn), 0 6px 14px rgba(0,0,0,.2); }
+.adaStage #hale { transition: --amb1 .8s ease, --ambO .8s ease, opacity .2s ease; }
+[data-yay] #hale { opacity: 0; }
+
+/* R1-4: cevaplanan onay satırı yer tutucu olarak kalır, sonra yükseklik animasyonuyla çekilir */
+.sat.satBitti { overflow: hidden; max-height: 46px; transition: max-height .26s var(--ease), opacity .26s ease, padding .26s var(--ease), min-height .26s var(--ease); }
+.sat.satBitti.git { max-height: 0; min-height: 0; padding-block: 0; opacity: 0; }

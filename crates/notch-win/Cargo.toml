@@ -1,0 +1,74 @@
+[package]
+name = "notch-win"
+description = "Notch's Windows adapters behind notch-core's ports"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+notch-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+parking_lot.workspace = true
+# Both already in Cargo.lock (Tauri's own), so nothing new is downloaded: app icons as PNG data URLs.
+png = "0.17.16"
+base64 = "0.22.1"
+# Wave 4, in Cargo.lock already: the clipboard image fingerprint.
+sha2 = "0.10.9"
+
+[target.'cfg(windows)'.dependencies]
+# Both in Cargo.lock at windows 0.61's own versions: `IIterable`/`IMapView` for the Bluetooth watcher, and
+# `#[implement]` (the volume callback) expands to `windows_core::...`.
+windows-collections = "0.2.0"
+windows-core = "0.61.2"
+windows = { workspace = true, features = [
+  "ApplicationModel",
+  "ApplicationModel_DataTransfer",
+  "UI_Notifications",
+  "UI_Notifications_Management",
+  "Storage",
+  "Storage_Search",
+  "Win32_Storage_Xps",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Devices_Enumeration",
+  "Devices_Radios",
+  "Foundation",
+  "Foundation_Collections",
+  "Media_Control",
+  "Storage_Streams",
+  "Win32_Devices_Display",
+  "Win32_UI_Shell_Common",
+  "Win32_System_SystemServices",
+  "Win32_System_Services",
+  "Win32_System_Search",
+  "Win32_System_Ole",
+  "Win32_System_Memory",
+  "Win32_System_DataExchange",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_Security_Cryptography",
+  "Win32_Foundation",
+  "Win32_Graphics_Dwm",
+  "Win32_Graphics_Gdi",
+  "Win32_Media_Audio",
+  "Win32_Media_Audio_Endpoints",
+  "Win32_NetworkManagement_IpHelper",
+  "Win32_Networking_WinSock",
+  "Win32_Storage_EnhancedStorage",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Performance",
+  "Win32_System_Power",
+  "Win32_System_Registry",
+  "Win32_System_RemoteDesktop",
+  "Win32_System_Shutdown",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+  "Win32_System_Variant",
+  "Win32_UI_Accessibility",
+  "Win32_UI_HiDpi",
+  "Win32_UI_Shell",
+  "Win32_UI_Shell_PropertiesSystem",
+  "Win32_UI_WindowsAndMessaging",
+] }

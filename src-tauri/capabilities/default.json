@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Strip and island pages: events only. App commands (commands.rs) need no permission entry; no plugin commands are granted (global-shortcut stays Rust-only).",
+  "windows": ["strip-*", "island"],
+  "permissions": ["core:event:default"]
+}

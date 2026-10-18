@@ -1,0 +1,36 @@
+import { useEffect, useRef } from "react";
+
+const FOCUSABLE = 'a[href],button:not([disabled]):not([tabindex="-1"]),input:not([disabled]):not([tabindex="-1"]),select:not([disabled]),textarea:not([disabled]),[role="switch"],[tabindex]:not([tabindex="-1"])';
+
+export const focusables = (root: HTMLElement): HTMLElement[] =>
+  [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((e) => !e.hasAttribute("disabled") && e.getAttribute("aria-hidden") !== "true");
+
+/** Kart davranışı: açılınca ilk denetime odak, Tab kartın içinde döner, Esc kapatır ve odak açan öğeye döner. Açan öğe sökülmüşse (çıkıntıdan açılan kart) klavye kullanılıyorsa `fallback` öğesine (F-08). */
+export function useFocusTrap(ref: React.RefObject<HTMLElement | null>, onClose: () => void, active = true, fallback?: () => HTMLElement | null) {
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => {
+    const root = ref.current;
+    if (!root || !active) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const first = root.querySelector<HTMLElement>("[data-autofocus]") ?? focusables(root)[0];
+    first?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close.current(); return; }
+      if (e.key !== "Tab") return;
+      const list = focusables(root);
+      if (!list.length) { e.preventDefault(); return; }
+      const i = list.indexOf(document.activeElement as HTMLElement);
+      const next = e.shiftKey ? (i <= 0 ? list.length - 1 : i - 1) : i === list.length - 1 ? 0 : i + 1;
+      e.preventDefault();
+      list[next].focus();
+    };
+    root.addEventListener("keydown", onKey);
+    return () => {
+      root.removeEventListener("keydown", onKey);
+      if (opener?.isConnected) opener.focus();
+      else if (fallback && document.documentElement.hasAttribute("data-kb") && (!document.activeElement || document.activeElement === document.body)) fallback()?.focus();
+      else if (!document.activeElement || document.activeElement === document.body) document.querySelector<HTMLElement>(".adaMerkez, header.cubuk button")?.focus(); // açan öğe sökülmüş (çıkıntı, dişli): odak gövdeye düşmesin (F-08)
+    };
+  }, [ref, active]);
+}

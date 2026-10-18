@@ -1,0 +1,4 @@
+# A clean Windows has no VC++ redistributable: link the C runtime into peeka.exe so it starts without
+# VCRUNTIME140*.dll (found in the first real-window run on a fresh VM, 17 Oct 2026).
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

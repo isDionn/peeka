@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity version="1.0.0.0" name="Notch.App" />
+  <!--
+    Links notch.exe to the sparse package of the Windows notification mirror (identity/AppxManifest.xml, Wave 6).
+    Windows ignores it until the owner registers that package (identity/register.ps1). Must match its Name,
+    Publisher and Application Id (notch_core::mirror, a test checks). Standard Windows manifest shape (Microsoft schema).
+  -->
+  <msix xmlns="urn:schemas-microsoft-com:msix.v1" publisher="CN=Notch" packageName="Notch.Mirror" applicationId="Notch" />
+  <!-- The same as tauri-build's default manifest: Common Controls v6. -->
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls" version="6.0.0.0" processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*" />
+    </dependentAssembly>
+  </dependency>
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 / 11 -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" />
+    </application>
+  </compatibility>
+</assembly>
