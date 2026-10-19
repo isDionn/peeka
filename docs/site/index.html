@@ -25,11 +25,12 @@
 <meta name="twitter:image" content="https://isdionn.github.io/peeka/images/banner.png">
 <meta name="twitter:image:alt" content="Peeka: a thin top strip with an island and the ghost mascot hanging below it">
 
+<link rel="preload" href="media/hero-still.webp" as="image" type="image/webp" media="(min-width: 721px)">
 <link rel="preload" href="fonts/bricolage-grotesque-latin.woff2" as="font" type="font/woff2" crossorigin>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"SoftwareApplication","name":"Peeka","operatingSystem":"Windows 10, Windows 11","applicationCategory":"UtilitiesApplication","softwareVersion":"0.3.3","license":"https://opensource.org/licenses/MIT","downloadUrl":"https://github.com/isDionn/peeka/releases/latest/download/Peeka-setup.exe","url":"https://isdionn.github.io/peeka/","image":"https://isdionn.github.io/peeka/images/banner.png","description":"A free, open-source Windows taskbar replacement: a slim top strip with a Dynamic-Island-style island for music, Claude Code tasks and alerts.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Person","name":"isDionn","url":"https://github.com/isDionn"}}
 </script>
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 <script>document.documentElement.classList.add("js")</script>
 </head>
 <body>
@@ -42,13 +43,15 @@
 
 <header class="strip">
   <a class="brand" href="#top" aria-label="Peeka, back to top"><img src="media/ghost-192.webp" alt="" width="192" height="192">Peeka</a>
-  <div class="island" aria-hidden="true"><span class="island-label" id="island-label">Peeka</span></div>
+  <button class="island" type="button" inert aria-expanded="false" aria-controls="sections"><span class="island-label" id="island-label">Peeka</span><span class="sr"> sections menu</span></button>
   <nav aria-label="Sections">
-    <a href="#features">Features</a>
-    <a href="#privacy">Privacy</a>
-    <a href="#plugins">Plugins</a>
-    <a href="#faq">FAQ</a>
-    <a class="pill" href="https://github.com/isDionn/peeka"><svg class="ico"><use href="#i-star"/></svg>Star</a>
+    <div class="sections" id="sections">
+      <a href="#features">Features</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#plugins">Plugins</a>
+      <a href="#faq">FAQ</a>
+    </div>
+    <a class="pill" href="https://github.com/isDionn/peeka"><svg class="ico" aria-hidden="true"><use href="#i-star"/></svg>Star</a>
   </nav>
 </header>
 
@@ -58,16 +61,17 @@
     <h1>A Dynamic Island for&nbsp;Windows.</h1>
     <p class="sub">Peeka replaces the taskbar with a slim top strip. Music, Claude Code tasks and alerts grow out of it.</p>
     <div class="cta">
-      <a class="btn primary" id="download" href="https://github.com/isDionn/peeka/releases/latest/download/Peeka-setup.exe"><svg class="ico"><use href="#i-win"/></svg>Download for Windows</a>
-      <a class="btn quiet" href="https://github.com/isDionn/peeka"><svg class="ico"><use href="#i-star"/></svg>Star on GitHub</a>
+      <a class="btn primary" id="download" href="https://github.com/isDionn/peeka/releases/latest/download/Peeka-setup.exe"><svg class="ico" aria-hidden="true"><use href="#i-win"/></svg>Download for Windows</a>
+      <a class="btn quiet" href="https://github.com/isDionn/peeka"><svg class="ico" aria-hidden="true"><use href="#i-star"/></svg>Star on GitHub</a>
     </div>
-    <p class="dl-meta">v0.3.3 · ~3.7 MB · Windows 10/11 · Free and open source (MIT) · <a href="https://github.com/isDionn/peeka/releases/latest">Other downloads</a></p>
+    <p class="dl-meta">v0.3.3 · ~3.7&nbsp;MB · Windows&nbsp;10/11 · Free and open source (MIT) · <a href="https://github.com/isDionn/peeka/releases/latest">Other downloads</a></p>
     <ul class="trust">
-      <li><b>Windows may warn.</b> The exe is not code-signed yet: choose <b>More info</b>, then <b>Run anyway</b>.</li>
-      <li><b>Easy to undo.</b> Press <b>Restore taskbar</b> in Peeka's Start panel and your normal taskbar is back.</li>
+      <li><b>Windows may warn.</b> The exe is not code-signed yet: choose <b class="nowrap">More info</b>, then <b class="nowrap">Run anyway</b>.</li>
+      <li><b>Easy to undo.</b> Press <b class="nowrap">Restore taskbar</b> in Peeka's Start panel and your normal taskbar is back.</li>
     </ul>
     <div class="screen">
-      <video autoplay muted loop playsinline poster="media/hero-poster.webp" width="1440" height="488" aria-label="Peeka's island growing out of the top strip into a music card, then a Claude Code task taking the island while the song moves to the side bubble.">
+      <button class="vid-toggle" type="button" aria-pressed="false" aria-label="Pause the animation" hidden><svg class="i-pause" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2h3.5v12H3zM9.5 2H13v12H9.5z"/></svg><svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2l10 6-10 6z"/></svg></button>
+      <video autoplay muted loop playsinline poster="media/hero-still.webp" width="1440" height="488" aria-label="Peeka's island growing out of the top strip into a music card, then a Claude Code task taking the island while the song moves to the side bubble.">
         <source src="media/hero.webm" type="video/webm">
         <source src="media/hero.mp4" type="video/mp4">
       </video>
@@ -83,7 +87,7 @@
           <h3>The island grows when something happens.</h3>
           <p>A song starts, a download finishes, a timer runs out, Claude Code asks for permission. The pill in the middle of the strip opens into a card with the controls you need, then tucks itself away.</p>
         </div>
-        <figure class="shot reveal"><img src="media/island-music.webp" alt="The island expanded into a music card with album art, a progress bar and play, pause and skip buttons" width="1200" height="406" loading="lazy"></figure>
+        <figure class="shot reveal"><img src="media/music-card.webp" alt="The island expanded into a music card: album art, Night Train by Lowtide, a progress bar, previous, pause and next buttons, and the ghost humming along" width="1080" height="412" loading="lazy" decoding="async"></figure>
       </div>
 
       <div class="row flip">
@@ -91,19 +95,19 @@
           <h3>Two tasks, one glance.</h3>
           <p>While a Claude Code session thinks in the island, the song you were playing waits in the small bubble beside it. One button in Settings connects Claude Code, and another removes exactly those entries.</p>
         </div>
-        <figure class="shot reveal"><img src="media/side-bubble.webp" alt="The island showing a Claude Code session with a running timer, and a round side bubble holding the music task" width="1200" height="282" loading="lazy"></figure>
+        <figure class="shot slim reveal"><img src="media/thinking.webp" alt="The strip's centre reading Compass, Claude, Thinking, 00:08, with the album cover waiting in a round bubble to its right" width="760" height="68" loading="lazy" decoding="async"></figure>
       </div>
 
       <div class="duo">
         <article class="tile tall reveal">
-          <img src="media/quick-settings.webp" alt="The quick settings panel: volume and brightness sliders, Wi-Fi, Bluetooth and Do Not Disturb tiles, battery, microphone and camera status" width="560" height="912" loading="lazy">
+          <img src="media/status.webp" alt="The quick settings panel: volume and brightness sliders, Wi-Fi, Bluetooth and Do not disturb tiles, battery, microphone, camera and screen sharing status" width="760" height="1500" loading="lazy" decoding="async">
           <div>
             <h3>Wi-Fi, sound and battery, one click away.</h3>
             <p>Quick settings drop down from the strip. Volume, brightness and radio changes show up as short island events.</p>
           </div>
         </article>
         <article class="tile reveal">
-          <img src="media/clipboard.webp" alt="Clipboard history with screenshots, files and links; a Bitwarden entry is blurred" width="960" height="660" loading="lazy">
+          <img src="media/clipboard-en.webp" alt="Clipboard history: four image thumbnails, then a PDF, a blurred Bitwarden password, a link, a note, a video file, a color and a git command, each with how long ago it was copied" width="1240" height="1192" loading="lazy" decoding="async">
           <div>
             <h3>A clipboard that keeps secrets secret.</h3>
             <p>Text, images and file paths. Password-like items, like the Bitwarden row above, stay blurred until you hover, never go to plugins, and sit in a vault encrypted with Windows DPAPI.</p>
@@ -222,8 +226,8 @@
       <img class="final-art reveal" src="media/showcase.webp" alt="The quick settings panel next to a music card, with the ghost mascot peeking over its edge" width="1400" height="788" loading="lazy">
       <h2>Give your taskbar a day off.</h2>
       <div class="cta">
-        <a class="btn primary" href="https://github.com/isDionn/peeka/releases/latest/download/Peeka-setup.exe"><svg class="ico"><use href="#i-win"/></svg>Download for Windows</a>
-        <a class="btn quiet" href="https://github.com/isDionn/peeka"><svg class="ico"><use href="#i-star"/></svg>Star on GitHub</a>
+        <a class="btn primary" href="https://github.com/isDionn/peeka/releases/latest/download/Peeka-setup.exe"><svg class="ico" aria-hidden="true"><use href="#i-win"/></svg>Download for Windows</a>
+        <a class="btn quiet" href="https://github.com/isDionn/peeka"><svg class="ico" aria-hidden="true"><use href="#i-star"/></svg>Star on GitHub</a>
       </div>
       <p class="note">v0.3.3 · ~3.7 MB · <a href="https://github.com/isDionn/peeka/releases/latest">Other downloads</a> (portable exe). Not code-signed yet, so SmartScreen may warn: choose More info, then Run anyway.</p>
     </div>
@@ -253,13 +257,43 @@
 
   // The strip's island names the section you are reading, like the real one names what is playing.
   const island = document.querySelector(".island"), label = document.getElementById("island-label");
+  const navLinks = [...document.querySelectorAll(".sections a")];
   const spy = new IntersectionObserver((es) => es.forEach((e) => {
     const text = e.target.dataset.label;
-    if (!e.isIntersecting || label.textContent === text) return;
+    if (!e.isIntersecting) return;
+    navLinks.forEach((a) => e.target.id && a.hash === "#" + e.target.id ? a.setAttribute("aria-current", "location") : a.removeAttribute("aria-current"));
+    if (label.textContent === text) return;
     label.textContent = text;
     island.classList.remove("pulse"); void island.offsetWidth; island.classList.add("pulse");
   }), { rootMargin: "-45% 0px -50% 0px" });
   document.querySelectorAll("[data-label]").forEach((s) => spy.observe(s));
+
+  // On phones the island opens the section list; on wider screens the links are already in the strip.
+  const strip = document.querySelector(".strip"), narrow = matchMedia("(max-width: 720px)");
+  const setOpen = (open, refocus) => {
+    strip.classList.toggle("open", open);
+    island.setAttribute("aria-expanded", open);
+    if (open) navLinks[0].focus(); else if (refocus) island.focus();
+  };
+  const fit = () => { island.inert = !narrow.matches; if (!narrow.matches) setOpen(false); };
+  fit(); narrow.addEventListener("change", fit);
+  island.addEventListener("click", () => setOpen(!strip.classList.contains("open")));
+  navLinks.forEach((a) => a.addEventListener("click", () => setOpen(false)));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && strip.classList.contains("open")) setOpen(false, true); });
+  document.addEventListener("click", (e) => { if (!strip.contains(e.target)) setOpen(false); });
+
+  // The hero clip loops, so it gets a pause button, and it starts paused when motion is reduced.
+  const video = document.querySelector(".screen video"), toggle = document.querySelector(".vid-toggle");
+  const setPaused = (paused) => {
+    paused ? video.pause() : video.play().catch(() => {});
+    toggle.setAttribute("aria-pressed", paused);
+  };
+  toggle.hidden = false;
+  toggle.addEventListener("click", () => setPaused(!video.paused));
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    // Reload without autoplay so the settled poster frame (the open music card) stays on screen.
+    video.removeAttribute("autoplay"); video.load(); toggle.setAttribute("aria-pressed", true);
+  }
 })();
 </script>
 </body>

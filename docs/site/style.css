@@ -41,7 +41,8 @@ code { font-family: var(--mono); font-size: .9em; }
 .skip:hover { color: var(--ink); }
 
 .wrap { width: min(1120px, 100% - 32px); margin-inline: auto; }
-section { padding: clamp(72px, 10vw, 136px) 0; }
+section { padding: clamp(72px, 9vw, 120px) 0 clamp(48px, 6vw, 88px); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: -0.025em; line-height: 1.05; }
 h2 { font-size: clamp(2rem, 4.4vw, 3.4rem); font-weight: 750; max-width: 20ch; }
 h3 { font-size: clamp(1.35rem, 2.2vw, 1.75rem); font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; }
@@ -62,16 +63,29 @@ p { text-wrap: pretty; }
   font-size: .9rem;
 }
 .brand { display: flex; align-items: center; gap: 8px; font: 700 1.05rem/1 var(--display); text-decoration: none; justify-self: start; }
-.brand img { width: 26px; height: 26px; }
-.strip nav { justify-self: end; display: flex; align-items: center; gap: clamp(12px, 2vw, 26px); }
+.brand img { width: 26px; height: 26px; transition: transform .45s var(--ease); }
+.brand:hover { color: var(--ghost); }
+.brand:hover img { transform: translateY(-2px) rotate(-8deg) scale(1.08); }
+.strip nav { justify-self: end; display: flex; align-items: center; gap: clamp(4px, 1vw, 14px); }
 .strip nav a { text-decoration: none; color: var(--muted); transition: color .2s; }
-.strip nav a:hover { color: var(--ghost); }
+/* Section links: a glow bar slides out from the centre on hover, and stays under the section you are reading. */
+.strip nav a:not(.pill) { position: relative; padding: 10px 8px; }
+.strip nav a:not(.pill)::after {
+  content: ""; position: absolute; left: 8px; right: 8px; bottom: 4px; height: 2px; border-radius: 2px;
+  background: var(--glow); transform: scaleX(0); transition: transform .35s var(--ease);
+}
+.strip nav a:hover, .strip nav a[aria-current] { color: var(--ghost); }
+.strip nav a:not(.pill):hover::after, .strip nav a[aria-current]::after { transform: scaleX(1); }
 .pill {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 5px 12px; border-radius: 99px; border: 1px solid var(--line);
   color: var(--ghost) !important; background: rgba(255, 244, 234, .06);
+  margin-left: 6px; transition: background .2s, border-color .2s, transform .25s var(--ease);
 }
-.pill:hover { background: rgba(255, 244, 234, .14); }
+.pill .ico { transition: transform .45s var(--ease); }
+.pill:hover { background: rgba(255, 244, 234, .14); border-color: rgba(155, 125, 255, .6); }
+.pill:hover .ico { transform: rotate(72deg) scale(1.15); }
+.pill:active { transform: scale(.96); }
 
 .island {
   align-self: start; height: 34px; min-width: 150px; padding: 0 22px;
@@ -81,7 +95,9 @@ p { text-wrap: pretty; }
   box-shadow: 0 8px 24px -6px rgba(0, 0, 0, .7), 0 0 0 1px var(--line);
   font: 600 .82rem/1 var(--display); letter-spacing: .01em;
   transform-origin: top center;
+  border: 0; cursor: default; -webkit-tap-highlight-color: transparent;
 }
+.sections { display: flex; align-items: center; gap: inherit; }
 .island-label { display: block; }
 .island.pulse { animation: pop .7s var(--ease); }
 .island.pulse .island-label { animation: rise .5s var(--ease); }
@@ -117,7 +133,9 @@ p { text-wrap: pretty; }
 .btn.primary:hover { color: var(--ink); background: #fff; box-shadow: 0 16px 40px -10px rgba(155, 125, 255, .75); }
 .btn.quiet { background: rgba(255, 244, 234, .06); }
 .btn.quiet:hover { background: rgba(255, 244, 234, .13); }
-.btn .ico { width: 17px; height: 17px; }
+.btn .ico { width: 17px; height: 17px; transition: transform .35s var(--ease); }
+.btn:hover .ico { transform: translateY(-1px) scale(1.12); }
+.strip :focus-visible { outline-offset: -2px; }
 .meta { color: var(--muted); font-size: .9rem; margin: 16px 0 0; }
 
 .screen {
@@ -129,7 +147,21 @@ p { text-wrap: pretty; }
   -webkit-mask-image: linear-gradient(#000 58%, transparent);
   mask-image: linear-gradient(#000 58%, transparent);
 }
+.screen { position: relative; }
 .screen video { width: 100%; aspect-ratio: 1440 / 488; object-fit: cover; }
+/* Pause control for the looping hero clip (WCAG 2.2.2); it sits in the top corner, clear of the fade. */
+.vid-toggle {
+  position: absolute; top: 12px; right: 12px; z-index: 1;
+  display: grid; place-items: center; width: 36px; height: 36px; padding: 0;
+  border-radius: 99px; border: 1px solid var(--line); cursor: pointer;
+  background: rgba(9, 7, 25, .72); color: var(--ghost);
+  transition: background .2s, transform .25s var(--ease), border-color .2s;
+}
+.vid-toggle:hover { background: rgba(59, 36, 136, .9); border-color: rgba(155, 125, 255, .6); transform: scale(1.08); }
+.vid-toggle:active { transform: scale(.94); }
+.vid-toggle svg { width: 14px; height: 14px; fill: currentColor; }
+.vid-toggle .i-play, .vid-toggle[aria-pressed="true"] .i-pause { display: none; }
+.vid-toggle[aria-pressed="true"] .i-play { display: block; }
 
 /* ---------- feature rows ---------- */
 .features { padding-top: clamp(80px, 10vw, 128px); }
@@ -143,6 +175,10 @@ p { text-wrap: pretty; }
 .shot { margin: 0; }
 .shot img, .tile img, .moods, .final-art { border-radius: 20px; }
 .shot img { border: 1px solid var(--line); box-shadow: 0 30px 70px -30px rgba(59, 36, 136, .9); }
+/* A thin strip capture sits on a strip-coloured plate so it reads as part of the bar, not a lost sliver. */
+.shot.slim { padding: clamp(28px, 4vw, 48px) clamp(16px, 2.4vw, 28px); border-radius: 20px; border: 1px solid var(--line);
+  background: radial-gradient(ellipse 70% 90% at 50% 0%, rgba(110, 72, 220, .35), transparent 70%), #07051a; }
+.shot.slim img { border-radius: 12px; box-shadow: 0 18px 40px -18px rgba(0, 0, 0, .9); }
 
 .duo { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(16px, 2.4vw, 28px); margin-top: clamp(56px, 8vw, 104px); }
 .tile {
@@ -175,6 +211,7 @@ p { text-wrap: pretty; }
 .tour { padding-top: 0; }
 .player { margin-top: 32px; border-radius: 20px; overflow: hidden; border: 1px solid var(--line); background: var(--night); box-shadow: 0 40px 100px -40px rgba(59, 36, 136, .9); }
 .player video { width: 100%; aspect-ratio: 16 / 9; }
+.player:has(video:focus-visible) { outline: 2px solid var(--glow); outline-offset: 4px; }
 
 /* ---------- privacy ---------- */
 .privacy { background: linear-gradient(180deg, var(--ink), var(--indigo) 55%, var(--ink)); }
@@ -212,6 +249,9 @@ summary::after {
 }
 details[open] summary::after { transform: rotate(-135deg); margin-top: -2px; }
 summary:hover { color: #fff; }
+summary:hover::after { translate: 0 2px; }
+details[open] summary:hover::after { translate: 0 -2px; }
+summary::after { transition: transform .3s var(--ease), translate .3s var(--ease); }
 details p { color: var(--muted); margin: 0 0 22px; max-width: 64ch; }
 details b { color: var(--ghost); }
 
@@ -238,9 +278,28 @@ footer .brand { margin-bottom: 14px; }
   .list { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 720px) {
-  .strip nav a:not(.pill) { display: none; }
+  .sections { display: none; }
   .island { min-width: 116px; padding: 0 14px; }
+  /* Phones: the island is the menu button, and the section list drops out of it like an island card. */
+  .js .island { cursor: pointer; }
+  .js .island .island-label::after {
+    content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 0 3px 8px;
+    border-right: 1.5px solid var(--glow); border-bottom: 1.5px solid var(--glow);
+    transform: rotate(45deg); transition: transform .3s var(--ease);
+  }
+  .js .strip.open .island-label::after { transform: translateY(3px) rotate(-135deg); }
+  .js .strip.open .sections {
+    display: grid; position: absolute; top: var(--strip); left: 50%; translate: -50% 0;
+    width: min(260px, calc(100vw - 32px)); padding: 8px; gap: 2px;
+    background: #05040f; border: 1px solid var(--line); border-radius: 0 0 20px 20px;
+    box-shadow: 0 24px 48px -16px rgba(0, 0, 0, .8);
+    animation: drop .35s var(--ease);
+  }
+  .js .strip.open .sections a { padding: 12px 16px; border-radius: 12px; font: 650 1rem/1.2 var(--display); color: var(--ghost); }
+  .js .strip.open .sections a::after { left: 16px; right: auto; width: 24px; bottom: 6px; }
+  .js .strip.open .sections a:hover { background: rgba(155, 125, 255, .12); }
 }
+@keyframes drop { from { opacity: 0; transform: translateY(-8px) scaleY(.92); } to { opacity: 1; transform: none; } }
 @media (max-width: 560px) {
   body { font-size: 1rem; }
   .strip .brand { font-size: 0; gap: 0; }
@@ -251,6 +310,10 @@ footer .brand { margin-bottom: 14px; }
   .cta .btn { flex: 1 1 100%; justify-content: center; }
   footer .wrap { grid-template-columns: 1fr; }
   .screen { border-radius: 14px 14px 0 0; }
+  .vid-toggle { top: 8px; right: 8px; width: 32px; height: 32px; }
+  .code pre { font-size: .74rem; padding-right: 56px; }
+  /* The code scrolls sideways on phones; a fade on the right edge says there is more. */
+  .code pre { -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
 }
 
 /* Download block: version line, trust notes */
@@ -259,3 +322,19 @@ footer .brand { margin-bottom: 14px; }
 .trust { list-style: none; margin: 14px auto 0; padding: 0; max-width: 56ch; color: var(--muted); font-size: .9rem; line-height: 1.5; display: grid; gap: 6px; }
 .trust b { color: var(--ghost); font-weight: 650; }
 .trust a { color: var(--ghost); }
+.nowrap { white-space: nowrap; }
+
+/* Inline links in small print still get a 24px tap target without changing the line rhythm. */
+.dl-meta a, .note a, footer a, details p a { display: inline-block; padding-block: 3px; }
+a, button, summary { touch-action: manipulation; -webkit-tap-highlight-color: rgba(155, 125, 255, .25); }
+
+/* ---------- reduced motion: everything visible, nothing loops ---------- */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation: none !important; transition-duration: .01ms !important; }
+  .js .reveal { opacity: 1; transform: none; }
+}
+
+/* ---------- 404 ---------- */
+.lost { min-height: 100svh; display: grid; place-content: center; padding-bottom: 64px; }
+.lost .hero-ghost { opacity: .9; }
