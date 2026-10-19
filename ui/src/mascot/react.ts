@@ -11,13 +11,14 @@ export const FADE_MS = 160;
 /** Moods a reaction may cover; anything that asks for the user (approval, question, error, quota...) or shows work is never covered. */
 const CALM: ReadonlySet<Mood> = new Set(["idle", "drowsy", "tired", "sleeping"]);
 
-/** The strip ghost's mood: `reaction` (hello, message) over a calm base; locked/presenting = never (no face may hint at content). */
+/** The strip ghost's mood: `reaction` (hello, message) over a calm base; locked/presenting = never (no face may hint at content).
+ *  The one exception is "shy" (a hand over the eyes as presentation mode turns on): it says nothing about content and is itself the privacy gesture. */
 export function withReaction(base: Mood, reaction: Mood | null, priv: boolean): Mood {
-  return reaction && !priv && CALM.has(base) ? reaction : base;
+  return reaction && (!priv || reaction === "shy") && CALM.has(base) ? reaction : base;
 }
 
 /** The ghost's mood in a strip event center (40 px). Locked/presenting = neutral idle. */
-const EVENT_MOOD: Partial<Record<string, Mood>> = { download: "done", shot: "attention", jobdone: "done" };
+const EVENT_MOOD: Partial<Record<string, Mood>> = { download: "done", shot: "attention", jobdone: "done", cpu: "hot" };
 export function eventMood(kind: string, priv: boolean): Mood | null {
   const m = EVENT_MOOD[kind];
   return m === undefined ? null : priv ? "idle" : m;

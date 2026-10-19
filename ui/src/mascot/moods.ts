@@ -3,10 +3,10 @@
 export type Mood =
   | "idle" | "drowsy" | "listening" | "thinking" | "speaking" | "approval" | "serious"
   | "attention" | "tired" | "done" | "error" | "quiet" | "sleeping" | "music"
-  | "searching" | "question" | "ratelimit" | "dizzy" | "hello" | "message";
+  | "searching" | "question" | "ratelimit" | "dizzy" | "hello" | "message" | "hot" | "shy";
 
 export type Body = "neutral" | "hands-up" | "chin" | "cheeks" | "tilted" | "squashed" | "tall" | "three-quarter";
-export type Fx = "zzz" | "mintLeft" | "mintRight" | "dots" | "redRight" | "redLeft" | "sign" | "sparkle" | "sparkle2" | "note" | "note2" | "ring" | "amber" | "wave" | "sweat";
+export type Fx = "zzz" | "mintLeft" | "mintRight" | "dots" | "redRight" | "redLeft" | "sign" | "sparkle" | "sparkle2" | "note" | "note2" | "ring" | "amber" | "wave" | "sweat" | "point" | "qsign" | "cover";
 export type Silhouette = "open" | "closed" | "hands" | "three-quarter";
 
 export interface MoodSpec {
@@ -37,15 +37,21 @@ export const MOODS: Record<Mood, MoodSpec> = {
   quiet:     { body: "neutral",         eyes: "eye-calm", mouth: SMILE,         fx: [],                       light: null,                 speed: 0,   sil: "closed" },
   sleeping:  { body: "tilted",         eyes: "eye-closed", mouth: SMILE,          fx: ["zzz"],                  light: null,                 speed: .5,  sil: "closed" },
   // Peeka's own moods (independent of the assistant): searching, question, quota reached, dizzy
-  searching: { body: "neutral",         eyes: "eye-open",   mouth: SMILE,          fx: [],                       light: "var(--blue,#64D2FF)",  speed: .9,  scan: true, sil: "open" },
-  question:  { body: "tilted",         eyes: "eye-up", mouth: SMILE,          fx: [],                       light: "var(--purple,#BF5AF2)",   speed: .8,  tag: "?", tilt: 6, sil: "three-quarter" },
+  searching: { body: "three-quarter",   eyes: "eye-open",   mouth: SMILE,          fx: ["point"],                light: "var(--blue,#64D2FF)",  speed: .9,  scan: true, sil: "open" },
+  question:  { body: "three-quarter",   eyes: "eye-up", mouth: SMILE,          fx: ["qsign"],                       light: "var(--purple,#BF5AF2)",   speed: .8,  tag: "?", tilt: 6, sil: "three-quarter" },
   ratelimit: { body: "tilted",         eyes: "eye-sad",  mouth: "mouth-wavy",   fx: ["sweat"],                  light: "var(--quota,#FF7A1A)",  speed: .5,  tag: "dot", sil: "closed" },
   dizzy:     { body: "tilted",         eyes: "eye-dizzy", mouth: "mouth-tongue",     fx: ["ring"],                light: "var(--yellow,#FFD60A)",  speed: 1.2, roll: true, tilt: -5, sil: "open" },
   // M1 short reactions (Peeka's own, never sent by plugins): launch greeting (waves once), a new message (raised brows + small sparkle)
   hello:     { body: "neutral",         eyes: "eye-happy",  mouth: SMILE,          fx: ["wave"],                 light: null,                 speed: 1,   sil: "hands" },
   message:   { body: "neutral",         eyes: "eye-brows-2", mouth: SMILE,         fx: ["sparkle2"],             light: null,                 speed: .8,  sil: "open" },
+  // M1b: CPU very busy (the cpu_high strip event; heat waves + sweat), presentation mode just turned on (one hand covers the eyes, 1.2 s, no content)
+  hot:       { body: "tilted",         eyes: "eye-narrow", mouth: "mouth-wavy",   fx: ["redRight", "redLeft", "sweat"], light: "var(--crimson,#F2555A)", speed: .9, sil: "closed" },
+  shy:       { body: "three-quarter",   eyes: "eye-closed", mouth: SMILE,          fx: ["cover"],                light: null,                 speed: .6,  sil: "closed" },
   music:     { body: "tilted",         eyes: "eye-closed", mouth: SMILE,          fx: ["note", "note2"],        light: null,                 speed: 1,   sway: true, sil: "closed" },
 };
+
+/** Effects drawn only on cards (56 px and up): too busy on the strip. */
+export const CARD_FX: ReadonlySet<Fx> = new Set(["sign", "point", "qsign"]);
 
 export const CLOSED_EYES = new Set(["eye-happy", "eye-closed", "eye-calm", "eye-line", "eye-dizzy", "eye-sleepy"]);
 

@@ -30,8 +30,8 @@ export function DownloadBump({ id, generic }: { id: string; generic: boolean }) 
 }
 
 /** CPU above 95% for a long time (Rust `cpu_high {app}`; Rust makes the 60 s call, no timer here). Task Manager is `open_task_manager`. */
-export const CpuCenter = ({ app, generic }: { app: string | null; generic: boolean }) =>
-  <span className="ms"><Cpu /><span className="b6">{app && !generic ? `${flat(app, 28)} is using a lot of CPU` : "CPU is very busy"}</span></span>;
+export const CpuCenter = ({ app, generic, ghost }: { app: string | null; generic: boolean; /** The 40 px strip ghost (overheated), if any. */ ghost?: ReactNode }) =>
+  <span className="ms">{ghost}<Cpu /><span className="b6">{app && !generic ? `${flat(app, 28)} is using a lot of CPU` : "CPU is very busy"}</span></span>;
 export const CpuBump = () => <div className="peekBar"><button className="btn kk primary" onClick={() => bridge.call("open_task_manager").catch(() => undefined)}>Task Manager</button></div>;
 
 /**

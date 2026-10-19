@@ -46,6 +46,10 @@ const ISLAND_STATES: Record<string, IslandInit> = {
   // b2 music card (the 56 px ghost sways in the player), kb empty Clipboard (96 px, searching), bit task done (40 px ghost cheers), k2 copy catch (40 px ghost spots the item).
   // Wink after listening: mascot-demo.html?mood=listening&then=idle&after=1000 (the engine winks once when listening ends, any size from 28 px).
   gr: { greet: true }, ms: {}, dl: { pin: true }, nt: {},
+  // M1b (more reactions from the unused parts): cpu "CPU is very busy" bump (the 40 px ghost overheats: red heat waves, sweat; neutral when locked),
+  // pr presentation mode turns on 1.5 s after load (the strip ghost covers its eyes for 1.2 s, then stays neutral). Idle tuft/tail fidgets, the sly prank face
+  // and the 96 px ground light: mascot-demo.html?view=fidget. Pin daytime with &time=2026-10-19T14:00.
+  cpu: { cpu: { app: "Chrome" }, pin: true }, pr: {},
   sarj: { charge: true, pin: true }, pil: {}, bt: { bt: { name: "Buds Pro", battery: 80 }, pin: true }, zam: {}, dik: {}, tik: {}, kay: {}, f0: {}, g0: { shelfDrag: true, pin: true }, g: { view: "shelf" },
 };
 const state = param("state", "a");
@@ -101,6 +105,7 @@ if (state === "f0" || state === "f") fakeBridge.setSurfaces({ protrusion: PROTRU
 if (state === "g0" || state === "g") fakeBridge.setShelf([{ id: "f1", name: "presentation-draft.pdf", sub: "2.4 MB, just now", kind: "pdf" }, { id: "f2", name: "screen-recording.mp4", sub: "38 MB, 2m ago", kind: "video" }]);
 if (param("mic", "") !== "") fakeBridge.setPrivacy({ mic: ["Chrome"], camera: [] });
 // ?share: B1 screen share shield (the dot says "Screen is being shared"; Rust's input_tick turns presentation on, generic labels)
+if (state === "pr") setTimeout(() => fakeBridge.emit("input_tick", { lastInputAgoMs: 60_000, cursor: null, presentation: true }), 1500);
 if (param("share", "") !== "") { fakeBridge.setPrivacy({ mic: [], camera: [], screen: true }); setTimeout(() => fakeBridge.emit("input_tick", { lastInputAgoMs: 0, cursor: null, presentation: true }), 0); }
 if (param("previewDelay", "") !== "") fakeBridge.setPreviewDelay(+param("previewDelay", "0"));
 if (state === "u") fakeBridge.pushAlert({ id: "cpu", title: "Chrome is maxing out the CPU", subtitle: "100% for 30 s", icon: "attention", action: "task_manager", priority: 70 });
@@ -126,7 +131,7 @@ if (state === "n" || state === "n2") {
 }
 if (state === "aye") fakeBridge.setPlugins([PLUGINS[0]]);
 if (state === "m0") void fakeBridge.call("clear_alerts");
-if (state === "gr" || state === "ms" || state === "nt") fakeBridge.setPlugins([]); // a calm strip ghost: the fake assistant always reports 2 jobs and 1 approval, which win over reactions
+if (state === "gr" || state === "ms" || state === "nt" || state === "pr") fakeBridge.setPlugins([]); // a calm strip ghost: the fake assistant always reports 2 jobs and 1 approval, which win over reactions
 if (state === "ms") setTimeout(() => fakeBridge.pushNotice({ id: "win.ms", app: "Discord", title: "Sam", body: "Does 8 tonight work?" }), 1500);
 if (state === "dl") setTimeout(() => fakeBridge.emit("download_done", { id: "d1", name: "q3-report.xlsx", size: 1_200_000 }), 400);
 if (state === "aym") fakeBridge.call("modules_set", { order: MODULES.map((m) => m.id), off: ["timer"] });

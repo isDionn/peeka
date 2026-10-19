@@ -7,6 +7,7 @@ import { addHitProvider } from "../lib/hitRects";
 import { cap99, flat, pluginName } from "../lib/plugin";
 import { Kbd } from "./common";
 import { Mascot, createIdlePrank, type Mood, type MascotHandle } from "../mascot";
+import { FIDGET_GAP } from "../mascot/idlePrank";
 import { firstRunDone, markFirstRun } from "../lib/firstRun";
 import { focusViaKeys, onX, sendX, tabLeaves } from "../lib/xwin";
 import { ambientMood } from "../mascot/ambient";
@@ -159,7 +160,7 @@ interface CenterOpts {
   net: NetNote | null; shot: ClipPlain | null; timerDone: string | null; main: ReturnType<typeof useMainAssistant>; locked: boolean; alertsN: number; done: { title: string; took: string } | null; meeting: ProtrusionItem | null; burst: Burst | null; stopped: MusicStopped | null; dl: DownloadDone | null; cpu: CpuHigh | null; edit: CcEdit | null;
   /** Resting center (mascot, "Compass ready", counts or the clock); Island picks which piece shows for which card. */
   rest: ReactNode;
-  /** The 40 px strip ghost in an event's mood (download, copy catch, task done); null = no ghost there. */
+  /** The 40 px strip ghost in an event's mood (download, copy catch, task done, CPU busy); null = no ghost there. */
   ghost: (kind: Kind) => ReactNode;
   battery: Status["battery"]; bt: BluetoothEvent | null; timer: TimerState | null; shelfCount: number; panel: "search" | "settings" | "status" | "start" | "cleanup" | "notif" | null;
 }
@@ -177,7 +178,7 @@ const centerOf = (kind: Kind, o: CenterOpts): ReactNode => {
     case "lowbat": return o.battery && <LowBatteryCenter b={o.battery} />;
     case "burst": return o.burst && <BurstCenter b={o.burst} generic={o.locked} />;
     case "quota": return <QuotaCenter />;
-    case "cpu": return o.cpu && <CpuCenter app={o.cpu.app} generic={o.locked} />;
+    case "cpu": return o.cpu && <CpuCenter app={o.cpu.app} generic={o.locked} ghost={o.ghost(kind)} />;
     case "download": return o.dl && <DownloadCenter name={o.dl.name} generic={o.locked} ghost={o.ghost(kind)} />;
     case "edit": return o.edit && <EditCenter e={o.edit} generic={o.locked} />;
     case "musicstop": return o.stopped && <MusicStoppedCenter name={o.stopped.name} generic={o.locked} />;
@@ -584,14 +585,23 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     react("message");
     mascotRef.current?.glance(innerWidth * 4, 0, REACT_MS);
   }, [mirrorIds, mir.ready]); // eslint-disable-line react-hooks/exhaustive-deps
-  prankEnv.current = { on: (settings?.mascotPranks ?? true) && restShown, dnd: !!status?.dnd || input.busy, presentation: input.presentation, meeting: meetingOn || surf.protrusion?.icon === "calendar", music: !!media?.playing, cardOpen: !restShown, fullscreen };
+  // M1b: presentation mode just turned on: the strip ghost covers its eyes once (REACT_MS), then stays neutral
+  const presenting = useRef(input.presentation);
+  useEffect(() => {
+    const was = presenting.current; presenting.current = input.presentation;
+    if (!was && input.presentation && restShown) react("shy");
+  }, [input.presentation]); // eslint-disable-line react-hooks/exhaustive-deps
+  prankEnv.current = { on: (settings?.mascotPranks ?? true) && restShown, dnd: !!status?.dnd || input.busy, presentation: priv, meeting: meetingOn || surf.protrusion?.icon === "calendar", music: !!media?.playing, cardOpen: !restShown, fullscreen };
   const lastInputAgoMs = input.lastInputAgoMs;
   useEffect(() => {
-    const prank = createIdlePrank({
+    const env = {
       now: Date.now, random: Math.random, enabled: () => prankEnv.current.on, lastInputAgoMs, fullscreen: () => prankEnv.current.fullscreen, dnd: () => prankEnv.current.dnd,
       presentation: () => prankEnv.current.presentation, meeting: () => prankEnv.current.meeting, cardOpen: () => prankEnv.current.cardOpen, musicPlaying: () => prankEnv.current.music,
-    }, () => mascotRef.current?.prank());
-    const t = setInterval(prank.poll, 1000);
+    };
+    const prank = createIdlePrank(env, () => mascotRef.current?.prank());
+    // M1b: a calm idle fidget every 3-6 min, same blockers (the ghost itself skips it unless its mood is idle)
+    const fidget = createIdlePrank(env, () => mascotRef.current?.fidget(), FIDGET_GAP);
+    const t = setInterval(() => { prank.poll(); fidget.poll(); }, 1000);
     return () => clearInterval(t);
   }, [lastInputAgoMs]);
 

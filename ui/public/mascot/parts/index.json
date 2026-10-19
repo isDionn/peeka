@@ -819,5 +819,26 @@
     83
    ]
   }
+ },
+ "unused": {
+  "note": "Parts the engine does not load (M1b audit, 2026-10-19). Everything else is wired in ui/src/mascot (ghost.ts FX/TUFTS, moods.ts).",
+  "fx-zzz": "same art as fx-zzz-token (recolored); the token file is used",
+  "fx-wave-mint": "same art as fx-wave-mint-token; the token file is used",
+  "fx-wave-red": "same art as fx-wave-red-token; the token file is used",
+  "fx-sparkle-2": "same art as fx-sparkle-2-token; the token file is used",
+  "eye-single-line": "a single off-center line, half of a pair: no face reads right with it",
+  "skirt-1": "the body art bakes its own tail; masking it and drawing a skirt leaves a hem line that reads as clothing",
+  "skirt-2": "see skirt-1",
+  "skirt-3": "see skirt-1",
+  "hand-fist": "every free-hand pose already has a better part; a third hand on a two-handed body reads wrong",
+  "hand-paw": "see hand-fist",
+  "hand-paw-2": "see hand-fist",
+  "hand-paw-3": "see hand-fist",
+  "hand-point-2": "variant of hand-point (used)",
+  "hand-question-sign-2": "variant of hand-question-sign (used)",
+  "hand-question-sign-3": "variant of hand-question-sign (used)",
+  "hand-reach": "see hand-fist",
+  "hand-round-2": "see hand-fist",
+  "hand-round-3": "see hand-fist"
  }
 }

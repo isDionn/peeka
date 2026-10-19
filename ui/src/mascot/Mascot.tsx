@@ -1,6 +1,6 @@
 import { PanelTop } from "lucide-react";
 import { useEffect, useImperativeHandle, useRef, useState, type DragEvent, type ReactNode, type Ref } from "react";
-import { Ghost } from "./ghost";
+import { Ghost, type Fidget } from "./ghost";
 import { DAZE_SIZE, HANG, sizePlan, type Mood } from "./moods";
 import { LOVE_MOODS, REACT, createClickCounter, createReactionGate } from "./motion";
 import { FADE_MS } from "./react";
@@ -12,6 +12,8 @@ export interface HitRect { x: number; y: number; width: number; height: number }
 
 export interface MascotHandle {
   hop(): void; prank(): void;
+  /** M1b calm idle fidget (tuft flick, tail swish or sly face, rotating; ≤1.2 s, idle mood only). */
+  fidget(kind?: Fidget): void;
   /** Touch reactions: slap (~600 ms, then the previous look) and love (hearts). */
   slap(): void; love(): void;
   /** File swallow: sy 0.78 -> 1.18 -> 1 (80/130/220 ms), mouth open. */
@@ -91,7 +93,7 @@ function MainMascot({ size, mood, onPoke, cursor, single = true, still = false, 
   useEffect(() => { ghost.current?.setMood(shown); }, [shown]);
 
   useImperativeHandle(ref, () => ({
-    hop: () => ghost.current?.hop(), slap: () => ghost.current?.slap(), love: () => ghost.current?.love(), prank: () => ghost.current?.prank(), swallow: () => ghost.current?.swallow(),
+    hop: () => ghost.current?.hop(), slap: () => ghost.current?.slap(), love: () => ghost.current?.love(), prank: () => ghost.current?.prank(), fidget: (k) => { ghost.current?.fidget(k); }, swallow: () => ghost.current?.swallow(),
     glance: (x, y, ms) => ghost.current?.glance(x, y, ms),
     running: () => !!ghost.current?.running,
     hitRect: () => {

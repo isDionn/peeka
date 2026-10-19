@@ -1,9 +1,11 @@
 // Mascot preview page (for headless Playwright frames).
 // Default: every mood x {20, 28, 40 hanging, 56}. ?still a still frame, ?mood=x one mood, ?view=fx behavior page (badge, shake, sparkle, gaze, swallow, daze, strip).
+// ?view=fidget (M1b): the three idle fidgets at 96/56/40 px (each replays every 2.5 s, first at 600 ms), plus the new hot/shy moods and the hands on searching/question.
 // ?then=y&after=ms: every cell switches to mood y after ms (M1: ?mood=listening&then=idle shows the wink after listening).
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "../notch.css";
+import { FIDGETS, type Fidget } from "./ghost";
 import { Mascot, type MascotHandle } from "./Mascot";
 import { MOODS, type Mood } from "./moods";
 
@@ -111,4 +113,20 @@ function Fx() {
   );
 }
 
-createRoot(document.getElementById("root")!).render(q.get("view") === "fx" ? <Fx /> : <Grid />);
+function FidgetCell({ kind, size }: { kind: Fidget; size: number }) {
+  const r = useRef<MascotHandle>(null);
+  useEffect(() => { const go = () => r.current?.fidget(kind); const a = setTimeout(go, 600), b = setInterval(go, 2500); return () => { clearTimeout(a); clearInterval(b); }; }, [kind]);
+  return <div data-fidget={`${kind}-${size}`} style={{ ...box, minWidth: 120 }}><b>{kind} {size}</b><Mascot ref={r} size={size} mood="idle" isMainAssistant single={false} /></div>;
+}
+function Fidgets() {
+  return (
+    <div style={{ padding: 16, background: "var(--card)", color: "var(--l1, #fff)", display: "flex", flexDirection: "column", gap: 12, width: 1000 }}>
+      {[96, 56, 40].map((s) => <div key={s} style={{ display: "flex", gap: 12 }}>{FIDGETS.map((k) => <FidgetCell key={k} kind={k} size={s} />)}</div>)}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        {(["hot", "shy", "searching", "question"] as Mood[]).flatMap((m) => [96, 56, 40].map((s) => <div key={m + s} data-cell={`${m}-${s}`} style={{ ...box, minWidth: 100 }}><b>{m} {s}</b><Mascot size={s} mood={m} isMainAssistant single={false} /></div>))}
+      </div>
+    </div>
+  );
+}
+
+createRoot(document.getElementById("root")!).render(q.get("view") === "fx" ? <Fx /> : q.get("view") === "fidget" ? <Fidgets /> : <Grid />);

@@ -3,7 +3,7 @@
 // The draw loop stops when nothing moves.
 // Continuous float/breathe/effect sway is CSS animation (mascot.css); the JS loop only runs springs, gaze and timed tracks.
 // Part names ("body-*", "eye-*", "mouth-*", "fx-*") are the artwork file names under public/mascot/parts.
-import { CLOSED_EYES, MOODS, pickScale, sizePlan, type Fx, type Mood } from "./moods";
+import { CARD_FX, CLOSED_EYES, DAZE_SIZE, MOODS, pickScale, sizePlan, type Fx, type Mood } from "./moods";
 import { WINK_MS, winkAfter } from "./react";
 import { BADGE, CHEW, CHEW_Y, POKE_X, POKE_Y, REACT, SPARKLE, SWALLOW_FILE_MS, SWALLOW_MOUTH_MS, SWALLOW_X, SWALLOW_Y, dizzyTrack, gazeStep, gazeTarget, sample, shakeTrack, swayTrack, trackMs, type Track } from "./motion";
 
@@ -34,7 +34,20 @@ const FX: Record<Exclude<Fx, "sweat">, [string, number, number, number, string?]
   wave: ["hand-wave", 455, 285, 135],
   note: ["fx-note", -10, 200, 470, "clip-path:inset(0 68% 0 0)"],
   note2: ["fx-note", 235, 140, 450, "clip-path:inset(0 0 0 36%)"],
+  // M1b hands on the three-quarter body's free (left) side: searching points, question holds the sign, shy covers the eyes
+  point: ["hand-point", 40, 330, 120],
+  qsign: ["hand-question-sign", 20, 330, 170],
+  cover: ["hand-flat", 200, 290, 190],
 };
+// shortcut: the .cut-top mask and tuft anchor fit body-neutral only, add per-body geometry if another body ever fidgets.
+/** M1b tuft flick: the neutral body's own tuft is masked off (mascot.css .cut-top) and these parts stand in, one after another.
+ *  [file, native width, native height]; bottom-center at (304, 239) at 0.6 scale. (skirt-* tails were tried the same way: the cut left a hem line that reads as clothing.) */
+const GROUND = "fx-ground-light";
+const TUFTS: [string, number, number][] = [["tuft-1", 178, 267], ["tuft-curl", 164, 209], ["tuft-drop", 164, 210], ["tuft-ring", 272, 244], ["tuft-flat", 256, 147]];
+export type Fidget = "tuft" | "sly";
+export const FIDGETS: readonly Fidget[] = ["tuft", "sly"];
+/** One fidget step (ms); a whole fidget stays within REACT_MS. */
+export const FIDGET_STEP_MS = 220;
 
 class Spring {
   v: number; target: number; vel = 0;
@@ -89,6 +102,7 @@ export class Ghost {
   /** Last keyboard input (ms, performance.now): no blinking within 3 s (item 19, rule 3). Fed from outside. */
   lastInput = -Infinity;
   private glanceEnd = 0;
+  private fidgetN = 0; private extra = new Map<string, HTMLImageElement>();
 
   constructor(host: HTMLElement, { size, mood, still = false }: GhostOptions) {
     this.plan = sizePlan(size); this.mood = mood; this.still = still; this.size = size;
@@ -100,6 +114,7 @@ export class Ghost {
     if (this.plan.effects) {
       this.light = el("div", "g-light", root);
       this.ground = el("div", "g-ground", root);
+      if (size >= DAZE_SIZE) this.ground.style.background = `url(${PARTS}${GROUND}.webp) center / 100% 100% no-repeat`;   // the big ghost stands on the real ground-light art
     }
     this.sway = el("div", "g-sway", el("div", "g-face-outer", root));
     this.squash = el("div", "g-squash", this.sway);
@@ -176,7 +191,7 @@ export class Ghost {
     const prev = this.mood;
     this.mood = mood;
     const m = MOODS[mood];
-    const on = new Set(m.fx.filter((f) => f !== "sign" || this.plan.sign));
+    const on = new Set(m.fx.filter((f) => !CARD_FX.has(f) || this.plan.sign));
     this.sweat?.classList.toggle("shown", on.has("sweat"));
     for (const [name, f] of this.fx) {
       if (on.has(name) && !f.src) f.src = `${PARTS}${FX[name][0]}.webp`;   // an effect image isn't loaded until first needed
@@ -223,7 +238,7 @@ export class Ghost {
         const life = SPARKLE.lifeMin + Math.random() * (SPARKLE.lifeMax - SPARKLE.lifeMin);
         const rise = (SPARKLE.riseMin + Math.random() * (SPARKLE.riseMax - SPARKLE.riseMin)) * (life / 1000) * ((this.size * 4) / 3) * .75;
         const e = img("g-spark", this.root, { left: `${22 + Math.random() * 46}%`, top: `${12 + Math.random() * 22}%`, width: "14%" });
-        e.src = `${PARTS}fx-sparkle-token.webp`;
+        e.src = `${PARTS}${i % 2 ? "fx-sparkle-2-token" : "fx-sparkle-token"}.webp`;
         e.style.setProperty("--life", `${Math.round(life)}ms`);
         e.style.setProperty("--rise", `${-Math.round(rise)}px`);
         e.style.setProperty("--drift", `${Math.round((Math.random() - .5) * this.size * .5)}px`);
@@ -343,9 +358,41 @@ export class Ghost {
     return this.seq([
       [550, look(1, 7)], [550, look(-1, -7)],
       [250, () => { this.gz.tx = 0; this.rot.target = 0; }],
-      [700, () => { if (L) { this.ovBody = "tall"; this.show(); } this.sy.target = 1.1; this.sx.target = .94; }],
-      [200, () => { this.sy.target = 1; this.sx.target = 1; this.ovBody = null; this.show(); }],
+      [700, () => { if (L) { this.ovBody = "tall"; this.ovEyes = "eye-sly"; this.ovMouth = "mouth-tongue-side"; this.show(); } this.sy.target = 1.1; this.sx.target = .94; }],
+      [200, () => { this.sy.target = 1; this.sx.target = 1; this.ovBody = null; this.ovEyes = null; this.ovMouth = null; this.show(); }],
     ]);
+  }
+
+  /** M1b calm idle fidget (≤ REACT_MS, layered sizes, idle mood only), alternating tuft flick and sly face. Returns which one played. */
+  fidget(want?: Fidget): Fidget | null {
+    if (this.still || this.playing || this.plan.silhouette || this.mood !== "idle") return null;
+    const kind = want ?? FIDGETS[this.fidgetN++ % FIDGETS.length];
+    const step = FIDGET_STEP_MS;
+    if (kind === "sly") {
+      this.seq([[step * 4, () => { this.ovEyes = "eye-sly"; this.ovMouth = "mouth-tongue-side"; this.show(); this.rot.target = -4; }],
+        [step, () => { this.ovEyes = null; this.ovMouth = null; this.rot.target = 0; this.show(); }]]);
+      return kind;
+    }
+    const imgs = TUFTS.map(([n, w, h]) => this.tuft(n, w, h));
+    const show = (i: number) => () => { imgs.forEach((e, j) => e.classList.toggle("shown", j === i)); this.rot.target = i < 1 ? 0 : i % 2 ? -3 : 3; };
+    // tuft-1 matches the baked tuft, so the swap in and out is seamless; 5 x 220 ms = 1.1 s
+    const run = () => { if (this.dead || this.playing || this.mood !== "idle") return; const body = this.bodies[this.bodyIdx]; this.seq([
+      [step, () => { this.ovBody = "neutral"; this.show(); body.classList.add("cut-top"); show(0)(); }],
+      ...imgs.slice(1).map((_, i) => [step, show(i + 1)] as [number, () => void]),
+      [0, () => { show(-1)(); body.classList.remove("cut-top"); }],
+    ]); };
+    // the body's own tuft is masked only once the stand-ins are decoded, so the head is never bald
+    void Promise.all(imgs.map((e) => e.decode?.().catch(() => undefined))).then(run);
+    return kind;
+  }
+  /** A tuft image above the body, made once and kept hidden until a fidget shows it. */
+  private tuft(name: string, w: number, h: number) {
+    let e = this.extra.get(name);
+    if (e) return e;
+    e = img("g-extra", this.squash, { left: pct(304 - (w * .6) / 2, KX), top: pct(239 - h * .6, KY), width: pct(w * .6, KX) });
+    e.src = `${PARTS}${name}.webp`;
+    this.extra.set(name, e);
+    return e;
   }
 
   private scheduleBlink() {

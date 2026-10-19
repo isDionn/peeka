@@ -20,11 +20,14 @@ export interface PrankEnv {
 
 export type PrankResult = "fired" | "wait" | "off" | "daily-limit" | "input" | "fullscreen" | "dnd" | "presentation" | "meeting" | "card" | "music";
 
-export function createIdlePrank(env: PrankEnv, onPrank: () => void) {
+/** M1b idle fidgets (tuft flick, tail swish, sly face) ride the same scheduler and blockers, every 3-6 min, no daily cap. */
+export const FIDGET_GAP = { min: 3 * 60_000, max: 6 * 60_000, perDay: Infinity };
+
+export function createIdlePrank(env: PrankEnv, onPrank: () => void, gapMs = { min: PRANK_MIN_MS, max: PRANK_MAX_MS, perDay: PRANK_PER_DAY }) {
   let nextAt: number | null = null;
   let day = "";
   let today = 0;
-  const gap = () => PRANK_MIN_MS + env.random() * (PRANK_MAX_MS - PRANK_MIN_MS);
+  const gap = () => gapMs.min + env.random() * (gapMs.max - gapMs.min);
 
   function poll(): PrankResult {
     const now = env.now();
@@ -33,7 +36,7 @@ export function createIdlePrank(env: PrankEnv, onPrank: () => void) {
     if (now < nextAt) return "wait";
     const d = new Date(now).toDateString();
     if (d !== day) { day = d; today = 0; }
-    if (today >= PRANK_PER_DAY) { nextAt = now + gap(); return "daily-limit"; }
+    if (today >= gapMs.perDay) { nextAt = now + gap(); return "daily-limit"; }
     const blocked: [boolean, PrankResult][] = [
       [env.lastInputAgoMs() < INPUT_QUIET_MS, "input"], [env.fullscreen(), "fullscreen"], [env.dnd(), "dnd"],
       [env.presentation(), "presentation"], [env.meeting(), "meeting"], [env.cardOpen(), "card"], [env.musicPlaying(), "music"],
