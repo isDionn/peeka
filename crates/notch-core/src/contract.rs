@@ -189,6 +189,7 @@ pub const EVENTS: &[&str] = &[
     "cc_event",
     "cc_edit",
     "notch://outside_press",
+    "notch://island_leave",
 ];
 
 fn ts_list(out: &mut String, name: &str, items: &[&str]) {

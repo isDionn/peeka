@@ -51,7 +51,7 @@ describe("Y1: with a peek showing, the island opens to Modules", () => {
 });
 
 describe("Y2: every card has a visible way out", () => {
-  it("× closes the card (no keyboard focus needed)", async () => {
+  it("Ã— closes the card (no keyboard focus needed)", async () => {
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -134,7 +134,7 @@ describe("Y4: the tab bar never shifts and is the same on every tab", () => {
     expect(new Set(pages.map((p) => modulesKw(p, 1920)))).toEqual(new Set([620]));
     expect(modulesKw("general", 1920)).toBeGreaterThan(620);
   });
-  it("the corner group has a fixed width (464) on the island center line, and × is always at the same screen point (independent of card width)", () => {
+  it("the corner group has a fixed width (464) on the island center line, and Ã— is always at the same screen point (independent of card width)", () => {
     expect(css).toMatch(/\.modTop \{[^}]*justify-content: flex-end;[^}]*width: 464px/);
     expect(css).toMatch(/\.cardBar \{[^}]*width: 464px/); // Modules and the card bar share the same corner group (R1-1)
     expect(css).toMatch(/\.modTop \.seg \{[^}]*flex: none;[^}]*max-width: 388px/);
@@ -169,6 +169,36 @@ describe("O2: a peek does not close while the pointer is over it", () => {
     await act(async () => { vi.advanceTimersByTime(300); });
     await act(async () => { vi.advanceTimersByTime(5000); });
     expect(pill().getAttribute("title")).toBeNull();
+  });
+});
+
+describe("stuck hover: Rust's notch://island_leave clears hover (the click-through window never gets pointerleave)", () => {
+  it("hover set by pointerenter is cleared by the event alone", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    fakeBridge.setSurfaces({ approvals: [APPROVAL_LOW], approvalTop: APPROVAL_LOW.id });
+    render(<Island monitor="m1" init={{ view: null }} />);
+    await act(async () => { vi.advanceTimersByTime(100); });
+    fireEvent.pointerEnter(pill());
+    await act(async () => { vi.advanceTimersByTime(200); });
+    expect(pill().getAttribute("title")).toBe("Open Modules");
+    await act(async () => { fakeBridge.emit("notch://island_leave", null); });
+    await act(async () => { vi.advanceTimersByTime(300); });
+    expect(pill().getAttribute("title")).toBeNull();
+  });
+  it("a CPU peek held open by hover auto-closes after the event, with no pointerleave", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    render(<Island monitor="m1" init={{ view: null }} />);
+    await act(async () => { vi.advanceTimersByTime(100); });
+    await act(async () => { fakeBridge.emit("cpu_high", { app: "chrome" }); });
+    fireEvent.pointerEnter(pill());
+    await act(async () => { vi.advanceTimersByTime(300); });
+    await act(async () => { vi.advanceTimersByTime(12_000); });
+    expect(pill().textContent).toContain("using a lot of CPU");
+    await act(async () => { fakeBridge.emit("notch://island_leave", null); });
+    await act(async () => { vi.advanceTimersByTime(300); });
+    await act(async () => { vi.advanceTimersByTime(10_500); });
+    await act(async () => { vi.advanceTimersByTime(2000); }); // the close animation
+    expect(pill().textContent).not.toContain("using a lot of CPU");
   });
 });
 

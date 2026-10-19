@@ -14,7 +14,7 @@
 
 <p>
   <a href="https://github.com/isDionn/peeka/releases/latest/download/Peeka-setup.exe"><b>Download for Windows</b></a>
-  <br><sub>v0.3.0 · ~3.7 MB · Windows 10/11 · <a href="#download">other downloads and SmartScreen note</a></sub>
+  <br><sub>v0.3.1 · ~3.7 MB · Windows 10/11 · <a href="#download">other downloads and SmartScreen note</a></sub>
 </p>
 
 <img src="docs/images/demo.gif" alt="Peeka in action: the island grows out of the strip, then a second task moves into the side bubble" width="100%">

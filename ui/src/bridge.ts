@@ -410,6 +410,8 @@ export interface Events {
   "notch://notice": string;
   /** Mouse pressed outside the strip (real window): monitor of the pressed strip, "" = not a strip. */
   "notch://outside_press": string;
+  /** The cursor left the island's clickable rects (Rust poll; the window turns click-through, so the page gets no pointerleave). */
+  "notch://island_leave": null;
   /* Wave 4 */
   clip_changed: ClipChange;
   lock_changed: LockState;

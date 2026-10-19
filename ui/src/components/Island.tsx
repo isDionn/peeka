@@ -430,6 +430,8 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       bridge.on("music_stopped", setStopped),
       bridge.on("download_done", setDl),
       bridge.on("cpu_high", setCpuHigh),
+      // Rust's cursor poll is the truth for hover: a click-through window never gets pointerleave
+      bridge.on("notch://island_leave", () => { hoverIntent(false); setMkHover(false); setBubbleHover(false); }),
       bridge.on("assistant_offline", setOffline),
       bridge.on("meeting_changed", setMeetingOn),
       bridge.on("cc_edit", setEdit),

@@ -2139,7 +2139,7 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
 name = "notch-app"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "notch-core",
  "notch-win",
@@ -2156,7 +2156,7 @@ dependencies = [
 
 [[package]]
 name = "notch-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "base64 0.22.1",
  "getrandom 0.3.4",
@@ -2170,7 +2170,7 @@ dependencies = [
 
 [[package]]
 name = "notch-win"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "base64 0.22.1",
  "notch-core",

@@ -169,4 +169,5 @@ export const EVENT_NAMES = [
   "cc_event",
   "cc_edit",
   "notch://outside_press",
+  "notch://island_leave",
 ] as const;

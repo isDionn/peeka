@@ -846,6 +846,10 @@ fn click_through(app: AppHandle) {
             if let Some(w) = app.get_webview_window("island") {
                 let _ = w.set_ignore_cursor_events(ignore);
             }
+            // a click-through window gets no pointerleave, so the page's hover would stick: tell it the cursor left
+            if ignore {
+                let _ = app.emit("notch://island_leave", ());
+            }
         }
     });
 }
