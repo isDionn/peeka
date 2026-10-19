@@ -32,7 +32,7 @@
 .ms > .leadMascot, .ms > .mascot, .ms > .dim { margin-block: -3px; }
 .ms .dim { display: inline-flex; }
 /* left mascot column on cards: 56 px (75 high) on the left, title and subtitle on the right */
-.mkHead:has(.mascot) { gap: 14px; }
+.mkHead:has(.mascot) { gap: var(--s4); } /* P1: the 56 px ghost is the card's fixed anchor: left edge at the card padding, 16 to the content */
 .mkHead .leadMascot { align-self: center; }
 .mkHead > .textCol { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 .initials.b { width: 56px; height: 56px; border-radius: 14px; font-size: 24px; }

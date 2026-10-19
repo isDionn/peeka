@@ -21,6 +21,13 @@
   --font:"Inter",-apple-system,"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
   --mono:"Cascadia Mono","Cascadia Code",ui-monospace,"SF Mono",Consolas,monospace;   /* code: Cascadia Mono 12 px, +0.06 em (so two hyphens don't merge), no ligatures */
   --ease:cubic-bezier(.23,1,.32,1);
+  /* P1 design tokens (one place). Spacing scale 4/8/12/16/20/24; radius ladder card 34 > panel 18 > inner 12 > small 8, pills are height/2;
+     icons 13 (chip) / 15 (button) / 16 (row) / 22 (media); fills: hover .08, selected .12; panel = the one lighter surface inside a card */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px;
+  --rSmall:8px;
+  --iXs:13px; --iSm:15px; --iMd:16px; --iLg:22px;
+  --hover:rgba(255,255,255,.08); --selected:rgba(255,255,255,.12);
+  --panelEdge:inset 0 .5px 0 rgba(255,255,255,.07);   /* a hairline of light on the top edge only: depth without a border */
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:#050506;color:var(--l1);font:500 13px/18px var(--font);letter-spacing:-.08px;font-optical-sizing:auto;overflow:hidden;-webkit-font-smoothing:antialiased}
@@ -52,7 +59,7 @@ svg.lucide{width:16px;height:16px;stroke-width:1.8;flex:none;display:block}
 .key{height:24px;min-width:28px;padding:0 8px;border-radius:8px;corner-shape:squircle;display:inline-flex;align-items:center;justify-content:center;gap:6px;color:var(--l1);transition:background-color .16s ease,transform .16s var(--ease)}
 .key svg.lucide{width:15px;height:15px}
 .key.dim{color:var(--l2)}
-@media (hover:hover) and (pointer:fine){ .key:hover{background:rgba(255,255,255,.08)} .tabA:hover{color:var(--l1)} }
+@media (hover:hover) and (pointer:fine){ .key:hover{background:var(--hover)} .tabA:hover{color:var(--l1)} }
 .tabA:active{transform:scale(.96)}
 .key:active,.btn.icon:active{transform:scale(.92)}   /* press: text button 0.96, icon-only 0.92 */
 .key.shown{background:rgba(255,255,255,.1)}
@@ -137,12 +144,12 @@ body[data-battery="0"] .batteryGroup{display:none}
 .cut .inner{position:absolute;top:0;left:50%}
 .cut .inner.onRight{left:auto;right:0}
 .cut .inner{scrollbar-width:thin;overscroll-behavior:contain}
-.panelClose{position:absolute;top:8px;right:8px;z-index:5;width:22px;height:22px;opacity:.8}   /* C-1: close button at top 8 / right 8 on every card; F-21: legible icon (.8) */
+.panelClose{position:absolute;top:8px;right:8px;z-index:5;width:28px;height:28px;border-radius:14px;display:grid;place-items:center;color:var(--l2)}   /* C-1: close button at top 8 / right 8 on every card; P1: the same 28 px round x as the island cards */
 .panelClose svg.lucide{width:15px;height:15px}
-.panelClose:is(:hover,:focus-visible){opacity:1;background:rgba(255,255,255,.1)}
+.panelClose:hover{color:var(--l1);background:var(--hover)}   /* hover only: a mouse-opened panel focuses x without a ring, so a focus fill looked like a stray pressed state; keyboard focus keeps the shared ring */
 .islandLine{position:absolute;left:calc(var(--r,0px) * .7);right:calc(var(--r,0px) * .7);bottom:0;height:2px;z-index:3;pointer-events:none;opacity:var(--co,0);
   background:linear-gradient(90deg,transparent 0%,var(--lc) 14%,var(--lc) 86%,transparent 100%);transition:--lc .45s ease}
-.body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:12px}
+.body{padding:var(--s4);display:flex;flex-direction:column;gap:var(--s3)}
 /* peek row: strip-colored, angular, thin */
 .peekBar{display:flex;align-items:center;justify-content:center;gap:10px;padding:2px 14px 8px;min-height:34px;white-space:nowrap}
 .miniProgress{width:120px;height:3px;border-radius:2px;background:rgba(255,255,255,.16);overflow:hidden}
@@ -169,7 +176,7 @@ body[data-battery="0"] .batteryGroup{display:none}
 
 /* glass: only over the card's own content (ambient layer), not over the desktop */
 .glass{background:var(--glass);-webkit-backdrop-filter:blur(24px) saturate(180%);backdrop-filter:blur(24px) saturate(180%);
-  box-shadow:inset 0 .5px 0 var(--glassEdge),inset 0 0 0 .5px rgba(255,255,255,.05)}
+  box-shadow:var(--panelEdge)}
 @supports not (backdrop-filter:blur(1px)){ .glass{background:var(--e1)} }
 .plat{border-radius:var(--rPlat);corner-shape:squircle;padding:6px}
 .btn{height:30px;padding:0 14px;border-radius:15px;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-weight:600;font-size:13px;white-space:nowrap;
@@ -186,7 +193,7 @@ body[data-battery="0"] .batteryGroup{display:none}
 .btn.hold:active::after,.btn.hold.filled2::after{clip-path:inset(0 0 0 0);transition:clip-path 1.2s linear}
 .btn.icon{width:30px;padding:0}
 .btn.kk{height:26px;padding:0 11px;font-size:12px;border-radius:13px}
-.btn.assistant{color:var(--l1);background:var(--glass);box-shadow:inset 0 .5px 0 var(--glassEdge),inset 0 0 0 .5px rgba(255,255,255,.05)}   /* mint means listening only: assistant actions are neutral glass, told apart by the sparkle icon */
+.btn.assistant{color:var(--l1);background:var(--glass);box-shadow:var(--panelEdge)}   /* mint means listening only: assistant actions are neutral glass, told apart by the sparkle icon */
 .btn.gray{background:rgba(255,255,255,.1)}
 .btn svg.lucide{width:15px;height:15px}
 
@@ -220,25 +227,28 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(3);background:#ff
 @media (hover:hover) and (pointer:fine){ .clipList .row:hover .mini{opacity:1} }
 .mini{width:28px;height:28px;border-radius:14px;display:grid;place-items:center;color:var(--l2);transition:background-color .15s,transform .16s var(--ease)}
 .mini:active{transform:scale(.92)}
-@media (hover:hover) and (pointer:fine){ .mini:hover{background:rgba(255,255,255,.1);color:var(--l1)} }
+@media (hover:hover) and (pointer:fine){ .mini:hover{background:var(--hover);color:var(--l1)} }
 .mini svg.lucide{width:15px;height:15px}
 .code{max-height:150px;overflow:auto;overflow-wrap:anywhere;font:12px/1.55 var(--mono);font-variant-ligatures:none;letter-spacing:.06em!important;border-radius:var(--rPlat);corner-shape:squircle;padding:10px 12px;white-space:pre-wrap;letter-spacing:0}
 .buttons{display:flex;gap:8px;align-items:center}
 .bubble{max-width:82%;padding:9px 14px;border-radius:18px;corner-shape:squircle;font-weight:400}
 .bubble.me{align-self:flex-end;background:var(--e2)}
 .reply{font-weight:400;color:var(--l1);padding:0 2px}
-.chip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;border-radius:12px;font-size:12px;color:var(--l2)}
-.chip svg.lucide{width:13px;height:13px}
+.chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:12px;font-size:12px;color:var(--l2);background:var(--glass)}
+.chip svg.lucide{width:var(--iXs);height:var(--iXs)}
 .inputBox{display:flex;align-items:center;gap:6px;height:40px;padding:0 5px 0 14px;border-radius:20px}
 .inputBox.large{height:48px;border-radius:24px}
 .inputBox input{flex:1;background:none;border:0;outline:0;color:var(--l1);font:400 13px var(--font);letter-spacing:-.08px}
 .inputBox.large input{font-size:15px;letter-spacing:-.24px}
 .inputBox input::placeholder{color:var(--l3)}
-.inputBox:focus-within{box-shadow:inset 0 0 0 2px var(--l2)}   /* Ctrl+K and other boxes are neutral */
-.inputBox.assistantBox:focus-within{box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--mint) 70%,transparent)}   /* mint only in the assistant's box (listening color) */
+.inputBox:focus-within{box-shadow:var(--panelEdge),inset 0 0 0 1px var(--l3)}   /* P1: one input style, one calm 1 px ring (l3 on the panel is above 3:1) plus the caret */
 .slot{width:30px;height:30px;border-radius:15px;display:grid;place-items:center;color:var(--l2);transition:transform .16s var(--ease)}
 .slot:active{transform:scale(.92)}
 .slot.accent{background:var(--lcK,var(--mint));color:#000}   /* the mic takes the current assistant color */
+.slot.send{background:var(--l1);color:#000;transition:transform .16s var(--ease),opacity .16s ease}   /* P1: the one send button: round, white, arrow */
+.slot.send:disabled{background:none;color:var(--l3);cursor:default}   /* empty box: a quiet arrow, so only one filled circle shows at a time */
+.inputBox input{text-overflow:ellipsis}   /* an unfocused box ends long text in an ellipsis (Chrome cuts it hard while focused) */
+@media (hover:hover) and (pointer:fine){ .slot:not(.accent,.send):hover{background:var(--hover);color:var(--l1)} }
 .key-hint{display:inline-flex;gap:3px;align-items:center;color:var(--l3);font-size:11px}
 .key-hint kbd{font:600 11px/16px var(--font);padding:0 5px;border-radius:8px;background:rgba(255,255,255,.08);color:var(--l2)}
 .shelf{display:grid;grid-template-columns:1fr 1fr .8fr;gap:8px}

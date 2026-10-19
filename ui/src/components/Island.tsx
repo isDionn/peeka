@@ -135,7 +135,7 @@ function Layer({ spec, onClose, onModules, measure }: { spec: Spec; onClose: () 
   return (
     <div ref={set} className={"islandInner m" + spec.mode + (isCard && !mods ? " conBar" : "")} role={isCard ? "dialog" : "group"} aria-label={spec.label} style={{ width: isCard ? spec.kw : "max-content" }}>
       {spec.node}
-      {isCard && !mods && (<div className="cardBar">{!NO_MODULES_BTN.has(spec.key) && <button className="close modGo" onClick={onModules}><LayoutGrid />Modules</button>}{close}</div>)}
+      {isCard && !mods && (<div className="cardBar">{!NO_MODULES_BTN.has(spec.key) && <button className="close modGo" title="Modules" aria-label="Modules" onClick={onModules}><LayoutGrid /></button>}{close}</div>)}
     </div>
   );
 }

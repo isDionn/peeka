@@ -1,7 +1,7 @@
 // Declarative plugin rendering (ADR-0062 §4.6): the plugin sends data, Peeka draws. All text is plain text (React escaping); no `dangerouslySetInnerHTML`, links or plugin icons.
 // Peeka prints the plugin's name in front of every item (`prefixed`); the plugin can't change that.
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { AlarmClock, Brain, Check, Circle, CircleCheck, CircleDot, ExternalLink, Ghost, List, Mic, MousePointerClick, Paperclip, Plus, ScanLine, ShieldAlert, StickyNote, Terminal, TriangleAlert, Users, Video, X, type LucideIcon } from "lucide-react";
+import { AlarmClock, ArrowUp, Brain, Check, Circle, CircleCheck, CircleDot, ExternalLink, Ghost, List, Mic, MousePointerClick, Paperclip, Plus, ScanLine, ShieldAlert, StickyNote, Terminal, TriangleAlert, Users, Video, X, type LucideIcon } from "lucide-react";
 import { bridge, type ActionDef, type ApprovalExt, type ApprovalItem, type Attached, type CardBlock, type ChoiceExt, type ComposerKind, type MeterBlock, type RowExt, type ProtrusionExt, type SummaryRowExt, type ModuleTab, type PluginRef, type ProtrusionItem, type SurfacesView } from "../bridge";
 import { useClips, useDeadline, useSecond, useShelf, useStream, type Turn } from "../hooks";
 import { AlertIcon, safeIcon } from "../lib/alertIcon";
@@ -445,28 +445,26 @@ export function ComposerCard({ owner, turns, send, autoShelf, picked }: { owner:
     setText(""); setAdded([]);
   };
   const name = pluginName(owner), ask = `Ask ${owner.name}`;
+  const typed = text.trim() !== "";
   const clipBtn = kinds.has("file") && <button className="slot" title="Attach file" aria-label="Attach file" onClick={() => void attach("composer_attach_file")}><Paperclip /></button>;
   const scanBtn = kinds.has("screen_image") && <button className="slot" title="Attach screenshot" aria-label="Attach screenshot" onClick={() => void attach("composer_scan")}><ScanLine /></button>;
   const box = (
-    <div className="inputBox glass assistantBox large" onMouseDown={(e) => { if ((e.target as HTMLElement).closest("button,input")) return; e.preventDefault(); e.currentTarget.querySelector("input")?.focus(); }}>
+    <div className="inputBox glass large" onMouseDown={(e) => { if ((e.target as HTMLElement).closest("button,input")) return; e.preventDefault(); e.currentTarget.querySelector("input")?.focus(); }}>
       {talking && kinds.has("file") && <span className="l3 leftIcon" aria-hidden="true"><Paperclip /></span>}
-      <input data-autofocus value={text} maxLength={4000} placeholder={`${ask} anything: a question, a task, a reminder`} aria-label={ask} title={name}
+      <input data-autofocus value={text} maxLength={4000} placeholder={`${ask} anything`} aria-label={ask} title={name}
         onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); go(); } }} />
       {scanBtn}{!talking && clipBtn}
-      {owner.voice && <button className={"slot" + (talking ? "" : " accent")} title="Ask by voice" aria-label="Ask by voice" onClick={() => bridge.call("composer_voice").catch(() => undefined)}><Mic /></button>}
+      {/* P1: fixed slots, nothing swaps under the cursor; one filled circle at a time: the mic is mint while the box is empty, the round send arrow turns white once there is text */}
+      {owner.voice && <button className={"slot" + (talking || typed ? "" : " accent")} title="Ask by voice" aria-label="Ask by voice" onClick={() => bridge.call("composer_voice").catch(() => undefined)}><Mic /></button>}
+      <button className="slot send" title="Send (Enter)" aria-label="Send" disabled={!typed} onClick={go}><ArrowUp /></button>
     </div>
   );
   const chipOf = (o: Added, on: boolean) => on
     ? <button key={o.key} className="chip glass added" aria-pressed="true" title="Remove" onClick={() => toggle(o)}><Check />{o.label}</button>
     : <button key={o.key} className="chip suggestionChip" onClick={() => toggle(o)}><Plus />{o.label}</button>;
-  const chips = talking ? (added.length > 0 ? <div className="buttons" style={{ gap: 6, flexWrap: "wrap" }}>{added.map((o) => chipOf(o, true))}</div> : null) : (
-    <div className="buttons" style={{ gap: 6, flexWrap: "wrap" }}>
-      {offers.map((o) => chipOf(o, added.some((x) => x.key === o.key)))}
-      {added.filter((x) => !offers.some((o) => o.key === x.key)).map((o) => chipOf(o, true))}
-      <span style={{ flex: 1 }} />
-      <><span className="key-hint"><kbd>↵</kbd> send</span><span className="key-hint"><kbd>Esc</kbd> close</span></>
-    </div>
-  );
+  // the send button and the card's x carry the old "Enter send / Esc close" hints (their tooltips name the keys)
+  const shown = talking ? added : [...offers, ...added.filter((x) => !offers.some((o) => o.key === x.key))];
+  const chips = shown.length > 0 ? <div className="buttons" style={{ gap: 6, flexWrap: "wrap" }}>{shown.map((o) => chipOf(o, talking || added.some((x) => x.key === o.key)))}</div> : null;
   // the box always sits in the same tree spot (top row): its place and focus don't change after the first message; the chat opens below
   return (
     <div className="body" data-composer>

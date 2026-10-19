@@ -116,7 +116,7 @@ describe("Ctrl+Space box", () => {
     const send = vi.fn();
     const { container } = render(<ComposerCard owner={owner} turns={[]} send={send} />);
     await settle();
-    expect(screen.getByPlaceholderText("Ask Compass anything: a question, a task, a reminder")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Ask Compass anything")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Attach screenshot" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Attach file" })).toBeTruthy();
     expect(container.querySelector(".slot.accent")).toBeTruthy();
@@ -130,6 +130,22 @@ describe("Ctrl+Space box", () => {
     fireEvent.keyDown(screen.getByPlaceholderText(/Ask Compass/), { key: "Enter" });
     expect(send).toHaveBeenCalledWith("summarize", [{ kind: "clipboard_link" }, { kind: "screen_image" }]);
   });
+  it("P1: mic and round send sit in fixed slots; send is disabled while empty, the mic's fill hands over to send once there is text; clicking sends", async () => {
+    const send = vi.fn();
+    const { container } = render(<ComposerCard owner={owner} turns={[]} send={send} />);
+    await settle();
+    const sendBtn = () => screen.getByRole("button", { name: "Send" }) as HTMLButtonElement;
+    expect(sendBtn().disabled).toBe(true);
+    expect(container.querySelector(".slot.accent")).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText(/Ask Compass/), { target: { value: "hello" } });
+    expect(sendBtn().disabled).toBe(false);
+    expect(screen.getByRole("button", { name: "Ask by voice" })).toBeTruthy(); // the mic stays where it was
+    expect(container.querySelector(".slot.accent")).toBeNull();
+    fireEvent.click(sendBtn());
+    expect(send).toHaveBeenCalledWith("hello", []);
+    expect(screen.getByRole("button", { name: "Send" })).toBe(sendBtn()); // same button after the click, now disabled
+    expect(sendBtn().disabled).toBe(true);
+  });
   it("when Rust reports no attachment kinds there are no chips or attach buttons (no out-of-contract kind is sent)", async () => {
     { const real = fakeBridge.call.bind(fakeBridge) as (c: string, ...a: unknown[]) => Promise<unknown>; vi.spyOn(fakeBridge, "call").mockImplementation(((c: string, ...a: unknown[]) => (c === "composer_kinds" ? Promise.reject("unknown") : real(c, ...a))) as never); }
     fakeBridge.setShelf([{ id: "a", name: "a.pdf", sub: "", kind: "pdf" }]);
@@ -141,7 +157,7 @@ describe("Ctrl+Space box", () => {
   });
   it("another plugin's name stays as a prefix", async () => {
     render(<ComposerCard owner={{ ...OTHER, voice: false }} turns={[]} send={() => undefined} />);
-    expect(screen.getByPlaceholderText("Ask Sample Assistant anything: a question, a task, a reminder")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Ask Sample Assistant anything")).toBeTruthy();
   });
 });
 
