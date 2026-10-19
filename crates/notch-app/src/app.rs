@@ -453,6 +453,12 @@ fn build(app: &AppHandle, label: &str, url: &str) -> Option<WebviewWindow> {
         .focused(false)
         .visible(false)
         .zoom_hotkeys_enabled(false)
+        // the window under the cursor (msedgewebview2's render widget) may only exist once the page has loaded
+        .on_page_load(|w, p| {
+            if let (tauri::webview::PageLoadEvent::Finished, Ok(h)) = (p.event(), w.hwnd()) {
+                notch_win::style::share_drop_target(h.0 as isize);
+            }
+        })
         .build()
         .map_err(|e| eprintln!("[notch] {label}: {e}"))
         .ok()?;
@@ -460,6 +466,7 @@ fn build(app: &AppHandle, label: &str, url: &str) -> Option<WebviewWindow> {
         notch_win::style::no_activate(hwnd.0 as isize);
         notch_win::style::tool_window(hwnd.0 as isize); // not on the taskbar, not in Alt+Tab (skip_taskbar alone is only the taskbar)
         notch_win::style::strip_no_activate(hwnd.0 as isize); // a press on a strip or the island leaves the user's app in front
+        notch_win::style::share_drop_target(hwnd.0 as isize); // else no file drag over Peeka reaches wry's handler
     }
     // A file dragged over any strip or the island opens the shelf; the strip is most of what the user sees.
     let handle = app.clone();

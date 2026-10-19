@@ -20,6 +20,48 @@ pub fn no_activate(hwnd: isize) {
     }
 }
 
+/// Puts wry's file-drop target on every WebView2 child window that has none. wry registers it only on the children
+/// that exist while the webview is built; for a window built hidden, msedgewebview2's `Chrome_RenderWidgetHostHWND`
+/// (the window under the cursor) comes later, and OLE's lookup from it never reaches the `Chrome_WidgetWin_0` that
+/// holds wry's target: every file drag over Peeka got "no drop" (VM run t4). wry's target is read back from that
+/// window's OLE property, used only when its code lies in this exe. Call on the window's own thread, after `build`.
+#[cfg(windows)]
+pub fn share_drop_target(hwnd: isize) {
+    use windows::core::{Interface, BOOL, PCWSTR};
+    use windows::Win32::Foundation::{HMODULE, HWND, LPARAM};
+    use windows::Win32::System::LibraryLoader::{GetModuleHandleExW, GetModuleHandleW, GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT};
+    use windows::Win32::System::Ole::{IDropTarget, RegisterDragDrop};
+    use windows::Win32::UI::WindowsAndMessaging::{EnumChildWindows, GetPropW, GetWindowThreadProcessId};
+    unsafe extern "system" fn push(h: HWND, l: LPARAM) -> BOOL {
+        // SAFETY: `l` is the `Vec` below, alive for the whole enumeration.
+        unsafe { (*(l.0 as *mut Vec<HWND>)).push(h) };
+        true.into()
+    }
+    let prop: Vec<u16> = "OleDropTargetInterface\0".encode_utf16().collect();
+    let mut kids: Vec<HWND> = Vec::new();
+    // SAFETY: handle queries on a live window of this thread; a property is dereferenced only on a window of this
+    // process (OLE keeps the registered interface there) and used only when its vtable lies in this exe: wry's target.
+    unsafe {
+        let _ = EnumChildWindows(Some(HWND(hwnd as _)), Some(push), LPARAM(&mut kids as *mut _ as isize));
+        let ours = |h: HWND, p: *mut core::ffi::c_void| {
+            let (mut m, mut pid) = (HMODULE::default(), 0u32);
+            GetWindowThreadProcessId(h, Some(&mut pid));
+            !p.is_null()
+                && pid == std::process::id()
+                && GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, PCWSTR(*(p as *const *const u16)), &mut m).is_ok()
+                && GetModuleHandleW(None).is_ok_and(|me| me == m)
+        };
+        let props: Vec<_> = kids.iter().map(|&h| GetPropW(h, PCWSTR(prop.as_ptr())).0).collect();
+        let Some(&raw) = kids.iter().zip(&props).find(|(&h, &p)| ours(h, p)).map(|(_, p)| p) else { return };
+        let Some(target) = IDropTarget::from_raw_borrowed(&raw) else { return };
+        for (&h, p) in kids.iter().zip(&props) {
+            if p.is_null() {
+                let _ = RegisterDragDrop(h, target);
+            }
+        }
+    }
+}
+
 /// The extended style with `WS_EX_TOOLWINDOW` on and `WS_EX_APPWINDOW` off (no taskbar button, no Alt+Tab entry).
 pub fn with_tool_window(ex_style: u32) -> u32 {
     (ex_style | notch_core::apps::WS_EX_TOOLWINDOW) & !notch_core::apps::WS_EX_APPWINDOW
