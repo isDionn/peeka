@@ -16,7 +16,9 @@ describe("pickPrimary: order", () => {
     expect(p.secondary).toEqual([]);
   });
   it("RANK matches the owner's order exactly", () => {
-    expect(Object.keys(RANK).sort((a, b) => RANK[a as ActivityKind] - RANK[b as ActivityKind])).toEqual(ORDER);
+    // "edit" (live diff, F4) shares "live"'s rank; the owner's order lists the distinct ranks
+    expect(RANK.edit).toBe(RANK.live);
+    expect(Object.keys(RANK).filter((k) => k !== "edit").sort((a, b) => RANK[a as ActivityKind] - RANK[b as ActivityKind])).toEqual(ORDER);
   });
   it("every adjacent pair: the upper one becomes primary, the lower one a bubble (independent of input order)", () => {
     for (let i = 0; i < ORDER.length - 1; i++) {

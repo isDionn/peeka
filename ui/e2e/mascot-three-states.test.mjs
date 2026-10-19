@@ -16,7 +16,7 @@ const read = (page) => page.evaluate(() => {
   return { mood: m.dataset.mood, box: r(m), hit: r(h), clock: clock ? r(clock) : null, center: r(c) };
 });
 
-const STATES = [["no-assistant", "/preview.html?state=a&noplugins=1", "idle"], ["assistant-sleeping", "/preview.html?state=x0", "idle"], ["assistant-connected", "/preview.html?state=a", null]];
+const STATES = [["no-assistant", "/preview.html?state=a&noplugins=1&time=2026-10-19T14:00", "idle"], ["assistant-sleeping", "/preview.html?state=x0&time=2026-10-19T14:00", "idle"], ["assistant-connected", "/preview.html?state=a&time=2026-10-19T14:00", null]];
 
 it("in all three states the mascot sits in a 40x30 hanging box at the same y; the clock doesn't overlap", { timeout: 120000 }, async () => {
   mkdirSync("screenshots", { recursive: true });

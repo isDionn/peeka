@@ -73,7 +73,7 @@ describe("every card reaches Modules > General (at most 2 steps) and closes", ()
   // Missing element: fail at once (invalid step); otherwise wait for the animation to settle, then click.
   const press = async (loc) => { if (!(await loc.count())) throw new Error("missing"); await loc.first().click({ timeout: 4000 }); };
   const ACT = {
-    "Modules button": (p) => press(p.locator("#island [role=dialog] button.modGo")),
+    "Modules button": (p) => press(p.locator("#island [role=dialog] button[aria-label=\"Modules\"]")),
     "General tab": (p) => press(p.locator(`${MOD} [role=tab][aria-label="General"]`)),
     "island center": (p) => press(p.locator(".islandCenter")),
   };
