@@ -210,8 +210,7 @@ describe("Settings › Windows notifications", () => {
     expect(logged("mirror_disable")).toHaveLength(1);
   });
   it.each([
-    [{ devMode: false }, "dev_mode_off", "Developer Mode is off", "ms-settings:developers"],
-    [{ registered: false }, "not_registered", "Run register.ps1, then restart Peeka", null],
+    [{ history: false }, "unavailable", "Windows notifications can't be read on this PC", null],
     [{ access: "denied" }, "access_denied", "Windows didn't allow it", "ms-settings:privacy-notifications"],
   ] as const)("blocker %j: reason row and the right Windows settings link", async (patch, blocker, text, uri) => {
     fakeBridge.setMirror(patch);
@@ -228,7 +227,7 @@ describe("Settings › Windows notifications", () => {
     expect(spy).toHaveBeenCalledWith("open_windows_settings", { uri });
   });
   it("if the Windows setting cannot be opened (the Rust allow-list refuses) the manual path is written out", async () => {
-    fakeBridge.setMirror({ devMode: false });
+    fakeBridge.setMirror({ access: "denied" });
     const sw = await open();
     fireEvent.click(sw);
     await settle();
@@ -236,6 +235,6 @@ describe("Settings › Windows notifications", () => {
     vi.spyOn(fakeBridge, "call").mockImplementation(((cmd: string, ...a: unknown[]) => (cmd === "open_windows_settings" ? Promise.reject("invalid") : real(cmd, ...a))) as never);
     fireEvent.click(document.querySelector("[data-blocker] button")!);
     await settle();
-    expect(document.querySelector("[data-blocker]")!.textContent).toContain("For developers");
+    expect(document.querySelector("[data-blocker]")!.textContent).toContain("Privacy & security › Notifications");
   });
 });

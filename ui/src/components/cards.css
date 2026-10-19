@@ -4,9 +4,9 @@
 .grid.module.general3 { grid-template-columns: 1.3fr 1fr .9fr; }
 .row .suggestionTag { margin-left: auto; }
 /* the tab bar is fixed-width and centered on the island's midline: its screen x stays put even when the card width changes (Y4) */
-/* right corner group: fixed width (464), centered in the card; × sits at the same screen point on every card and Modules tab (card width ≥ 520) (R1-1) */
-.modTop { display: flex; align-items: center; justify-content: flex-end; gap: 10px; width: 464px; max-width: 100%; margin-inline: auto; }
-.modTop .seg { flex: none; max-width: 388px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+/* right corner group: fixed width (498: 12 tabs + gear + ×), centered in the card; × sits at the same screen point on every card and Modules tab (card width ≥ 520) (R1-1) */
+.modTop { display: flex; align-items: center; justify-content: flex-end; gap: 10px; width: 498px; max-width: 100%; margin-inline: auto; }
+.modTop .seg { flex: none; max-width: 422px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .modTop .seg::-webkit-scrollbar { display: none; }
 .modTop { position: relative; }
 .modTop .seg .segb { flex: none; width: 32px; padding: 0; justify-content: center; }
@@ -64,7 +64,7 @@
 
 /* card exit: × on every card; cards without a tab bar get a thin bar on top (Modules + ×) */
 .islandInner.conBar { display: flex; flex-direction: column; }
-.cardBar { position: relative; z-index: 2; order: -1; display: flex; justify-content: flex-end; gap: 6px; width: 464px; max-width: 100%; margin: 0 auto -16px; padding-top: 16px; }
+.cardBar { position: relative; z-index: 2; order: -1; display: flex; justify-content: flex-end; gap: 6px; width: 498px; max-width: 100%; margin: 0 auto -16px; padding-top: 16px; }
 .close { height: 28px; min-width: 28px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 14px; color: var(--l2); font: 500 12px/16px var(--font); }
 .close svg.lucide { width: 15px; height: 15px; }
 @media (hover: hover) and (pointer: fine) { .close:hover { background: var(--hover); color: var(--l1); } }   /* P1: Modules is icon-only like x (name in aria-label + tooltip) */
@@ -109,7 +109,14 @@
 
 /* Modules: the card hugs its tab (owner: no empty surface under a short tab like System); General 404 = 14 + 32 + 12 + body 330 + 16 is the cap */
 /* capped (R1-10): long tabs (Clipboard, plugins) scroll inside, the card doesn't grow; the clip reaches the card edge (2 px on top for the focus ring, the card padding on the left and bottom; the scrollbar stays put) so the cover glow fades out instead of being cut */
-.modBody { max-height: 330px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; padding: 2px 2px 16px 16px; margin: -2px -2px -16px -16px; box-sizing: content-box; }
+.modBody { max-height: 330px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; padding: 2px 2px 16px 16px; margin: -2px -2px -16px -16px; box-sizing: content-box;
+  animation: modIn .13s ease-out both, modMore linear both; animation-timeline: auto, scroll(self); }
+/* more below: a tab taller than the cap fades out over its last 40 px so the cut row reads as "scroll"; at the end only the empty 16 px padding fades.
+   Driven by its own scroll position; a tab that fits has an inactive scroll timeline, so no mask at all (its glass keeps its blur). */
+@keyframes modMore {
+  0%, 96% { -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 40px), transparent); }
+  100% { -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 16px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 16px), transparent); }
+}
 
 /* notification list: the last row isn't cut mid-way, it fades at the bottom (R2-D2) */
 .notifs { -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); padding-bottom: 14px; }
@@ -124,14 +131,34 @@
 .row.rowDone { overflow: hidden; max-height: 46px; transition: max-height .26s var(--ease), opacity .26s ease, padding .26s var(--ease), min-height .26s var(--ease); }
 .row.rowDone.go { max-height: 0; min-height: 0; padding-block: 0; opacity: 0; }
 
-/* General overview: same-size tiles, one per module; a fixed height so an empty module or a long title never moves the grid */
-.genTiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; } /* 620 px card: 3 x 2; wide General: one row of 6 above the assistant boxes */
-.genTiles + .general3 { margin-top: 12px; }
-.genTile { display: flex; flex-direction: column; align-items: stretch; height: 92px; text-align: left; color: inherit; font: inherit; border: 0; cursor: pointer; transition: filter .16s var(--ease); }
-.genTile .genMain, .genTile .genSub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.genTile .genMain .ms { display: inline-flex; gap: 6px; align-items: center; }
-.genTile .genMain .ms svg { display: none; }
-@media (hover:hover) and (pointer:fine) { .genTile:hover { filter: brightness(1.15); } }
+/* General home: one calm surface, no box-in-box, no borders. Left: the 56 px ghost beside a one-line "now" headline, the dock of icon-only
+   shortcuts to the other modules under them. Right: up to three pills (36 px, radius 18) for things with something to say.
+   Fixed geometry: the surface is 160 px tall whatever the content (= three pills + padding; dock bottom = last pill bottom), so nothing moves when data arrives.
+   One accent: Peeka indigo (live state words, the dock's hover). Hover/press animate only opacity and transform. */
+.genHome { --acc: color-mix(in srgb, var(--indigo) 60%, white); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 32px; grid-template-areas: "now pills" "dock pills"; column-gap: 24px; row-gap: 12px; height: 160px; flex: none; padding: 20px; border-radius: var(--rPlat); corner-shape: squircle;
+  background: radial-gradient(90% 120% at 0% 100%, color-mix(in srgb, var(--indigo) 16%, transparent), transparent 70%), var(--glass); box-shadow: var(--panelEdge), 0 12px 32px rgba(0,0,0,.2); }
+.genHome + .general3 { margin-top: 12px; }
+.genNow { grid-area: now; display: flex; align-items: center; gap: 12px; min-width: 0; }
+.genText { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.genLine { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.genGhost { flex: none; width: 64px; height: 64px; display: flex; align-items: flex-end; }
+.genPills { grid-area: pills; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.genDock { grid-area: dock; display: flex; gap: 4px; margin-left: -8px; }   /* -8: the first icon lines up with the ghost's edge */
+
+.genHome button { color: inherit; font: inherit; text-align: left; border: 0; cursor: pointer; position: relative; isolation: isolate; transition: transform .12s var(--ease); }
+.genHome button::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--hover); opacity: 0; transition: opacity .16s var(--ease); }
+@media (hover:hover) and (pointer:fine) { .genHome button:hover::before { opacity: 1; } }
+.genHome button:active { transform: scale(.97); }
+
+.genPill { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; column-gap: 10px; height: 36px; flex: none; padding: 0 14px 0 10px; border-radius: 18px; background: rgba(255,255,255,.055); }
+.genPill > svg.lucide { justify-self: center; width: var(--iSm); height: var(--iSm); color: var(--l2); }
+.genPill .pillArt { width: 20px; height: 20px; border-radius: 6px; object-fit: cover; }
+.genPill .genVal { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.genPill .genState { white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+.genPill .genState.live { color: var(--acc); }
+.genKey { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 16px; color: var(--l3); }
+.genKey svg.lucide { width: var(--iSm); height: var(--iSm); }
+@media (hover:hover) and (pointer:fine) { .genKey:hover { color: var(--l1); } }
 
 /* resting center: the clock never shrinks under the music (they overlapped on long titles); the title box is fixed, a long title scrolls (transform only) */
 .islandMascot > .ms.keep { flex: none; }

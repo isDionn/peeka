@@ -3,7 +3,6 @@ import { ArrowUpRight, Clipboard, LayoutGrid, Lock, Search, Settings as Settings
 import { bridge, UNSUPPORTED_EVENT, type Alert, type Attached, type ApprovalItem, type AssistantCounts, type BluetoothEvent, type CcEdit, type ClipPlain, type CpuHigh, type DownloadDone, type Media, type MusicStopped, type ProtrusionItem, type Status, type TimerState, type VolumeOsd } from "../bridge";
 import { timerLeft, useAlerts, useBluetooth, useComposer, useConsent, useHitRects, useInput, useLock, useMainAssistant, useMedia, useMirror, useNow, usePlugins, useMeetingReminder, useSecond, useSettings, useShelf, useShelfDrag, useStatus, useSurfaces, useSysmon, useTimer } from "../hooks";
 import { pickProtrusion } from "../lib/alerts";
-import { addHitProvider } from "../lib/hitRects";
 import { cap99, flat, pluginName } from "../lib/plugin";
 import { Kbd } from "./common";
 import { Mascot, createIdlePrank, type Mood, type MascotHandle } from "../mascot";
@@ -20,6 +19,7 @@ import { coverColors } from "../lib/coverColor";
 import { fly } from "../lib/flight";
 import { trackKey, trackTitle } from "../lib/media";
 import { focusables, useFocusTrap } from "../lib/useFocusTrap";
+import { isTextEntry } from "../lib/justPressed";
 import { SPRINGS } from "../motion/spring";
 import { AWAY_IDLE_MS, awayLabel, createAway, SUMMARY_MS, type AwayCounts } from "../lib/away";
 import { useNetNotice, type NetNote } from "../lib/netNotice";
@@ -163,7 +163,11 @@ interface CenterOpts {
   /** The 40 px strip ghost in an event's mood (download, copy catch, task done, CPU busy); null = no ghost there. */
   ghost: (kind: Kind) => ReactNode;
   battery: Status["battery"]; bt: BluetoothEvent | null; timer: TimerState | null; shelfCount: number; panel: "search" | "settings" | "status" | "start" | "cleanup" | "notif" | null;
+  /** The island is hidden or a fullscreen app is up: the music bars hold still and don't ask for the speaker level. */
+  quiet: boolean;
 }
+/** Short device peeks (volume, screenshot, Bluetooth, charger) leave the clock where it was: no hand-over to the strip and back. */
+const KEEPS_CLOCK = new Set<Kind>(["osd", "shot", "bt", "charge"]);
 /* While locked, the strip and bubble show generic labels instead of content: LOCK_MUSIC, LOCK_ALERT (SideBubble.tsx). */
 const centerOf = (kind: Kind, o: CenterOpts): ReactNode => {
   const { media, alert, osd, approval, plug, composerLabel, main, rest } = o;
@@ -205,10 +209,10 @@ const centerOf = (kind: Kind, o: CenterOpts): ReactNode => {
       <span className="ms">
         {main && <Lead plugin={{ id: main.id, name: main.name, main: true }} mascot="music" />}
         {o.locked ? <span className="b6">{LOCK_MUSIC}</span> : <>{media.art ? <img className="cover" data-share="cover" src={media.art} alt="" style={{ width: 18, height: 18, borderRadius: 5 }} /> : null}
-        <span className="b6" data-share="title" title={trackTitle(media)}>{trackTitle(media)}</span><span className="l3" title={media.artist}>{media.artist}</span></>}<Bars />
+        <span className="b6" data-share="title" title={trackTitle(media)}>{trackTitle(media)}</span><span className="l3" title={media.artist}>{media.artist}</span></>}<Bars still={o.quiet} />
       </span>
     );
-    case "music-card": return <span className="ms">{main && <Lead plugin={{ id: main.id, name: main.name, main: true }} mascot="music" />}<Bars /><span className="l2">{media?.playing ? "Playing" : "Paused"}</span></span>;
+    case "music-card": return <span className="ms">{main && <Lead plugin={{ id: main.id, name: main.name, main: true }} mascot="music" />}<Bars still={o.quiet} /><span className="l2">{media?.playing ? "Playing" : "Paused"}</span></span>;
     case "alert": return alert && <AlertCenter alert={alert} main={main} />;
     case "osd": return <span className="ms">{osd?.muted ? <VolumeX /> : <Volume2 />}{osd?.muted ? <span className="b6">Muted</span> : <><span className="b6">Volume</span>{osd?.device && <span className="l3">{osd.device}</span>}</>}</span>;
     case "welcome": return <span className="ms"><span className="b6">Peeka</span></span>;
@@ -398,8 +402,9 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   useEffect(() => { if (pinned !== null && !pinnedLive) setPinned(null); }, [pinned, pinnedLive]); // the brought-forward activity ended: the order returns on its own
   // while Search / Settings is open on the strip page, a short label in the center (say it once); if something else is in the peek, it stays
   const kind: Kind = (panelLabel === "search" || panelLabel === "settings" || panelLabel === "cleanup") && (base === "rest" || base === "hov") ? "panel" : base;
-  const plainPanel = panelLabel === "status" || panelLabel === "start"; // no mascot in the center while Status / Start is open (one mascot, in the card or panel)
-  const mkAside = plainPanel || panelLabel === "notif"; // the Notifications panel (strip window, so the one-mascot registry can't see it) shows the ghost: the strip's steps aside
+  const plainPanel = panelLabel === "status" || panelLabel === "start"; // while Status / Start is open the counts live in the panel (say it once); the ghost stays
+  // the strip window's own ghost (the empty Notifications board; the one-mascot registry can't see across windows) is on screen: the strip ghost steps aside
+  const [mkAside, setMkAside] = useState(false);
   const meetingItem = surf.protrusion?.icon === "calendar" ? surf.protrusion : null;
   const sys = useSysmon(kind === "modules");
   useEffect(() => { if (kind !== "modules") { setModPage("general"); setModName("General"); setModStart(undefined); } }, [kind]);
@@ -458,7 +463,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   useEffect(() => { if (!osd || pin || hold) return; const t = setTimeout(() => setOsd(null), OSD_MS); return () => clearTimeout(t); }, [osd, pin, hold]);
   // from the strip page: open panel label and "show intro again"
   // panel-open: opening a strip panel closes the open card (Y5)
-  useEffect(() => onX((m) => { if (m.t === "panel") setPanelLabel(m.panel); else if (m.t === "panel-open") setUser((u) => { if (u === "welcome") markFirstRun(); return null; }); else if (m.t === "firstrun") setUser("welcome"); else if (m.t === "welcome?") sendX({ t: "welcome", open: userRef.current === "welcome" }); else if (m.t === "ask") openAsk(owner.current ? "composer" : "noassistant"); else if (m.t === "to-island") { const l = tabStops(); focusViaKeys(m.end ? l[l.length - 1] : l[0]); } }), []);
+  useEffect(() => onX((m) => { if (m.t === "ghost") setMkAside(m.on); else if (m.t === "panel") setPanelLabel(m.panel); else if (m.t === "panel-open") setUser((u) => { if (u === "welcome") markFirstRun(); return null; }); else if (m.t === "firstrun") setUser("welcome"); else if (m.t === "welcome?") sendX({ t: "welcome", open: userRef.current === "welcome" }); else if (m.t === "ask") openAsk(owner.current ? "composer" : "noassistant"); else if (m.t === "to-island") { const l = tabStops(); focusViaKeys(m.end ? l[l.length - 1] : l[0]); } }), []);
   // while the welcome card is open the strip doesn't open the setup wizard (one thing at a time): open/closed is sent to the strip on every change
   const welcomeOpen = user === "welcome";
   useEffect(() => { sendX({ t: "welcome", open: welcomeOpen }); }, [welcomeOpen]);
@@ -544,14 +549,22 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       mascotRef.current?.swallow(); setPicked(r); openAsk("composer");
     }, () => { pickRun.current = null; });
   };
-  // while the Ask box is open the island takes keyboard focus; on close it hands it back to the previous app (ADR-0062 §1)
-  const asking = user === "composer";
+  // while the Ask box is open, or focus is in a card's text field (Clipboard search), the island keeps keyboard focus; on close it hands it back to the previous app (ADR-0062 §1, same rule as Shell's `inText`)
+  const [inText, setInText] = useState(false);
+  useEffect(() => {
+    const fin = (e: FocusEvent) => { if (isTextEntry(e.target)) setInText(true); };
+    const fout = (e: FocusEvent) => { if (!isTextEntry(e.relatedTarget)) setInText(false); };
+    document.addEventListener("focusin", fin);
+    document.addEventListener("focusout", fout);
+    return () => { document.removeEventListener("focusin", fin); document.removeEventListener("focusout", fout); };
+  }, []);
+  useEffect(() => { setInText(isTextEntry(document.activeElement)); }, [user]); // a field removed with its card fires no focusout
+  const asking = user === "composer" || (inText && user !== null); // a field that kept focus in a closed card doesn't count
   useEffect(() => {
     if (!asking) return;
     bridge.call("typing_focus", { label: "island", on: true }).catch(() => undefined);
     return () => { bridge.call("typing_focus", { label: "island", on: false }).catch(() => undefined); };
   }, [asking]);
-  useEffect(() => addHitProvider(() => mascotRef.current?.hitRect() ?? null), []);
   // in Tauri the drop goes to Rust (copied to the Shelf): if the Shelf grew and the pointer is on the mascot, the mascot swallows it
   const shelfN = useRef(shelf.length);
   useEffect(() => {
@@ -719,7 +732,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       default: return null;
     }
   })();
-  const centerKey = kind === "alert" ? "alert:" + alert?.id : kind === "approval" ? "approval:" + approvalTop?.id : kind === "plugin" ? "plugin:" + surf.protrusion?.title : kind === "rest" || kind === "hov" || kind === "modules" || kind === "noassistant" ? "rest" + (plainPanel ? "-plain" : "") + (consent ? "-consent" : "") + (hidden ? "-hidden" : offline ? "-offline" : status?.dnd ? "-dnd" : "") : kind === "panel" ? "panel:" + panelLabel : kind;
+  const centerKey = kind === "alert" ? "alert:" + alert?.id : kind === "approval" ? "approval:" + approvalTop?.id : kind === "plugin" ? "plugin:" + surf.protrusion?.title : kind === "rest" || kind === "hov" || kind === "modules" || kind === "noassistant" ? "rest" + (consent ? "-consent" : "") + (hidden ? "-hidden" : offline ? "-offline" : status?.dnd ? "-dnd" : "") : kind === "panel" ? "panel:" + panelLabel : kind;
   // resting center: with an assistant connected, mascot + "Compass ready" + counts (a); otherwise clock and music (x0), with a sleeping mascot if the assistant is installed but not connected
   const approvalsN = surf.approvals.length;
   const rest = ((): ReactNode => {
@@ -729,10 +742,10 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     if (assistantUp && mainP && restShown && offline) return <OfflineRest />;
     if (assistantUp && mainP && restShown && status?.dnd) return <DndRest approvals={approvalsN} until={status.dndUntil} lock={lockIcon} />;
     if (assistantUp && kind !== "noassistant" && mainP) {
-      const card = kind === "modules" || plainPanel; // while a card is open, counts and mascot live in the card (say it once)
+      const card = kind === "modules" || plainPanel; // while a card or Status / Start is open, the counts live there (say it once)
       return (
         <>
-          <span className="ms">{lockIcon}<Mascot ref={keepMascot} size={40} mood={moodShown} isMainAssistant cursor={input.cursor} onFileDrop={feed} onPoke={pick} hide={card || mkAside} /><span className="l2" title={composerLabel ?? `${pluginName(mainP)} ready`}>{composerLabel ?? `${pluginName(mainP)} ready`}</span></span>
+          <span className="ms">{lockIcon}<Mascot ref={keepMascot} size={40} mood={moodShown} isMainAssistant cursor={input.cursor} onFileDrop={feed} onPoke={pick} hide={mkAside} /><span className="l2" title={composerLabel ?? `${pluginName(mainP)} ready`}>{composerLabel ?? `${pluginName(mainP)} ready`}</span></span>
           {!card && approvalsN > 0 && <span className="t12 b6 approvalCount num">{cap99(approvalsN)} {approvalsN === 1 ? "approval" : "approvals"}</span>}
           {alerts.length > 0 && <span className="t12 l3 num">{cap99(alerts.length)} {alerts.length === 1 ? "notification" : "notifications"}</span>}
         </>
@@ -743,12 +756,12 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
         <span className="ms keep">{lockIcon}<Mascot ref={keepMascot} size={40} mood={moodShown} isMainAssistant cursor={input.cursor} hide={!restShown || mkAside} /><span className="b6 num">{time}</span></span>
         {approvalsN > 0 && <span className="t12 b6 approvalCount num">{cap99(approvalsN)} {approvalsN === 1 ? "approval" : "approvals"}</span>}{/* pending approvals are counted on the strip even when the connection is lost */}
         {media && (priv
-          ? <span className="ms"><span className="l2">{LOCK_MUSIC}</span>{media.playing && <Bars />}</span>
-          : <span className="ms keep">{media.art && <img className="cover" src={media.art} alt="" style={{ width: 18, height: 18, borderRadius: 5 }} />}<Marquee text={trackTitle(media)} />{media.playing && <Bars />}</span>)}
+          ? <span className="ms"><span className="l2">{LOCK_MUSIC}</span>{media.playing && <Bars still={hidden || fullscreen} />}</span>
+          : <span className="ms keep">{media.art ? <img className="cover" src={media.art} alt="" style={{ width: 18, height: 18, borderRadius: 5 }} /> : <span className="coverSlot" />}<Marquee text={trackTitle(media)} />{media.playing && <Bars still={hidden || fullscreen} />}</span>)}
       </>
     );
   })();
-  const centerNode = centerOf(kind, { time, media, alert, osd, approval: kind === "approval" ? approvalTop : null, plug: surf.protrusion, composerLabel: composerLabel, net: netNote, shot: shotNow, timerDone: timerDone?.label ?? null, main, locked: priv, alertsN: alerts.length, done, meeting: meetingItem, burst, stopped, dl, cpu: cpuHigh, edit, rest, ghost: (k) => { const m = eventMood(k, priv); return m && <Mascot size={40} mood={m} isMainAssistant cursor={input.cursor} />; }, battery: batt, bt, timer, shelfCount: shelf.length, panel: panelLabel });
+  const centerNode = centerOf(kind, { time, media, alert, osd, approval: kind === "approval" ? approvalTop : null, plug: surf.protrusion, composerLabel: composerLabel, net: netNote, shot: shotNow, timerDone: timerDone?.label ?? null, main, locked: priv, alertsN: alerts.length, done, meeting: meetingItem, burst, stopped, dl, cpu: cpuHigh, edit, rest, ghost: (k) => { const m = eventMood(k, priv); return m && <Mascot size={40} mood={m} isMainAssistant cursor={input.cursor} />; }, battery: batt, bt, timer, shelfCount: shelf.length, panel: panelLabel, quiet: hidden || fullscreen });
 
   const centerOld = useOld(centerKey, centerNode);
   const shapeOld = useOld(spec?.key ?? "none", spec?.node ?? null, spec?.mode === "card" ? spec.kw : undefined);
@@ -829,7 +842,8 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     });
   }, [centerKey, spec?.key]);
 
-  useEffect(() => { announceCenterClock(kind === "noassistant" || ((kind === "rest" || kind === "hov" || kind === "modules") && !assistantUp)); }, [kind, assistantUp]);
+  // device peeks are short blips: the clock stays where it was instead of jumping next to the strip's date and back
+  useEffect(() => { if (!KEEPS_CLOCK.has(kind)) announceCenterClock(kind === "noassistant" || ((kind === "rest" || kind === "hov" || kind === "modules") && !assistantUp)); }, [kind, assistantUp]);
 
   const openMod = (tab?: string) => { setModStart(tab); setUser("modules"); };
   /** One rule (Y1/Y3/O11): clicking a peek opens Modules on its own tab; clicking the center with a card open closes the card. */

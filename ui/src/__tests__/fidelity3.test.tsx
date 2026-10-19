@@ -205,6 +205,22 @@ describe("tray (y1, y2)", () => {
     expect(logged("tray_open")[0].args).toEqual({ id: "exe:c:/apps/steam.exe" });
     expect(onClose).toHaveBeenCalled();
   });
+  it("grid: a PNG is drawn in colour only when Rust sends colorIcon (a nearly black icon stays a light silhouette)", async () => {
+    const png = "data:image/png;base64,AAAA";
+    const real = fakeBridge.call.bind(fakeBridge) as (...a: unknown[]) => Promise<unknown>;
+    const spy = vi.spyOn(fakeBridge, "call").mockImplementation(((cmd: string, ...rest: unknown[]) => cmd === "tray_icons"
+      ? Promise.resolve([
+        { id: "exe:c:/a.exe", name: "Dark", exe: "C:/a.exe", promoted: false, icon: png },
+        { id: "exe:c:/b.exe", name: "Bright", exe: "C:/b.exe", promoted: false, icon: png, colorIcon: png },
+      ])
+      : real(cmd, ...rest)) as typeof fakeBridge.call);
+    render(<TrayList monitor="m1" onClose={() => undefined} />);
+    await settle();
+    const icon = (name: string) => screen.getByRole("button", { name }).querySelector<HTMLElement>(".appIcon")!;
+    expect(icon("Dark").style.getPropertyValue("--icon-color")).toBe("");
+    expect(icon("Bright").style.getPropertyValue("--icon-color")).toContain(png);
+    spy.mockRestore();
+  });
   it("frequent icons on the strip are only the 'always visible' ones, with badges", async () => {
     render(<PromotedTray monitor="m1" />);
     await settle();

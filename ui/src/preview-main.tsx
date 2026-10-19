@@ -52,6 +52,7 @@ const ISLAND_STATES: Record<string, IslandInit> = {
   cpu: { cpu: { app: "Chrome" }, pin: true }, pr: {},
   sarj: { charge: true, pin: true }, pil: {}, bt: { bt: { name: "Buds Pro", battery: 80 }, pin: true }, zam: {}, dik: {}, tik: {}, kay: {}, f0: {}, g0: { shelfDrag: true, pin: true }, g: { view: "shelf" },
 };
+// Claude chat tab (ClaudeChat.tsx): its own page, claude-chat-demo.html?state=empty|chat|thinking|streaming|long|missing|signin|error (&still for a still ghost).
 const state = param("state", "a");
 // plugin states (mockup ids): c1/c1r approval peek, c2/c2r/c3 approval card, t3 strip dropping down in fullscreen, s Ctrl+Space, d2 chat, j Modules, eo consent window
 const APPROVALS = { c1: APPROVAL_LOW, c2: APPROVAL_LOW, t3: APPROVAL_LOW, c1r: APPROVAL_HIGH, c2r: APPROVAL_HIGH, c3: APPROVAL_CHOICE } as const;
@@ -116,13 +117,13 @@ if (state === "kl") fakeBridge.setLocked(true, "manual");
 if (param("locked", "") !== "") fakeBridge.setLocked(true, "manual"); // any state while locked (music or an alert on the locked strip)
 if (param("noplugins", "") !== "") fakeBridge.setPlugins([]);
 if (param("index", "") === "off") fakeBridge.setFilesIndex(false);
-// Wave 6: ?notice=1 Windows notification (m), ?mirror=ok|dev|reg|denied Settings toggle on plus a blocker (ayg)
+// Wave 6: ?notice=1 Windows notification (m), ?mirror=ok|off|denied Settings toggle on plus a blocker (off = no readable notification history: "unavailable") (ayg)
 if (param("notice", "") !== "") {
   fakeBridge.pushNotice({ id: "win.1", app: "Teams", title: "Emma Clarke", body: "Meeting moved to 3:00 PM, could you share the deck too?", tile: "data:image/svg+xml;charset=utf-8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" rx="3"/></svg>') });
   fakeBridge.pushNotice({ id: "win.2", app: "Outlook", title: "Weekly report", body: "Attachment: q3-report.xlsx", canOpen: false });
 }
 const mirror = param("mirror", "");
-if (mirror) { fakeBridge.setMirror({ enabled: true, ...(mirror === "dev" ? { devMode: false } : mirror === "reg" ? { registered: false } : mirror === "denied" ? { access: "denied" } : {}) }); }
+if (mirror) { fakeBridge.setMirror({ enabled: true, ...(mirror === "off" ? { history: false } : mirror === "denied" ? { access: "denied" } : {}) }); }
 // Fidelity 3: gz hides the island temporarily (only the eye icon in the middle of the strip), h2 a clipboard item being dragged (source dimmed)
 // n / n2: an incoming Windows notification becomes the top-right card in Shell; n2 shows the draft view as if "Let the assistant reply" was pressed
 if (state === "n" || state === "n2") {

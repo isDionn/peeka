@@ -409,13 +409,13 @@ describe("small peeks (decision 12)", () => {
   it("shelf: share_open is rejected for a file that does not exist (fake bridge)", async () => {
     await expect(fakeBridge.call("share_open", { id: "missing" })).rejects.toBe("denied");
   });
-  it("microphone/camera privacy dot: the app using it is named in the label; absent if nobody is using it", async () => {
+  it("privacy dot: camera and screen sharing only, never the microphone; no app names", async () => {
     render(<Shell monitor="m1" />);
     await settle();
     expect(document.querySelector(".privacyDot")).toBeNull();
     act(() => fakeBridge.setPrivacy({ mic: ["Chrome"], camera: [] }));
     await settle();
-    expect(screen.getByRole("img", { name: "Microphone in use" })).toBeTruthy();
+    expect(document.querySelector(".privacyDot")).toBeNull(); // owner: no mic dot on the strip
     act(() => fakeBridge.setPrivacy({ mic: [], camera: ["Teams"] }));
     await settle();
     expect(document.querySelector(".privacyDot")!.getAttribute("data-only")).toBe("camera");
@@ -492,7 +492,7 @@ describe("module management and color icons", () => {
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
     const tabs = within(screen.getByRole("tablist", { name: "Modules" })).getAllByRole("tab").map((t) => t.getAttribute("aria-label") ?? t.textContent);
-    expect(tabs).toEqual(["General", "Music", "Clipboard", "Calendar", "Notifications", "Compass › Claude Code", "Compass"]);
+    expect(tabs).toEqual(["General", "Music", "Clipboard", "Calendar", "Notifications", "Claude", "Compass › Claude Code", "Compass"]);
     expect(screen.queryByRole("heading", { name: "System" })).toBeNull();
     expect(screen.queryByText("CPU")).toBeNull();
   });

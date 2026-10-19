@@ -1,11 +1,11 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowUpRight, Bell, Calendar, Clipboard, Cpu, Inbox, LayoutGrid, Music, PanelTop, Pause, Play, SkipBack, SkipForward, Timer, X, type LucideIcon } from "lucide-react";
+import { ArrowUpRight, Bell, ShieldCheck, Calendar, Clipboard, Cpu, Inbox, LayoutGrid, MessageCircle, Music, PanelTop, Settings as Gear, Pause, Play, SkipBack, SkipForward, Timer, X, type LucideIcon } from "lucide-react";
 import { bridge, type Alert, type TimerState, type Media, type TabExt, type ModuleEntry, type PluginInfo, type ProtrusionItem, type ShelfItem, type SurfacesView, type SysmonTick, type VolumeOsd } from "../bridge";
 import { capTabs, flat, MASCOT_STATES } from "../lib/plugin";
 import { AlertIcon } from "../lib/alertIcon";
 import { ageLabel } from "../lib/alerts";
 import { actionLabel } from "../lib/alerts";
-import { useAlerts, useClips, useMainAssistant } from "../hooks";
+import { timerLeft, useAlerts, useClips, useMainAssistant, useSecond } from "../hooks";
 import { Lead, SummaryBoxes, TabBlocks, TabGlyph, tabLabel } from "./Plugin";
 import { MeetingCard, ShelfSuggestRow } from "./Fidelity";
 import { WaveMascot } from "./CardsExtra";
@@ -13,10 +13,12 @@ import "./cards.css";
 import { durationSec, fmtTime, timeSlot, trackTitle } from "../lib/media";
 import { ClipboardView } from "./Pano";
 import { ShelfCard, TimerBump, TimerCenter } from "./Extras";
+import { ClaudeChatTab } from "./ClaudeChat";
+import { sendX } from "../lib/xwin";
 
 /* ---- peek rows (.cik): strip-colored, thin ---- */
 
-export const Bars = () => <span className="seen" aria-hidden="true"><i /><i /><i /><i /></span>;
+export { Bars } from "./Bars";
 
 const PlayIcon = ({ playing }: { playing: boolean }) => (playing ? <Pause fill="currentColor" /> : <Play fill="currentColor" />);
 const ctl = (action: "play_pause" | "next" | "previous") => () => bridge.call("media_control", { action }).catch(() => undefined);
@@ -149,29 +151,61 @@ const SystemBox = ({ sys, cpu }: { sys: SysmonTick | null; cpu: number[] }) => {
   );
 };
 
-/** General's overview (owner): one same-size tile per enabled core module, each one click into its tab; an empty module shows a short line, it never disappears.
- *  Clipboard shows count, kind and source only: its text and images stay behind the capture exclusion of the Clipboard tab (ADR-0063 §7). */
+/** General (owner: a calm "home", not a grid of tiles). One surface: on the left the main assistant's 56 px ghost at a fixed spot under a one-line "now" headline;
+ *  on the right a short stack of pills, only for things that have something to say right now (an approval, music, a timer, notifications, a meeting, clipboard, system);
+ *  every other enabled module is a small icon-only shortcut in the dock. Each pill and shortcut opens its tab in one click. Works with any subset of modules.
+ *  One mascot: the ghost outranks the strip's 40 px and the Compass box's 24 px in the single-mascot registry (as M1's MusicCard does).
+ *  Clipboard shows count, kind and age only: its text and images stay behind the capture exclusion of the Clipboard tab (ADR-0063 §7). */
 const TILES: [string, string, LucideIcon][] = [["music", "Music", Music], ["clipboard", "Clipboard", Clipboard], ["calendar", "Calendar", Calendar], ["timer", "Timer", Timer], ["notifications", "Notifications", Bell], ["system", "System", Cpu]];
-function GeneralTiles({ ids, go, media, meeting, timer, sys }: { ids: string[]; go: (id: string) => void; media: Media | null; meeting: ProtrusionItem | null; timer: TimerState | null; sys: SysmonTick | null }) {
-  const clips = useClips().filter((c) => c.kind !== "password"), { alerts } = useAlerts(); // no capture exclusion here: password items are never counted or named (ADR-0063 §7)
-  const now = bridge.now().getTime(), c = clips[0], a = alerts[0];
-  const line: Record<string, [ReactNode, string]> = {
-    music: media ? [trackTitle(media), (media.playing ? "" : "Paused · ") + (media.artist || media.app)] : ["Nothing playing", "Music from any player shows here"],
-    clipboard: c ? [`${clips.length} item${clips.length === 1 ? "" : "s"}`, `Latest: ${c.kind}${c.source ? " from " + flat(c.source, 20) : ""} · ${ageLabel((now - c.createdAt) / 1000)}`] : ["Clipboard is empty", "Things you copy show up here"],
-    calendar: meeting ? [flat(meeting.title, 40), meeting.subtitle ? flat(meeting.subtitle, 40) : "Next meeting"] : ["No upcoming meetings", "From a calendar plugin"],
-    timer: timer ? [<TimerCenter key="t" t={timer} />, timer.running ? "Running" : "Paused"] : ["No timer running", "Start one in the Timer tab"],
-    notifications: a ? [flat(a.title, 40), alerts.length > 1 ? `+${alerts.length - 1} more` : ageLabel((now - a.updatedAt) / 1000)] : ["No notifications", "You're all caught up"],
-    system: [`CPU ${sys?.cpu == null ? dash : Math.round(sys.cpu) + "%"} · GPU ${sys?.gpu == null ? dash : Math.round(sys.gpu) + "%"}`, sys?.memUsed == null || sys.memTotal == null ? "Memory " + dash : `Memory ${Math.round((sys.memUsed / sys.memTotal) * 100)}%`],
-  };
+const PILLS = 3; // at most three pills: the stack's height is fixed, the rest go to the dock
+const TimerLeft = ({ t }: { t: TimerState }) => <span className="num">{fmtTime(Math.ceil(timerLeft(t, useSecond(t.running))))}</span>;
+type Pill = { id: string; icon: ReactNode; value: ReactNode; state: string; live?: boolean; open: () => void; label: string };
+
+function GeneralTiles({ ids, go, media, meeting, timer, sys, approvals, onApproval }: { ids: string[]; go: (id: string) => void; media: Media | null; meeting: ProtrusionItem | null; timer: TimerState | null; sys: SysmonTick | null; approvals: { id: string }[]; onApproval: (id: string) => void }) {
+  const main = useMainAssistant();
+  const clips = useClips().filter((c) => c.kind !== "password"), { alerts } = useAlerts(); // password items are never counted or named (ADR-0063 §7)
+  const now = bridge.now().getTime(), c = clips[0], a = alerts[0], on = (id: string) => ids.includes(id);
+  const mem = sys?.memUsed != null && sys.memTotal ? (sys.memUsed / sys.memTotal) * 100 : null;
+  const busy = (sys?.cpu ?? 0) >= 85 || (mem ?? 0) >= 90;
+  const icon = (id: string) => { const I = TILES.find(([k]) => k === id)![2]; return <I aria-hidden="true" />; };
+  const pill = (id: string, p: Omit<Pill, "id" | "open" | "label" | "icon"> & { icon?: ReactNode }): Pill => ({ id, icon: icon(id), open: () => go(id), label: `${TILES.find(([k]) => k === id)![1]}: open tab`, ...p });
+  const all: (Pill | false)[] = [
+    approvals.length > 0 && { id: "approval", icon: <ShieldCheck aria-hidden="true" />, value: `${approvals.length} approval${approvals.length === 1 ? "" : "s"}`, state: "waiting", live: true, open: () => onApproval(approvals[0].id), label: "Review approval" },
+    on("music") && !!media && pill("music", { icon: media.art ? <img className="pillArt" src={media.art} alt="" /> : icon("music"), value: trackTitle(media), state: media.playing ? "playing" : "paused", live: media.playing }),
+    on("timer") && !!timer && pill("timer", { value: <><TimerLeft t={timer} /> <span className="l2 b4">{flat(timer.label, 24)}</span></>, state: timer.running ? "running" : "paused", live: timer.running }),
+    on("notifications") && !!a && pill("notifications", { value: flat(a.title, 40), state: alerts.length > 1 ? `+${alerts.length - 1} more` : ageLabel((now - a.updatedAt) / 1000) }),
+    on("calendar") && !!meeting && pill("calendar", { value: flat(meeting.title, 40), state: meeting.subtitle ? flat(meeting.subtitle, 20) : "next" }),
+    on("clipboard") && !!c && pill("clipboard", { value: `${clips.length} item${clips.length === 1 ? "" : "s"}`, state: `${c.kind}, ${ageLabel((now - c.createdAt) / 1000)}` }),
+    on("system") && pill("system", { value: `CPU ${sys?.cpu == null ? dash : Math.round(sys.cpu) + "%"}`, state: busy ? "busy" : sys?.cpu == null ? "quiet" : "all good" }),
+  ];
+  const pills = all.filter((p): p is Pill => !!p).slice(0, PILLS);
+  const dock = TILES.filter(([id]) => on(id) && !pills.some((p) => p.id === id));
+  // the "now" line: what matters most right now, in one line
+  const [head, sub] = approvals.length > 0 ? ["Waiting for your approval", `${main?.name ?? "Your assistant"} asked`]
+    : timer?.running && on("timer") ? [<><TimerLeft key="t" t={timer} /> left</>, flat(timer.label, 32)]
+    : media && on("music") ? [trackTitle(media), media.playing ? (media.artist || "Playing") : "Paused"]
+    : ["All quiet", "Nothing needs you right now"];
+  const mood = approvals.length > 0 ? "approval" : media?.playing ? "music" : "ready";
   return (
-    <div className="genTiles">
-      {TILES.filter(([id]) => ids.includes(id)).map(([id, title, Icon]) => (
-        <button key={id} type="button" className="box glass genTile" aria-label={`${title}: open tab`} onClick={() => go(id)}>
-          <h4><Icon />{title}</h4>
-          <div className="b6 genMain">{line[id][0]}</div>
-          <div className="t12 l3 genSub">{line[id][1]}</div>
-        </button>
-      ))}
+    <div className="genHome">
+      <div className="genNow">
+        {/* the ghost's spot is fixed (reserved even with no assistant): nothing reflows when it arrives */}
+        <span className="genGhost">{main && <Lead plugin={{ id: main.id, name: main.name, main: true }} mascot={mood} size={56} />}</span>
+        <div className="genText">
+          <div className="t20 b6 genLine">{head}</div>
+          <div className="t13 l3 genLine">{sub}</div>
+        </div>
+      </div>
+      <div className="genPills">
+        {pills.map((p) => (
+          <button key={p.id} type="button" className="genPill" aria-label={p.label} onClick={p.open}>
+            {p.icon}<span className="genVal b6">{p.value}</span><span className={"genState t12" + (p.live ? " live" : " l3")}>{p.state}</span>
+          </button>
+        ))}
+      </div>
+      <div className="genDock" role="group" aria-label="Other modules">
+        {dock.map(([id, title, Icon]) => <button key={id} type="button" className="genKey" aria-label={`${title}: open tab`} title={title} onClick={() => go(id)}><Icon aria-hidden="true" /></button>)}
+      </div>
     </div>
   );
 }
@@ -219,7 +253,7 @@ export const MOD_NARROW = 620;
 export const modulesKw = (page: string, screenW: number) => (page === "general" ? Math.min(1056, Math.round(screenW * 0.55)) : MOD_NARROW);
 
 /** Core tabs (mockup j): Peeka's own; then a divider and plugin tabs. `id` matches the Settings › Modules id (wire name, stays Turkish). */
-const CORE: [string, string, LucideIcon][] = [["general", "General", LayoutGrid], ["music", "Music", Music], ["clipboard", "Clipboard", Clipboard], ["shelf", "Shelf", Inbox], ["calendar", "Calendar", Calendar], ["timer", "Timer", Timer], ["system", "System", Cpu], ["notifications", "Notifications", Bell]];
+const CORE: [string, string, LucideIcon][] = [["general", "General", LayoutGrid], ["music", "Music", Music], ["clipboard", "Clipboard", Clipboard], ["shelf", "Shelf", Inbox], ["calendar", "Calendar", Calendar], ["timer", "Timer", Timer], ["system", "System", Cpu], ["notifications", "Notifications", Bell], ["claude", "Claude", MessageCircle]];
 
 /** Modules card (mockup j): 11 tabs + gear; General = assistant | Claude Code | System. System monitoring runs while the card is open (Island starts it). */
 export const ModulesCard = memo(ModulesCardImpl); // Island re-renders every frame during the spring; the card only re-renders when its props change
@@ -256,7 +290,7 @@ function ModulesCardImpl({ media, pos, sys, cpu, surf, shelf, main, meeting, onP
   const tipOn = (text: string) => (e: { currentTarget: HTMLElement }) => { const b = e.currentTarget, u = b.closest(".modTop") as HTMLElement; window.clearTimeout(tipTimer.current); tipTimer.current = window.setTimeout(() => setTip({ text, x: b.getBoundingClientRect().left - u.getBoundingClientRect().left + b.offsetWidth / 2 }), 400); };
   useEffect(() => () => window.clearTimeout(tipTimer.current), []);
   // focus tooltip only for keyboard users (focus goes to the first tab programmatically on open; opening with the mouse shouldn't pop the tooltip)
-  const tipProps = (text: string) => ({ "aria-label": text, onMouseEnter: tipOn(text), onFocus: (e: React.FocusEvent<HTMLElement>) => { if (document.documentElement.hasAttribute("data-kb")) tipOn(text)(e); }, onMouseLeave: hideTip, onBlur: hideTip });
+  const tipProps = (text: string) => ({ "aria-label": text, onMouseEnter: tipOn(text), onFocus: (e: React.FocusEvent<HTMLElement>) => { if (document.documentElement.hasAttribute("data-kb") && !segRef.current?.matches(":hover")) tipOn(text)(e); }, onMouseLeave: hideTip, onBlur: hideTip });
   // tab bar: one Tab stop (the active tab); Left/Right/Home/End move and select (F-04)
   const order = [...core.map(([id]) => id), ...tabs.map((t) => t.plugin.id + "/" + t.id)];
   const idOf = (k: string) => "modtab-" + k.replace(/[^\p{L}\p{N}_-]/gu, "_");
@@ -278,8 +312,9 @@ function ModulesCardImpl({ media, pos, sys, cpu, surf, shelf, main, meeting, onP
       : p === "timer" ? <TimerStart timer={timer} />
       : p === "system" ? <SystemBox sys={sys} cpu={cpu} />
       : p === "notifications" ? <AlertsTab />
+      : p === "claude" ? <ClaudeChatTab />
       : <>
-        <GeneralTiles ids={core.map(([id]) => id)} go={(id) => { hideTip(); setTab(id); }} media={media} meeting={meeting} timer={timer} sys={sys} />
+        <GeneralTiles ids={core.map(([id]) => id)} go={(id) => { hideTip(); setTab(id); }} media={media} meeting={meeting} timer={timer} sys={sys} approvals={surf.approvals} onApproval={onApproval} />
         {boxes > 0 && <div className="grid module general3" style={{ gridTemplateColumns: boxes >= 3 ? "1.3fr 1fr .9fr" : `repeat(${boxes}, 1fr)` }}>
           <SummaryBoxes surf={surf} onDetail={onApproval} />
           {generalTabs.map((x) => <TabBlocks key={x.plugin.id + "/" + x.id} tab={x} />)}
@@ -299,6 +334,7 @@ function ModulesCardImpl({ media, pos, sys, cpu, surf, shelf, main, meeting, onP
           })}
         </div>
         {tip && <span className="segTip" role="tooltip" style={{ left: tip.x }}>{tip.text}</span>}
+        <button className="mini" title="Modules settings" aria-label="Modules settings" onClick={() => sendX({ t: "open-panel", panel: "modules" })}><Gear /></button>
         <button className="close" title="Close (Esc)" aria-label="Close" onClick={onClose}><X /></button>
       </div>
       {shown !== "clipboard" && <div className="modBody" key={shown} role="tabpanel" aria-labelledby={idOf(shown)}>{body(shown)}</div>}

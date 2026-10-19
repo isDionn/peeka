@@ -44,7 +44,7 @@ pub struct AppRef {
     pub app_id: String,
     pub name: String,
     pub icon: String,
-    /// Settings > Appearance colour icons on: the same PNG in colour (`icon` is painted as a mask). Absent when off.
+    /// The same PNG in colour (`icon` is painted as a mask), when `color` says so.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color_icon: Option<String>,
 }
@@ -112,6 +112,10 @@ pub struct SaveResult {
 
 /// The app's icon (cached per id, a miss too). COM is set up here because async commands run on pool threads.
 pub(crate) fn icon(n: &Notch, app_id: &str) -> String {
+    look(n, app_id).url
+}
+
+fn look(n: &Notch, app_id: &str) -> notch_win::icons::Icon {
     if let Some(i) = n.icons.lock().get(app_id) {
         return i.clone();
     }
@@ -122,13 +126,14 @@ pub(crate) fn icon(n: &Notch, app_id: &str) -> String {
 }
 
 fn app_ref(n: &Notch, app_id: &str, name: &str) -> AppRef {
-    let icon = icon(n, app_id);
-    AppRef { app_id: app_id.to_string(), name: name.to_string(), color_icon: color(n, &icon), icon }
+    AppRef { app_id: app_id.to_string(), name: name.to_string(), color_icon: color(n, app_id), icon: icon(n, app_id) }
 }
 
-/// The colour copy of an icon, only while the setting is on (the extracted PNG is already in colour).
-fn color(n: &Notch, icon: &str) -> Option<String> {
-    (n.settings.lock().color_icons && !icon.is_empty()).then(|| icon.to_string())
+/// The colour copy of an app's icon (the extracted PNG is already in colour): while the setting is on, and always
+/// for an icon whose mask would be a blank square or circle; never for a nearly black one (invisible on the strip).
+fn color(n: &Notch, app_id: &str) -> Option<String> {
+    let i = look(n, app_id);
+    (!i.url.is_empty() && !i.dark && (i.blob || n.settings.lock().color_icons)).then_some(i.url)
 }
 
 /// Pins + open windows now; also what later commands are checked against.
@@ -202,12 +207,11 @@ fn windows_on(n: &Notch, items: &[AppItem], foreground: isize) -> Vec<WindowInfo
         .iter()
         .flat_map(|i| i.windows.iter().map(move |w| (i, w)))
         .map(|(i, w)| {
-            let icon = icon(n, &i.app_id);
             WindowInfo {
                 app_id: i.app_id.clone(),
                 name: i.name.clone(),
-                color_icon: color(n, &icon),
-                icon,
+                color_icon: color(n, &i.app_id),
+                icon: icon(n, &i.app_id),
                 hwnd: w.hwnd,
                 title: w.title.clone(),
                 active: w.hwnd == foreground,
@@ -808,6 +812,17 @@ pub fn sysmon_stop() {
     notch_win::sysmon::stop();
 }
 
+/// The music bars are on screen: `audio_level` events until `audio_level_stop` (see `live::audio_level`).
+#[tauri::command]
+pub fn audio_level_start(app: AppHandle) {
+    crate::live::audio_level(&app, true);
+}
+
+#[tauri::command]
+pub fn audio_level_stop(app: AppHandle) {
+    crate::live::audio_level(&app, false);
+}
+
 /* ---------- plugins (Wave 3; shapes: ui/src/plugin-api.ts, rules: notch_core::plugins) ---------- */
 
 use notch_core::plugins::host::{
@@ -1390,6 +1405,12 @@ pub fn open_start_menu() -> Res<()> {
     notch_win::press_windows_key().then_some(()).ok_or(CmdError::Refused)
 }
 
+/// The strip clock: Windows's own notification center and calendar (Win+N), only from the owner's click on it.
+#[tauri::command]
+pub fn open_calendar() -> Res<()> {
+    notch_win::open_calendar_flyout().then_some(()).ok_or(CmdError::Refused)
+}
+
 /// The island is hidden for an hour (`on`) or back now; also Ctrl+Shift+A (`app::on_shortcut`).
 pub fn set_island_hidden(app: &AppHandle, on: bool) {
     let Some(n) = app.try_state::<Notch>() else { return };
@@ -1420,7 +1441,7 @@ pub fn island_hidden(n: State<'_, Notch>) -> bool {
     island_is_hidden(&n)
 }
 
-/// fidelity-api.ts `TrayIconX`: `open_tray`'s list plus the colour icon while the setting is on. No `badge`:
+/// fidelity-api.ts `TrayIconX`: `open_tray`'s list plus the colour icon (`color`). No `badge`:
 /// `NotifyIconSettings` has no count, and Notch does not guess one.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1434,7 +1455,7 @@ pub struct TrayIconX {
 #[tauri::command]
 pub async fn tray_icons(n: State<'_, Notch>, monitor: String) -> Res<Vec<TrayIconX>> {
     let list = open_tray(n.clone(), monitor).await?;
-    Ok(list.into_iter().map(|t| TrayIconX { color_icon: color(&n, &t.icon), icon: t }).collect())
+    Ok(list.into_iter().map(|t| TrayIconX { color_icon: color(&n, &t.id), icon: t }).collect())
 }
 
 /// Start "Recommended": the newest files in the owner's Recent folder (`shell:recent`, its `.lnk` files only;
@@ -1920,4 +1941,31 @@ pub fn recap_copy_image(app: AppHandle, png: Vec<u8>) -> Res<()> {
         return Err(CmdError::Refused);
     }
     Ok(())
+}
+
+/* ---------- The Modules card's Claude chat (through the owner's Claude Code CLI: `claude_chat.rs`) ---------- */
+
+/// Is Claude Code installed (its version) and signed in, and is a reply running. No tokens are spent.
+#[tauri::command]
+pub async fn claude_chat_state() -> crate::claude_chat::State {
+    crate::claude_chat::state()
+}
+
+/// Send: the text (trimmed, 1..=8000 characters, else `invalid`) goes to Claude only now. `refused` while a reply
+/// runs, `missing` without Claude Code, `denied` while locked. Demo mode answers with a canned reply.
+#[tauri::command]
+pub fn claude_chat_send(app: AppHandle, text: String) -> Res<()> {
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    crate::claude_chat::send(&app, &text)
+}
+
+#[tauri::command]
+pub fn claude_chat_stop(app: AppHandle) {
+    crate::claude_chat::stop(&app);
+}
+
+/// A new conversation: stops a running reply and forgets the session.
+#[tauri::command]
+pub fn claude_chat_new(app: AppHandle) {
+    crate::claude_chat::reset(&app);
 }

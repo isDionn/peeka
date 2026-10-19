@@ -112,3 +112,44 @@ describe("approval card N / Y", () => {
     expect(answers()).toEqual([expect.objectContaining({ decision: "deny" })]);
   });
 });
+
+describe("window region: every ghost's full drawn box", () => {
+  const box = (el: Element, left: number, top: number, width: number, height: number) =>
+    vi.spyOn(el, "getBoundingClientRect").mockReturnValue({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({}) });
+  it("a hanging ghost adds its drawn box (with room for sway and effects) as paint and its body as hit; a fading or leaving one paints only", () => {
+    document.body.innerHTML = `<div class="mascot" id="a"><div class="g"></div><div class="mascot-hit"></div></div>
+      <div data-leaving><div class="mascot" id="b"><div class="g"></div><div class="mascot-hit"></div></div></div>
+      <div class="mascot out" id="c"><div class="g"></div><div class="mascot-hit"></div></div>
+      <div style="visibility:hidden"><div class="mascot" id="d"><div class="g"></div><div class="mascot-hit"></div></div></div>`; // a closed strip panel's ghost: nothing
+    for (const id of ["a", "b", "c", "d"]) { box(document.querySelector(`#${id} .g`)!, 100, -3.5, 40, 53); box(document.querySelector(`#${id} .mascot-hit`)!, 105, 5, 30, 37); }
+    const rects = collectHitRects();
+    expect(rects.filter((r) => r.paint)).toHaveLength(3);
+    const paint = rects.find((r) => r.paint)!;
+    expect(paint.x <= 100 && paint.y <= -3 && paint.x + paint.w >= 140 && paint.y + paint.h >= 50).toBe(true); // covers the whole ghost, hanging part included
+    expect(rects.filter((r) => !r.paint)).toEqual([{ x: 105, y: 5, w: 30, h: 37 }]); // only the live ghost takes clicks
+    document.body.innerHTML = "";
+  });
+});
+
+describe("one mascot on screen: the strip ghost hides only for another visible ghost", () => {
+  const ghost = () => document.querySelector(".islandCenter .mascot:not(.out)");
+  it("Status (and Start) keep the strip ghost; the empty Notifications board's ghost makes it step aside", async () => {
+    const { sendX } = await import("../lib/xwin");
+    fakeBridge.setPlugins([]); // the clock rest: the owner's setup
+    render(<Island monitor="m1" init={{ view: null }} />);
+    await settle(300);
+    expect(ghost()).not.toBeNull();
+    sendX({ t: "panel-open", panel: "status" }); sendX({ t: "panel", panel: "status" });
+    await settle(400);
+    expect(ghost()).not.toBeNull();
+    sendX({ t: "panel", panel: "notif" }); sendX({ t: "ghost", on: false }); // Notifications with items: no other ghost
+    await settle(400);
+    expect(ghost()).not.toBeNull();
+    sendX({ t: "ghost", on: true }); // the empty board's 96 px ghost is on screen
+    await settle(400);
+    expect(ghost()).toBeNull();
+    sendX({ t: "panel", panel: null }); sendX({ t: "ghost", on: false });
+    await settle(400);
+    expect(ghost()).not.toBeNull();
+  });
+});

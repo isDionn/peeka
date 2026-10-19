@@ -8,7 +8,7 @@
 //! carries `notch_core::status::Status`, `settings_changed` the page's settings view. Wave 2 (`live.rs`):
 //! `media_changed` (`notch_core::media::Media` or null), `alerts_changed` (`notch_core::alerts::AlertsView`),
 //! `sysmon_tick` (`notch_core::sysmon::SysmonTick`, only between `sysmon_start` and `sysmon_stop`), `volume_osd`
-//! (`notch_core::status::Volume`, after a captured volume key). The list lives in `notch_core::contract::EVENTS`.
+//! (`notch_core::status::Volume`, after a captured volume key), `audio_level` (`[f32; 2]`, `live::audio_level`). The list lives in `notch_core::contract::EVENTS`.
 //! Wave 3 (`plugins.rs`): `plugins_changed`, `consent_changed`, `plugin_surfaces_changed`, `composer_event`,
 //! `plugin_stream`; the consent window loads `consent.html` (label `consent`). Wave 4: `lock_changed`
 //! (`notch_core::lock::LockState`), `clip_changed` (`clip_history.rs`). Wave 5 (`extras.rs`): `privacy_changed`,
@@ -73,7 +73,7 @@ pub struct Notch {
     /// The Start panel's last list (and when it was scanned): `launch_app` accepts these ids too.
     pub apps: Mutex<(Vec<ListedApp>, Option<Instant>)>,
     /// App id -> PNG data URL ("" = the shell had none).
-    pub icons: Mutex<HashMap<String, String>>,
+    pub icons: Mutex<HashMap<String, notch_win::icons::Icon>>,
     /// The primary monitor's DDC/CI brightness; None = not controllable (read once at start, then after each set).
     pub brightness: Mutex<Option<u8>>,
     /// `Radio::RequestAccessAsync` said yes (true until it has answered).
@@ -197,6 +197,8 @@ pub fn run() {
             crate::commands::open_alert,
             crate::commands::sysmon_start,
             crate::commands::sysmon_stop,
+            crate::commands::audio_level_start,
+            crate::commands::audio_level_stop,
             crate::commands::plugin_surfaces,
             crate::commands::plugin_action,
             crate::commands::approval_answer,
@@ -243,6 +245,7 @@ pub fn run() {
             crate::commands::privacy_get,
             crate::commands::quit_app,
             crate::commands::open_start_menu,
+            crate::commands::open_calendar,
             crate::commands::island_hide,
             crate::commands::island_hidden,
             crate::commands::tray_icons,
@@ -278,6 +281,10 @@ pub fn run() {
             crate::commands::recap_get,
             crate::commands::recap_ack,
             crate::commands::recap_copy_image,
+            crate::commands::claude_chat_state,
+            crate::commands::claude_chat_send,
+            crate::commands::claude_chat_stop,
+            crate::commands::claude_chat_new,
         ])
         .setup(|app| {
             setup(app.handle()).map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
@@ -429,6 +436,7 @@ fn shutdown(app: &AppHandle) {
     crate::live::http_stop(app);
     crate::mirror::clear_now(app);
     crate::plugins::stop(app);
+    crate::claude_chat::kill();
     notch_win::sysmon::stop();
     if let Some(n) = app.try_state::<Notch>() {
         for hwnd in n.appbar.handles() {

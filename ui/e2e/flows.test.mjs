@@ -90,7 +90,7 @@ describe("every card reaches Modules > General (at most 2 steps) and closes", ()
   ];
   /** The sequence that reaches General in 0, 1 or 2 steps; null if none. The page is reloaded for every attempt. */
   async function findPath(page, c) {
-    const fresh = async () => { await goto(page, c.url); if (c.pre) { await page.waitForSelector(MOD); await c.pre(page); } await frame(page); };
+    const fresh = async () => { await goto(page, c.url); if (c.pre) { await page.waitForSelector(MOD); await c.pre(page); } await ready(page); };
     await fresh();
     if (await generalOpen(page, 400) && (await page.locator("#island [role=dialog]").count())) return [];
     const seqs = [...names.map((a) => [a]), ...names.flatMap((a) => names.map((b) => [a, b]))];
@@ -101,6 +101,8 @@ describe("every card reaches Modules > General (at most 2 steps) and closes", ()
     }
     return null;
   }
+  // the starting card mounts after the fake media/surfaces arrive: acting before it is up tried steps against a half-built page (the flaky "music card")
+  const ready = async (p) => { await until(async () => (await layers(p)).length > 0, "starting layer did not open", 5000); await stable(() => layers(p)); await frame(p); };
   const gone = async (p, ms) => { try { await until(async () => !(await layers(p)).length, "layer did not close", ms); return true; } catch { return false; } };
   for (const c of CARDS) {
     it(c.name, T, async () => {
@@ -115,7 +117,8 @@ describe("every card reaches Modules > General (at most 2 steps) and closes", ()
         assert.ok(!(await layers(page)).length, `a layer is still open after ${esc} Esc with General open: ${(await layers(page)).join()}`);
         await goto(page, c.url);
         if (c.pre) { await page.waitForSelector(MOD); await c.pre(page); }
-        for (const a of path) await ACT[a](page);
+        await ready(page);
+        for (const a of path) { await ACT[a](page); await frame(page); }
         await generalOpen(page, 2000);
         const x = page.locator('#island [role=dialog] button[aria-label="Close"]');
         assert.equal(await x.count(), 1, "no visible × on the General card");
@@ -209,7 +212,7 @@ describe("the peek stays open while the cursor is on it", () => {
 /* ---------------- 6. Opening a panel leaves one top layer; one Esc closes it ---------------- */
 describe("opening a panel while a card is open leaves a single layer", () => {
   const CARDS = [["modules", "j"], ["clipboard", "h"], ["shelf", "g"], ["chat", "s"], ["music", "b2"], ["approval", "c2"]];
-  const PANELS = ["start", "search", "status", "notif", "tray"];
+  const PANELS = ["start", "search", "status", "tray"]; // the clock opens Windows's calendar, not a Peeka panel
   for (const [name, d] of CARDS) {
     for (const k of PANELS) {
       it(`${k} panel while the ${name} card is open`, T, () => on(P(d), async (page) => {

@@ -48,7 +48,7 @@ function Step({ n }: { n: number }) {
         </div>
         <div className="row">
           <Bell />
-          <div style={{ flex: 1 }}><div>Show Windows notifications at top right</div><div className="t12 l3 b4">{blocked ? "Windows didn't allow it, or Developer Mode is off. Details in Settings › Appearance" : "Optional. Needs Developer Mode and Windows permission"}</div></div>
+          <div style={{ flex: 1 }}><div>Show Windows notifications at top right</div><div className="t12 l3 b4">{blocked ? "Windows didn't allow it, or it isn't available on this PC. Details in Settings › Appearance" : "Optional. They stay on this PC and are never sent anywhere"}</div></div>
           <Switch on={!!mirror?.enabled} label="Show Windows notifications at top right" onChange={(v) => bridge.call(v ? "mirror_enable" : "mirror_disable").then(setMirror).catch(() => undefined)} />
         </div>
         <div className="row">
@@ -91,5 +91,5 @@ export function SetupWizard({ onDone, startStep = 0 }: { onDone: () => void; /**
 
 /** Setup card hanging below the strip (centered, same size as the settings card). Shell drives it with `open`. */
 export function SetupPanel({ open, onClose, startStep }: { open: boolean; onClose: () => void; startStep?: number }) {
-  return <Panel side="center" width={600} label="Setup" dataKind="setup" open={open} onClose={onClose}><SetupWizard onDone={onClose} startStep={startStep} /></Panel>;
+  return <Panel side="center" width={600} label="Setup" dataKind="setup" open={open} onClose={() => { markSetup(); onClose(); }}><SetupWizard onDone={onClose} startStep={startStep} /></Panel>;
 }

@@ -1,9 +1,13 @@
-//! The Windows notification mirror (Wave 6, owner decisions 3, 14, 17):
-//! optional, off by default, only for owners with Developer Mode on. Other apps' toasts (WhatsApp, Teams…) are read
-//! with `UserNotificationListener`, which needs package identity: a sparse package registered by the owner
-//! (`crates/notch-app/identity/`). Here: whether it can be on and why not, the poll diff, the mapping to a card and the
-//! in-memory list. Nothing in this file (or in `notch-win/src/notifications.rs`, `crates/notch-app/src/mirror.rs`) writes
-//! a file or a log line: notification bodies live in memory only (a test below checks the sources).
+//! The Windows notification mirror (Wave 6, owner decisions 3, 14, 17): optional, off by default. Other apps' toasts
+//! (WhatsApp, Teams, the Claude desktop app…) come from one of two sources:
+//! - `UserNotificationListener`, when Notch runs with package identity (the sparse package in
+//!   `crates/notch-app/identity/`, which needs Developer Mode) and Windows said yes;
+//! - otherwise, with no setup, this user's own notification history database, read-only
+//!   (`notch-win/src/wpn.rs`; payload parsing: `toast_texts`).
+//!
+//! Here: whether it can be on and why not, the poll diff, the mapping to a card and the in-memory list. Nothing in
+//! this file (or in `notch-win/src/notifications.rs`, `notch-win/src/wpn.rs`, `crates/notch-app/src/mirror.rs`)
+//! writes a file or a log line: notification bodies live in memory only (a test below checks the sources).
 //!
 
 use std::collections::HashSet;
@@ -25,16 +29,16 @@ pub const MAX_ITEMS: usize = 20;
 /// A wake-up from sleep can deliver a pile of toasts in one poll; only this many of the latest turn into cards.
 pub const MAX_BURST: usize = 3;
 pub const POLL_MS: u64 = 1_000;
+/// The history database is polled more gently (a file read each time).
+pub const DB_POLL_MS: u64 = 2_500;
+/// At most this many of the newest toasts are read from the history database per poll.
+pub const MAX_ROWS: usize = 50;
+/// A bigger toast payload is skipped (real ones are a few KB).
+const MAX_PAYLOAD: usize = 64 * 1024;
 const MAX_TITLE: usize = 120;
 const MAX_BODY: usize = 300;
 const MAX_APP: usize = 64;
 const MAX_AUMID: usize = 512;
-
-/// `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock\AllowDevelopmentWithoutDevLicense`: a DWORD,
-/// non-zero = Developer Mode on. Missing (or not a DWORD) = off.
-pub fn dev_mode(value: Option<u32>) -> bool {
-    value.is_some_and(|v| v != 0)
-}
 
 /// Windows's answer to `UserNotificationListener::RequestAccessAsync` / `GetAccessStatus`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
@@ -44,31 +48,32 @@ pub enum Access {
     #[default]
     Unknown,
     Allowed,
-    /// Off in Settings › Privacy › Notifications (`ms-settings:privacy-notifications`).
+    /// Off in Settings › Privacy › Notifications (`ms-settings:privacy-notifications`). Also read without identity
+    /// (the switch for all apps), so the history database is not read either when the owner said no there.
     Denied,
     /// Windows has no answer yet (not asked, or the prompt was closed): the switch may ask again.
     Unspecified,
 }
 
-/// Why the mirror cannot be on, first one wins. The page words it (texts suggested in the Wave 6 report).
+/// Why the mirror cannot be on, first one wins. The page words it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Blocker {
-    /// Developer Mode is off (`ms-settings:developers`): an unsigned sparse package cannot be registered.
-    DevModeOff,
-    /// No package identity: the owner has not run `identity\register.ps1`, or has not restarted Notch since.
-    NotRegistered,
     /// Windows said no: Settings › Privacy › Notifications (`ms-settings:privacy-notifications`).
     AccessDenied,
+    /// No identity and the history database cannot be read (missing, or a Windows build with another layout).
+    Unavailable,
 }
 
 /// `mirror_state`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MirrorState {
-    pub dev_mode: bool,
+    /// Notch runs with the sparse package's identity (the optional listener route).
     pub registered: bool,
     pub access: Access,
+    /// The notification history database can be read (the no-setup route).
+    pub history: bool,
     /// The owner's switch (`Settings::mirror`).
     pub enabled: bool,
     /// Actually mirroring now.
@@ -76,18 +81,24 @@ pub struct MirrorState {
     pub blocker: Option<Blocker>,
 }
 
-pub fn state(dev_mode: bool, registered: bool, access: Access, enabled: bool) -> MirrorState {
-    let blocker = if !dev_mode {
-        Some(Blocker::DevModeOff)
-    } else if !registered {
-        Some(Blocker::NotRegistered)
-    } else if access == Access::Denied {
+impl MirrorState {
+    /// Read through `UserNotificationListener` (identity and Windows's yes); otherwise the history database.
+    pub fn listener(&self) -> bool {
+        self.registered && self.access == Access::Allowed
+    }
+}
+
+pub fn state(registered: bool, access: Access, history: bool, enabled: bool) -> MirrorState {
+    let blocker = if access == Access::Denied {
         Some(Blocker::AccessDenied)
+    } else if !registered && !history {
+        Some(Blocker::Unavailable)
     } else {
         None
     };
-    let on = enabled && blocker.is_none() && access == Access::Allowed;
-    MirrorState { dev_mode, registered, access, enabled, on, blocker }
+    // With identity but no answer yet and no database, the switch asks Windows again (`mirror_enable`).
+    let on = enabled && blocker.is_none() && (history || access == Access::Allowed);
+    MirrorState { registered, access, history, enabled, on, blocker }
 }
 
 /// One toast as Windows gave it.
@@ -252,9 +263,77 @@ fn clean(s: &str, limit: usize) -> Option<String> {
     crate::alerts::text(&Value::String(s.to_string()), limit)
 }
 
+/// The text lines (title first) of a toast payload from the history database: the `<text>` elements of the
+/// `ToastGeneric` binding (else the first binding), attribution lines skipped, entities decoded. The XML is from
+/// another app, so this only ever extracts plain text; empty when nothing matches. UTF-8 or UTF-16LE, with or without BOM.
+pub fn toast_texts(payload: &[u8]) -> Vec<String> {
+    use std::sync::LazyLock;
+    static BINDING: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"(?s)<binding\b([^>]*)>(.*?)</binding>").unwrap());
+    static TEXT: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"(?s)<text\b([^>]*)>(.*?)</text>").unwrap());
+    if payload.len() > MAX_PAYLOAD {
+        return vec![];
+    }
+    let xml = decode(payload);
+    let bindings: Vec<_> = BINDING.captures_iter(&xml).collect();
+    let Some(b) = bindings.iter().find(|c| c[1].contains("ToastGeneric")).or(bindings.first()) else { return vec![] };
+    TEXT.captures_iter(&b[2])
+        .filter(|c| !c[1].contains("attribution"))
+        .map(|c| unescape(&c[2]))
+        .filter(|t| !t.trim().is_empty())
+        .collect()
+}
+
+fn decode(b: &[u8]) -> String {
+    let b = b.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(b);
+    let utf16 = b.starts_with(b"\xFF\xFE") || (b.len() > 1 && b[1] == 0);
+    if !utf16 {
+        return String::from_utf8_lossy(b).into_owned();
+    }
+    let b = b.strip_prefix(b"\xFF\xFE").unwrap_or(b);
+    String::from_utf16_lossy(&b.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect::<Vec<_>>())
+}
+
+/// XML entities and CDATA to text. An unknown or broken entity stays as written.
+fn unescape(s: &str) -> String {
+    let s = s.trim();
+    if let Some(inner) = s.strip_prefix("<![CDATA[").and_then(|x| x.strip_suffix("]]>")) {
+        return inner.to_string();
+    }
+    let mut out = String::new();
+    let mut rest = s;
+    while let Some(i) = rest.find('&') {
+        out.push_str(&rest[..i]);
+        rest = &rest[i..];
+        let end = rest.find(';').filter(|&e| e <= 10);
+        let ch = end.and_then(|e| match &rest[1..e] {
+            "lt" => Some('<'),
+            "gt" => Some('>'),
+            "amp" => Some('&'),
+            "quot" => Some('"'),
+            "apos" => Some('\''),
+            n if n.starts_with("#x") || n.starts_with("#X") => u32::from_str_radix(&n[2..], 16).ok().and_then(char::from_u32),
+            n if n.starts_with('#') => n[1..].parse().ok().and_then(char::from_u32),
+            _ => None,
+        });
+        match (ch, end) {
+            (Some(c), Some(e)) => {
+                out.push(c);
+                rest = &rest[e + 1..];
+            }
+            _ => {
+                out.push('&');
+                rest = &rest[1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 /// An AUMID that is safe behind `shell:AppsFolder\`: Windows's own shapes (`Pkg_hash!App`, `{GUID}\x.exe`,
 /// `Vendor.App`), no control characters, quotes, drive colons or `..`.
-fn aumid_ok(a: &str) -> bool {
+pub fn aumid_ok(a: &str) -> bool {
     !a.is_empty()
         && a.len() <= MAX_AUMID
         && !a.chars().any(|c| c.is_control() || matches!(c, '"' | ':' | '/' | '<' | '>' | '|' | '*' | '?'))
@@ -423,20 +502,42 @@ mod tests {
     }
 
     #[test]
-    fn developer_mode_and_why_the_mirror_cannot_be_on() {
-        assert!(!dev_mode(None) && !dev_mode(Some(0)) && dev_mode(Some(1)) && dev_mode(Some(2)));
-        let s = state(false, true, Access::Allowed, true);
-        assert_eq!((s.blocker, s.on), (Some(Blocker::DevModeOff), false), "Developer Mode first, even if registered");
-        assert_eq!(state(true, false, Access::Unknown, true).blocker, Some(Blocker::NotRegistered));
-        assert_eq!(state(true, true, Access::Denied, true).blocker, Some(Blocker::AccessDenied));
-        let s = state(true, true, Access::Unspecified, false);
-        assert_eq!((s.blocker, s.on), (None, false), "no answer yet is not a no");
-        let s = state(true, true, Access::Unknown, false);
-        assert_eq!((s.blocker, s.on), (None, false), "not asked yet: the switch can be turned on");
-        assert!(!state(true, true, Access::Allowed, false).on, "off by default: the owner's switch");
-        assert!(state(true, true, Access::Allowed, true).on);
-        let json = serde_json::to_value(state(false, false, Access::Unknown, false)).unwrap();
-        assert_eq!((json["devMode"].as_bool(), json["blocker"].as_str()), (Some(false), Some("dev_mode_off")));
+    fn why_the_mirror_cannot_be_on_and_which_source_reads() {
+        let s = state(false, Access::Unknown, true, true);
+        assert_eq!((s.blocker, s.on, s.listener()), (None, true, false), "no setup: the history database");
+        let s = state(true, Access::Allowed, false, true);
+        assert_eq!((s.blocker, s.on, s.listener()), (None, true, true), "identity and Windows's yes: the listener");
+        assert!(state(true, Access::Allowed, true, true).listener(), "the listener stays first when both work");
+        let s = state(true, Access::Unspecified, true, true);
+        assert_eq!((s.on, s.listener()), (true, false), "no answer yet: the database meanwhile");
+        let s = state(true, Access::Unknown, false, true);
+        assert_eq!((s.blocker, s.on), (None, false), "identity, not asked, no database: the switch may still ask");
+        let s = state(false, Access::Denied, true, true);
+        assert_eq!((s.blocker, s.on), (Some(Blocker::AccessDenied), false), "a Windows no also stops the database");
+        assert_eq!(state(false, Access::Unknown, false, true).blocker, Some(Blocker::Unavailable));
+        assert!(!state(false, Access::Unknown, true, false).on, "off by default: the owner's switch");
+        let json = serde_json::to_value(state(false, Access::Unknown, false, false)).unwrap();
+        assert_eq!((json["history"].as_bool(), json["blocker"].as_str()), (Some(false), Some("unavailable")));
+    }
+
+    #[test]
+    fn toast_payload_xml_gives_title_and_body_lines() {
+        let xml = r#"<toast launch="x"><visual><binding template="ToastGeneric"><text>Claude</text><text hint-maxLines="2">Tom &amp; Jerry &lt;3 &#233;&#x1F600; &bogus; a&b</text><text placement="attribution">via Web</text><image src="file:///c.png"/></binding></visual><actions><action content="Reply"/></actions></toast>"#;
+        assert_eq!(toast_texts(xml.as_bytes()), ["Claude", "Tom & Jerry <3 é😀 &bogus; a&b"]);
+        let legacy = r#"<toast><visual><binding template="ToastText02"><text id="1">Hi</text><text id="2"><![CDATA[x < y]]></text><text id="3"> </text></binding></visual></toast>"#;
+        assert_eq!(toast_texts(legacy.as_bytes()), ["Hi", "x < y"], "legacy template, CDATA, blank skipped");
+        let two = r#"<toast><visual><binding template="ToastImageAndText01"><text>old</text></binding><binding template="ToastGeneric"><text>new</text></binding></visual></toast>"#;
+        assert_eq!(toast_texts(two.as_bytes()), ["new"], "ToastGeneric wins");
+        let utf16: Vec<u8> = [0xFEFF_u16].into_iter().chain("<toast><visual><binding template=\"ToastGeneric\"><text>Ğü</text></binding></visual></toast>".encode_utf16()).flat_map(u16::to_le_bytes).collect();
+        assert_eq!(toast_texts(&utf16), ["Ğü"]);
+        assert_eq!(toast_texts(b"\xEF\xBB\xBF<toast><visual><binding template='ToastGeneric'><text>bom</text></binding></visual></toast>"), ["bom"]);
+        assert!(toast_texts(&[b' '; MAX_PAYLOAD + 1]).is_empty(), "oversized payload skipped");
+        for bad in [&b""[..], b"<tile/>", b"not xml", b"<binding template='ToastGeneric'><text>open", b"\xFF\xFE\x00"] {
+            assert!(toast_texts(bad).is_empty());
+        }
+        let raw = RawToast { id: 1, app: "Claude".into(), aumid: "Claude_pzs8sxrjxfjjc!Claude".into(), texts: toast_texts(xml.as_bytes()) };
+        let n = Notice::from_raw(&raw, String::new(), 0).unwrap();
+        assert_eq!((n.app.as_str(), n.title.as_str(), n.can_open), ("Claude", "Claude", true), "same card as any other app");
     }
 
     #[test]
@@ -618,9 +719,12 @@ mod tests {
             ["fn ", "save"].concat(),
             ["fn ", "load"].concat(),
         ];
-        for file in
-            ["crates/notch-core/src/mirror.rs", "crates/notch-win/src/notifications.rs", "crates/notch-app/src/mirror.rs"]
-        {
+        for file in [
+            "crates/notch-core/src/mirror.rs",
+            "crates/notch-win/src/notifications.rs",
+            "crates/notch-win/src/wpn.rs",
+            "crates/notch-app/src/mirror.rs",
+        ] {
             let src = std::fs::read_to_string(root.join(file)).unwrap_or_else(|_| panic!("{file} missing"));
             let code = src.split("#[cfg(test)]").next().unwrap();
             for b in &banned {

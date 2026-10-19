@@ -14,7 +14,7 @@
 
 <p>
   <a href="https://github.com/isDionn/peeka/releases/latest/download/Peeka-setup.exe"><b>Download for Windows</b></a>
-  <br><sub>v0.3.3 · ~3.7 MB · Windows 10/11 · <a href="#download">other downloads and SmartScreen note</a></sub>
+  <br><sub>v0.3.4 · ~3.7 MB · Windows 10/11 · <a href="#download">other downloads and SmartScreen note</a></sub>
 </p>
 
 <img src="docs/images/demo.gif" alt="Peeka in action: the island grows out of the strip, then a second task moves into the side bubble" width="100%">
@@ -70,6 +70,7 @@ It runs locally, sends nothing anywhere, and other programs can add their own ca
 - 🙈 **Lock and presentation modes.** Peeka locks when Windows locks, on demand, or when a plugin asks (a plugin can never unlock). While locked, or while Windows is in presentation mode, the strip and bubble show generic labels instead of content, password rows are hidden, and nothing is sent to plugins.
 - 🌫️ **Passwords are blurred.** Password rows in the clipboard stay blurred until you hover or focus them; the real text is not in the page until then and disappears as soon as you leave.
 - ⏲️ **One-time codes clean up after themselves.** A code copied from a notification is cleared from the clipboard after 60 seconds, unless you have copied something else since.
+- 🔔 **Notification mirror is read-only and off by default.** When you turn it on, Peeka reads your own Windows notification history (read-only, never written, no copy), keeps the cards in memory only, and does not start while Windows' notification access switch is off.
 - 🎙️ **Mic and camera indicator.** A dot shows which apps are using the microphone or camera, read from Windows' own consent store.
 - 📡 **Local listeners only.** A per-user named pipe for plugins, and an optional alert API on `127.0.0.1` that is off by default and needs a per-install key.
 - 📁 Your data (settings, clipboard vault, plugin tokens stored as SHA-256 only) lives in `%LOCALAPPDATA%\notch`.

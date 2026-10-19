@@ -12,7 +12,7 @@ import { useLayoutEffect, useState } from "react";
 export const SAFE_ICON = /^data:image\/(png|svg\+xml)[;,]/;
 
 /** Monochrome app icon: the data URL is used as an alpha mask painted in the text color (§0i item 7). */
-export function AppIcon({ src, color, size }: { src: string; /** Color icon (data URL); used only while Settings › Appearance › Color app icons is on (html[data-color]). */ color?: string | null; size?: number }) {
+export function AppIcon({ src, color, size }: { src: string; /** Color icon (data URL), drawn instead of the mask whenever given: Rust sends it while Settings › Appearance › Color app icons is on, or when the mask would be a blank shape. */ color?: string | null; size?: number }) {
   const style = { WebkitMaskImage: `url("${src}")`, maskImage: `url("${src}")`, ...(color && /^data:image\/(png|svg\+xml)[;,]/.test(color) ? { "--icon-color": `url("${color}")` } : null), ...(size ? { width: size, height: size } : null) } as CSSProperties;
   return <span className="appIcon mono" style={style} aria-hidden="true" />;
 }

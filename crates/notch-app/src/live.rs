@@ -3,7 +3,7 @@
 //! own thread in `notch-win`; this file only moves their results into the state and out as events.
 
 use std::net::{TcpListener, TcpStream};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
 use notch_core::alerts::{Alert, AlertsView, Attention};
@@ -163,4 +163,41 @@ pub fn http_stop(app: &AppHandle) {
     if n.alerts.lock().clear(Some("api")) {
         emit_alerts(app);
     }
+}
+
+/// The poller that runs now; a start or stop retires the one before.
+static METER: AtomicU64 = AtomicU64::new(0);
+
+/// `audio_level`: the default speaker's peak [left, right] (0..1, linear) about 30 times a second while the music bars
+/// are shown (`on`), only while music plays and Peeka is neither locked, presenting nor shared (the bars then fall
+/// back to their calm loop). Only the level is read, never the sound. Demo mode never starts it (the music is fake).
+pub fn audio_level(app: &AppHandle, on: bool) {
+    let mine = METER.fetch_add(1, Ordering::SeqCst) + 1;
+    if !on || crate::app::demo() {
+        return;
+    }
+    let app = app.clone();
+    std::thread::spawn(move || {
+        notch_win::com();
+        let mut meter = None;
+        let mut tick = 0u32;
+        while METER.load(Ordering::SeqCst) == mine {
+            let playing = app.try_state::<Notch>().is_some_and(|n| n.media.lock().as_ref().is_some_and(|m| m.playing));
+            // hide_passwords = locked, presentation/busy, or screen shared: the same "private" gate
+            if !playing || crate::clip_history::hide_passwords(&app) {
+                (meter, tick) = (None, 0);
+                std::thread::sleep(std::time::Duration::from_millis(250));
+                continue;
+            }
+            // re-opened every 2 s, so a switch of the default speaker is followed
+            if tick % 60 == 0 {
+                meter = notch_win::audio::meter();
+            }
+            tick = tick.wrapping_add(1);
+            if let Some(l) = meter.as_ref().and_then(notch_win::audio::peaks) {
+                let _ = app.emit("audio_level", l);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(33));
+        }
+    });
 }

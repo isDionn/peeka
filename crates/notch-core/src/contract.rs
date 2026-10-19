@@ -42,6 +42,9 @@ pub const COMMANDS: &[&str] = &[
     "open_alert",
     "sysmon_start",
     "sysmon_stop",
+    // The music bars follow the speaker's level while shown
+    "audio_level_start",
+    "audio_level_stop",
     // Wave 3 plugins (names and shapes: ui/src/plugin-api.ts)
     "plugin_surfaces",
     "plugin_action",
@@ -104,6 +107,7 @@ pub const COMMANDS: &[&str] = &[
     // Fidelity 3 (shapes: ui/src/fidelity-api.ts, fidelity-cards-api.ts, bridge.ts FIDELITY BLOCK)
     "quit_app",
     "open_start_menu",
+    "open_calendar",
     "island_hide",
     "island_hidden",
     "tray_icons",
@@ -146,6 +150,11 @@ pub const COMMANDS: &[&str] = &[
     "recap_get",
     "recap_ack",
     "recap_copy_image",
+    // The Modules card's Claude chat through the owner's Claude Code CLI (`notch_core::claude_chat`)
+    "claude_chat_state",
+    "claude_chat_send",
+    "claude_chat_stop",
+    "claude_chat_new",
 ];
 
 /// Every event Rust emits to the pages. Payloads: see the header of `crates/notch-app/src/app.rs`.
@@ -160,6 +169,7 @@ pub const EVENTS: &[&str] = &[
     "media_changed",
     "alerts_changed",
     "sysmon_tick",
+    "audio_level",
     "volume_osd",
     "plugins_changed",
     "consent_changed",
@@ -190,6 +200,8 @@ pub const EVENTS: &[&str] = &[
     "cc_edit",
     "notch://outside_press",
     "notch://island_leave",
+    "claude_chat_delta",
+    "claude_chat_done",
 ];
 
 fn ts_list(out: &mut String, name: &str, items: &[&str]) {

@@ -11,8 +11,6 @@ const label = (t: TrayIconX) => t.name + (t.badge ? `, ${t.badge} new` : "");
 
 /** The last list, so a reopened panel paints its cells at once instead of growing in after the call. */
 let last: TrayIconX[] | null = null;
-/** Rust's icons are the exe's own PNG; an SVG (preview glyphs) stays a monochrome template icon. */
-const PNG = /^data:image\/png[;,]/;
 
 /** Strip icon 17, hidden-icons grid (list role) 18: the notch.css app icon scale. No icon: one neutral glyph, same box. */
 function TrayIconView({ t, size, color }: { t: TrayIconX; size: number; color?: string | null }) {
@@ -46,7 +44,7 @@ export function TrayList({ monitor, onClose }: { monitor: string; onClose: () =>
       {list && list.length > 0 && (
         <div className="trayIconGrid" role="group" aria-label="Hidden icons" ref={grid}>
           {list.map((t, i) => (
-            <button key={t.id} title={t.name} aria-label={label(t)} data-autofocus={i === 0 ? "" : undefined} onClick={() => open(t, onClose)}><TrayIconView t={t} size={18} color={PNG.test(t.icon) ? t.icon : t.colorIcon} /></button>
+            <button key={t.id} title={t.name} aria-label={label(t)} data-autofocus={i === 0 ? "" : undefined} onClick={() => open(t, onClose)}><TrayIconView t={t} size={18} color={t.colorIcon} /></button>
           ))}
         </div>
       )}

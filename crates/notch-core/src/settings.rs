@@ -25,6 +25,9 @@ pub enum HideMode {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
+    /// File format version; a file without one is 0 and `load` migrates it (see `VERSION`).
+    #[serde(default)]
+    pub version: u32,
     #[serde(default)]
     pub taskbar_hide: HideMode,
     #[serde(default)]
@@ -72,6 +75,9 @@ pub struct Settings {
     pub watch_downloads: bool,
 }
 
+/// 1: colour icons became the default; a version-0 `"color_icons": false` was the old default, not a choice.
+pub const VERSION: u32 = 1;
+
 fn sixty() -> u32 {
     60
 }
@@ -93,6 +99,7 @@ fn yes() -> bool {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            version: VERSION,
             taskbar_hide: HideMode::Full,
             pins: vec![],
             shortcuts: shortcuts::defaults(),
@@ -301,12 +308,22 @@ pub fn settings_path(data_dir: &Path) -> PathBuf {
 
 /// Missing = defaults. Unreadable = defaults too, and the bad file is kept beside it (`settings.json.bad`) so the
 /// next save cannot destroy what the owner may still want back.
+/// An older file is migrated once and written back.
 pub fn load(path: &Path) -> Settings {
     match std::fs::read(path) {
-        Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_else(|_| {
-            let _ = std::fs::rename(path, path.with_extension("json.bad"));
-            Settings::default()
-        }),
+        Ok(bytes) => match serde_json::from_slice::<Settings>(&bytes) {
+            Ok(mut s) if s.version < VERSION => {
+                s.color_icons = true;
+                s.version = VERSION;
+                let _ = save(path, &s);
+                s
+            }
+            Ok(s) => s,
+            Err(_) => {
+                let _ = std::fs::rename(path, path.with_extension("json.bad"));
+                Settings::default()
+            }
+        },
         Err(_) => Settings::default(),
     }
 }
@@ -409,8 +426,24 @@ mod tests {
         assert!(s.capture_volume_keys && !s.alerts_api, "an old file gets keys on, the HTTP adapter off");
         assert!(s.autostart, "an old file starts with Windows too");
         assert!(s.watch_downloads, "an old file gets the download watch on (names only)");
+        assert!(s.color_icons && s.version == VERSION, "an old file gets colour icons");
         tmp.write("settings.json", b"{nope");
         assert_eq!(load(&path), Settings::default());
         assert!(path.with_extension("json.bad").exists());
+    }
+
+    #[test]
+    fn colour_icons_migrate_once_and_a_later_choice_sticks() {
+        let tmp = Tmp::new();
+        let path = tmp.write("settings.json", br#"{"color_icons":false,"dnd":true}"#);
+        let s = load(&path);
+        assert!(s.color_icons && s.dnd, "the old default false is not a choice");
+        let on_disk: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!((on_disk["version"].as_u64(), on_disk["color_icons"].as_bool()), (Some(1), Some(true)), "written back once");
+        let p: UiPatch = serde_json::from_str(r#"{"colorIcons":false}"#).unwrap();
+        save(&path, &apply_patch(&s, p, |_: &str| None, |_: &str| None).unwrap()).unwrap();
+        assert!(!load(&path).color_icons, "the user's later off is kept");
+        tmp.write("settings.json", br#"{"version":1,"color_icons":false}"#);
+        assert!(!load(&path).color_icons, "a versioned false is a choice");
     }
 }

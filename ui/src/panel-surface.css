@@ -24,11 +24,9 @@
 .trayGrid .trayIconGrid button{border-radius:8px}
 
 /* H-2: in the setup wizard, Back / Next stay put when the step changes */
-.setup .setupStep{min-height:152px;display:flex;flex-direction:column;gap:12px}
+.setup .setupStep{display:flex;flex-direction:column;gap:12px}
 .setup .buttons .btn{min-width:84px;justify-content:center}
 
-/* K-3: the panel's bottom edge doesn't move when Settings pages change (Modules is the longest page) */
-.body .settings{min-height:566px}
 /* T-2 / R-4 / Y-2: single selected fill, 12 gap in the Plugins action row, small button line height t12 */
 .seg.segSmall .segb.on{background:rgba(255,255,255,.13)}
 .pluginAction{gap:12px}

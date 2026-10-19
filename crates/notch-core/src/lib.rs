@@ -5,6 +5,7 @@ pub mod alerts;
 pub mod apps;
 pub mod capture;
 pub mod clickthrough;
+pub mod claude_chat;
 pub mod clip;
 pub mod cmd;
 pub mod contract;

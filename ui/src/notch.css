@@ -90,6 +90,8 @@ body[data-battery="0"] .batteryGroup{display:none}
 .seen{display:flex;gap:2px;align-items:center;height:12px}
 .seen i{width:2.5px;height:100%;border-radius:2px;background:var(--l1);transform-origin:50% 50%;animation:hop 1s ease-in-out infinite}
 .seen i:nth-child(2){animation-delay:-.32s;animation-duration:.8s}.seen i:nth-child(3){animation-delay:-.6s;animation-duration:1.15s}.seen i:nth-child(4){animation-delay:-.15s;animation-duration:.9s}
+.seen.live i{animation:none} /* Bars.tsx drives scaleY from the speaker level */
+.seen.still i{animation:none} /* hidden island / fullscreen app: the bars hold still */
 @keyframes hop{0%,100%{transform:scaleY(.3)}50%{transform:scaleY(1)}}
 .wave{display:flex;gap:2px;align-items:center;height:14px}
 .wave i{width:2px;height:100%;border-radius:2px;background:var(--phase,var(--mint));animation:hop .9s ease-in-out infinite;transition:background-color .3s}
@@ -431,7 +433,7 @@ body[data-color="1"] :is(.tabA,.pin,.appCell,.favTray .key):is(:hover,.hovered) 
 .segDivider{width:1px;height:16px;background:var(--divider);margin:0 4px;align-self:center}
 .segSmall .segb{height:26px}
 .handle{color:var(--l3);cursor:grab;padding:4px;box-sizing:content-box}
-.settings{display:grid;grid-template-columns:168px 1fr;gap:16px;min-height:360px}
+.settings{display:grid;grid-template-columns:168px 1fr;gap:16px}
 .settingsNav{display:flex;flex-direction:column;gap:2px}
 .settingsItem{display:flex;align-items:center;gap:8px;height:32px;padding:0 10px;border-radius:9px;corner-shape:squircle;color:var(--l2);text-align:left}
 .settingsItem svg.lucide{width:15px;height:15px}

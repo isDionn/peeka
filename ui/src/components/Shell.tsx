@@ -90,6 +90,10 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
   useEffect(() => { if (primary && welcome === false && !setupAsked.current && (inTauri || init?.setup) && !setupDone()) { setupAsked.current = true; setPanel((p) => p ?? "setup"); } }, [primary, init?.setup, welcome]);
   // the island window shows the short label in the strip center ("say it once"): tell it which panel is open
   panelRef.current = panel;
+  // one mascot on screen: the island's strip ghost steps aside only while a panel really shows its own ghost (the empty Notifications board)
+  const [notifEmpty, setNotifEmpty] = useState(false);
+  const ghost = !!monitor?.primary && panel === "notif" && notifEmpty;
+  useEffect(() => { if (monitor?.primary) sendX({ t: "ghost", on: ghost }); }, [ghost, monitor?.primary]);
   useEffect(() => { if (monitor?.primary) sendX({ t: "panel", panel: panel === "search" ? "search" : SETTINGS_PAGES.includes(panel) ? "settings" : panel === "status" || panel === "start" || panel === "cleanup" || panel === "notif" ? panel : null }); if (monitor?.primary && panel) sendX({ t: "panel-open", panel }); }, [panel, monitor?.primary]);
   useEffect(() => {
     if (panel !== "tray") return;
@@ -165,7 +169,7 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
         </Panel>
       )}
       <Panel side="right" width={400} label="Notifications" dataKind="notif" open={panel === "notif"} onClose={close}>
-        <NotificationList onReview={(a) => { setReview(a); setPanel("cleanup"); }} onClose={close} />
+        <NotificationList onReview={(a) => { setReview(a); setPanel("cleanup"); }} onClose={close} onEmpty={setNotifEmpty} />
       </Panel>
       <Panel side="center" width={520} amb="#FF9F0A" label="Cleanup approval" dataKind="cleanup" open={panel === "cleanup" && !!review} onClose={close}>
         {review && <ReviewCard alert={review} onClose={close} />}

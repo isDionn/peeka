@@ -1,18 +1,25 @@
 import type { Rect } from "../bridge";
 
-/** Rectangles of the page's `[data-hit]` elements (CSS pixels). Empty and invisible ones are skipped. */
-const providers = new Set<() => { x: number; y: number; width: number; height: number } | null>();
-/** Clickable rectangle of an element that overflows its box (the strip mascot's body); the returned function unregisters it. */
-export function addHitProvider(f: () => { x: number; y: number; width: number; height: number } | null) { providers.add(f); return () => { providers.delete(f); }; }
+const rectOf = (r: DOMRect | { left: number; top: number; width: number; height: number }): Rect => ({ x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) });
 
+/** Rectangles of the page's `[data-hit]` (clickable) and `[data-paint]` (drawn, clicks pass through) elements, CSS pixels; empty and invisible ones are skipped.
+ *  Every ghost is in too (a fading one too, as paint only), wherever it sits: its drawn box overflows its parents (the 40 px one hangs below the strip) and its effects move past that
+ *  (sway, squash, hearts, sparks), so the window region would cut it. Paint = the drawn box plus half its width on every side; hit = the hanging body (`.mascot-hit`). */
 export function collectHitRects(root: ParentNode = document): Rect[] {
   const out: Rect[] = [];
-  providers.forEach((f) => { const r = f(); if (r && r.width >= 1 && r.height >= 1) out.push({ x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }); });
+  root.querySelectorAll<HTMLElement>(".mascot").forEach((m) => {
+    if (getComputedStyle(m).visibility === "hidden") return; // inside a closed strip panel: no paint, no dead click zone
+    const g = (m.querySelector<HTMLElement>(".g") ?? m).getBoundingClientRect();
+    const pad = g.width / 2;
+    if (g.width >= 1 && g.height >= 1) out.push({ ...rectOf({ left: g.left - pad, top: g.top - pad, width: g.width + 2 * pad, height: g.height + 2 * pad }), paint: true });
+    const hit = m.matches(".out") || m.closest("[data-leaving]") ? null : m.querySelector<HTMLElement>(".mascot-hit");
+    const h = hit?.getBoundingClientRect();
+    if (h && h.width >= 1 && h.height >= 1) out.push(rectOf(h));
+  });
   root.querySelectorAll<HTMLElement>("[data-hit], [data-paint]").forEach((el) => {
     const r = el.getBoundingClientRect();
     if (r.width < 1 || r.height < 1 || getComputedStyle(el).visibility === "hidden") return;
-    const rect: Rect = { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
-    out.push(el.hasAttribute("data-hit") ? rect : { ...rect, paint: true });
+    out.push(el.hasAttribute("data-hit") ? rectOf(r) : { ...rectOf(r), paint: true });
   });
   return out;
 }

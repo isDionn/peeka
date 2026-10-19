@@ -22,6 +22,7 @@ pub mod keyboard;
 pub mod media;
 pub mod monitors;
 pub mod notifications;
+pub mod wpn;
 pub mod ocr;
 pub mod outline;
 pub mod picker;
@@ -66,16 +67,33 @@ pub fn system_exe(exe: &str) -> Option<String> {
 /// Windows's own Start menu: one Windows key press (down, up), as if typed.
 #[cfg(windows)]
 pub fn press_windows_key() -> bool {
+    win_chord(None)
+}
+
+/// Windows's notification center with its calendar: Win+N (Microsoft's Windows 11 shortcut list). It opens even
+/// while Peeka hides the taskbar; Win+Alt+D (the taskbar's own date flyout) does not (VM check, t7-02/t7-03).
+#[cfg(windows)]
+pub fn open_calendar_flyout() -> bool {
+    win_chord(Some(windows::Win32::UI::Input::KeyboardAndMouse::VK_N))
+}
+
+/// The Windows key, optionally with one more key held, pressed and released as if typed.
+#[cfg(windows)]
+fn win_chord(with: Option<windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY>) -> bool {
     use windows::Win32::UI::Input::KeyboardAndMouse::{
-        SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, VK_LWIN,
+        SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, VIRTUAL_KEY, VK_LWIN,
     };
-    let key = |flags: KEYBD_EVENT_FLAGS| INPUT {
+    let key = |vk: VIRTUAL_KEY, flags: KEYBD_EVENT_FLAGS| INPUT {
         r#type: INPUT_KEYBOARD,
-        Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: VK_LWIN, dwFlags: flags, ..Default::default() } },
+        Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: vk, dwFlags: flags, ..Default::default() } },
     };
-    let inputs = [key(KEYBD_EVENT_FLAGS(0)), key(KEYEVENTF_KEYUP)];
-    // SAFETY: two well-formed keyboard inputs and their size.
-    unsafe { SendInput(&inputs, std::mem::size_of::<INPUT>() as i32) == 2 }
+    let (down, up) = (KEYBD_EVENT_FLAGS(0), KEYEVENTF_KEYUP);
+    let inputs: Vec<INPUT> = match with {
+        Some(vk) => vec![key(VK_LWIN, down), key(vk, down), key(vk, up), key(VK_LWIN, up)],
+        None => vec![key(VK_LWIN, down), key(VK_LWIN, up)],
+    };
+    // SAFETY: well-formed keyboard inputs and their size.
+    unsafe { SendInput(&inputs, std::mem::size_of::<INPUT>() as i32) as usize == inputs.len() }
 }
 
 /// COM (and WinRT) for this thread, multi-threaded; "already initialised" in either apartment is fine.

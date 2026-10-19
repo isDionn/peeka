@@ -51,7 +51,7 @@ describe("Y1: with a peek showing, the island opens to Modules", () => {
 });
 
 describe("Y2: every card has a visible way out", () => {
-  it("Ã— closes the card (no keyboard focus needed)", async () => {
+  it("× closes the card (no keyboard focus needed)", async () => {
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -134,10 +134,10 @@ describe("Y4: the tab bar never shifts and is the same on every tab", () => {
     expect(new Set(pages.map((p) => modulesKw(p, 1920)))).toEqual(new Set([620]));
     expect(modulesKw("general", 1920)).toBeGreaterThan(620);
   });
-  it("the corner group has a fixed width (464) on the island center line, and Ã— is always at the same screen point (independent of card width)", () => {
-    expect(css).toMatch(/\.modTop \{[^}]*justify-content: flex-end;[^}]*width: 464px/);
-    expect(css).toMatch(/\.cardBar \{[^}]*width: 464px/); // Modules and the card bar share the same corner group (R1-1)
-    expect(css).toMatch(/\.modTop \.seg \{[^}]*flex: none;[^}]*max-width: 388px/);
+  it("the corner group has a fixed width (498) on the island center line, and × is always at the same screen point (independent of card width)", () => {
+    expect(css).toMatch(/\.modTop \{[^}]*justify-content: flex-end;[^}]*width: 498px/);
+    expect(css).toMatch(/\.cardBar \{[^}]*width: 498px/); // Modules and the card bar share the same corner group (R1-1)
+    expect(css).toMatch(/\.modTop \.seg \{[^}]*flex: none;[^}]*max-width: 422px/);
     expect(css).not.toMatch(/\.modUst > \.mini \{[^}]*margin-left: auto/);
   });
   it("on every tab the button boxes, icon size and button count are the same; the bar is the same element", async () => {
@@ -272,5 +272,19 @@ describe("System history", () => {
     await act(async () => { await new Promise((r) => setTimeout(r, 1200)); });
     expect(document.querySelectorAll(".spark i").length).toBe(16);
     expect(document.querySelectorAll(".spark i.empty").length).toBeLessThan(16);
+  });
+});
+
+describe("General home: the empty-state line fits", () => {
+  it("text and pills get equal columns, so \"Nothing needs you right now\" isn't cut next to the reserved ghost spot (VM v0.3.4)", () => {
+    expect(readFileSync("src/components/cards.css", "utf8")).toMatch(/\.genHome \{[^}]*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\);/);
+  });
+});
+
+describe("copy peek / Shelf handle: the hanging ghost stays whole", () => {
+  it("the island center holding the 40 px hanging ghost sits above the bump (.dangling, z 7) (VM v0.3.4)", () => {
+    const css = readFileSync("src/island.css", "utf8") + readFileSync("src/notch-extra.css", "utf8");
+    expect(css).toMatch(/\.dangling \{ z-index: 7; \}/);
+    expect(css).toMatch(/\.islandCenter:has\(\.mascot\[data-hang\]\) \{ z-index: 8; \}/);
   });
 });

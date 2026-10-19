@@ -22,7 +22,7 @@ export interface MonitorInfo {
   hz: number;
 }
 /** Monochrome icon: data URL (SVG or PNG). The UI paints it only as an alpha mask. */
-export interface AppRef { appId: string; name: string; icon: string; /** Wave 5: color icon; Rust sends it only while `colorIcons` is on. */ colorIcon?: string | null }
+export interface AppRef { appId: string; name: string; icon: string; /** Wave 5: color icon; Rust sends it while `colorIcons` is on, or when the mask would be a blank shape (never for a nearly black icon). */ colorIcon?: string | null }
 export interface WindowInfo extends AppRef { hwnd: number; title: string; active: boolean; monitor: string; /** Elevated (admin) window: Peeka can't close it, the menu suggests Task Manager. */ elevated?: boolean }
 export type PinnedApp = AppRef;
 /** On/off and what it's connected to. `name` (Wi-Fi network, Bluetooth device) isn't read yet: it comes as null and the UI shows "On". */
@@ -161,8 +161,9 @@ export interface InputTick {
 
 /* ---------- Wave 6: tray list, Windows notification mirror ---------- */
 export interface TrayIcon { id: string; name: string; exe: string; promoted: boolean; /** PNG data URL (alpha painted monochrome); "" = none. */ icon: string }
-export type MirrorBlocker = "dev_mode_off" | "not_registered" | "access_denied";
-export interface MirrorState { devMode: boolean; registered: boolean; access: string; enabled: boolean; on: boolean; blocker: MirrorBlocker | null }
+export type MirrorBlocker = "access_denied" | "unavailable";
+/** `registered` = the optional listener route (package identity); `history` = the no-setup route (Windows's notification history, read-only). */
+export interface MirrorState { registered: boolean; access: string; history: boolean; enabled: boolean; on: boolean; blocker: MirrorBlocker | null }
 /** Windows notification. Card only in the top right; no strip ripple (`ripple` always false); `tile` is an alpha mask, `tileMono` always true. */
 export interface Notice { id: string; app: string; title: string; body: string | null; tile: string; tileMono: boolean; ripple: boolean; openLabel: string; canOpen: boolean; at: number; /** The notification has a one-time verification code (show "Copy code"; Rust always sends this, old fakes don't). The code itself never reaches the page as a SEPARATE field; only `notif_copy_code` puts it on the clipboard. The notification mirror is off by default; while off there are no notifications, and so no codes. */ hasCode?: boolean }
 /** `quiet`: do not disturb / fullscreen / presentation: no card opens by itself. */
@@ -180,7 +181,7 @@ export interface BridgeState { installed: boolean; healthy: boolean; lastEventAg
 export interface AgentBridge extends BridgeState { id: string; name: string; file: string; present: boolean }
 /** Permission history row (newest first): who got or gave up which scope, and when. `at` is Unix ms. */
 export interface PermissionEvent { at: number; plugin: string; scope: string; granted: boolean }
-/** `open_tray` result + color icon (while `colorIcons` is on). Rust gives NO badge count: without `badge` no badge is drawn. */
+/** `open_tray` result + color icon (same rule as `AppRef.colorIcon`). Rust gives NO badge count: without `badge` no badge is drawn. */
 export interface TrayIconX extends TrayIcon { badge?: number; colorIcon?: string | null }
 /** `start`: ISO time (absent on all-day rows); `link`: https only on meeting hosts (Rust filters). Both absent on the old bridge. */
 export interface CalendarNext { detail: string | null; next: { time: string; title: string; source: string; start?: string; link?: string }[] }
@@ -243,6 +244,9 @@ export interface Commands {
   /** Starts when the system monitor card opens and stops when it closes; samples arrive via the `sysmon_tick` event. */
   sysmon_start: { args: void; ret: void };
   sysmon_stop: { args: void; ret: void };
+  /** The music bars are shown / gone: the speaker's level arrives via `audio_level` meanwhile (only while music plays, never locked or presenting). */
+  audio_level_start: { args: void; ret: void };
+  audio_level_stop: { args: void; ret: void };
   /** Manual taskbar mode (also clears the emergency shortcut's "off"). No button in the UI yet. */
   taskbar_set_mode: { args: { mode: "full" | "auto" | "off" }; ret: void };
   /* Wave 4: search, clipboard, lock */
@@ -318,6 +322,8 @@ export interface Commands {
   start_pins: { args: void; ret: AppRef[] };
   /** Open the Windows Start menu (Win key). */
   open_start_menu: { args: void; ret: void };
+  /** The strip clock: Windows's notification center and calendar (Win+N; it opens even with the taskbar hidden). */
+  open_calendar: { args: void; ret: void };
   /** "Quit app": sends close to all of that app's windows (never force-kills). */
   quit_app: { args: { appId: string }; ret: void };
   /** Hide the island for 1 hour (`on: true`) or bring it back. */
@@ -377,7 +383,18 @@ export interface Commands {
   composer_attach_file: { args: void; ret: Attached | null };
   /** Called on pointerdown on the mascot; resolves on release. null = no drag (a plain click), [] = cancelled (Esc, or released over no app window), else the chips for the window it was dropped on (already kept by Rust for the next send). */
   window_pick: { args: void; ret: Attached[] | null };
+  /** The Modules card's Claude chat (the owner's Claude Code CLI, no tools). No tokens spent: version and sign-in checks only. */
+  claude_chat_state: { args: void; ret: ClaudeChatState };
+  /** Sends `text` (trimmed, 1-8000 chars, else `invalid`); the reply streams as `claude_chat_delta`, then one `claude_chat_done`. `refused` while a reply runs, `missing` without Claude Code, `denied` while locked. */
+  claude_chat_send: { args: { text: string }; ret: void };
+  /** Kills the running reply (`claude_chat_done` with `stopped`); the conversation continues with the next message. */
+  claude_chat_stop: { args: void; ret: void };
+  /** A new conversation: stops a running reply and forgets the session. */
+  claude_chat_new: { args: void; ret: void };
 }
+export interface ClaudeChatState { available: boolean; version: string | null; signedIn: boolean; busy: boolean }
+/** `ok` false with `stopped` false carries the CLI's error text (sign-in, limits, timeout). */
+export interface ClaudeChatDone { ok: boolean; error: string | null; stopped: boolean }
 export type CommandName = keyof Commands;
 // Must match Rust's list (commands.generated.ts) exactly: tsc stops here if one is missing or extra. Plugin commands and
 // events (plugin-api.ts) are in Rust too (Wave 3); the check covers both.
@@ -403,6 +420,8 @@ export interface Events {
   media_changed: Media | null;
   alerts_changed: AlertsView;
   sysmon_tick: SysmonTick;
+  /** The default speaker's peak [left, right], 0..1 linear, about 30 a second (the level only, never the sound). */
+  audio_level: [number, number];
   volume_osd: VolumeOsd;
   /** Whether the strips are hidden because of fullscreen (Rust). */
   "notch://fullscreen": boolean;
@@ -452,6 +471,9 @@ export interface Events {
   cc_event: { agent?: string | null; kind: string; tool?: string | null; reason?: string | null; sid?: string | null };
   /** Peeka's own hook only: an Edit/Write inside the session folder. `file` is relative to it; `file`/`add`/`del` are null while locked or presenting (generic label only). The diff itself comes only from `cc_diff`. */
   cc_edit: CcEdit;
+  /** Claude chat: reply text as it streams. */
+  claude_chat_delta: { text: string };
+  claude_chat_done: ClaudeChatDone;
 }
 export type EventName = keyof Events;
 

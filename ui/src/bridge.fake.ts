@@ -1,5 +1,5 @@
 // Fake back end used outside Tauri: realistic data, in-memory state, the same event path. Used by the preview and tests.
-import type { AgentBridge, Attached, TrayIconX, CalendarNext, Alert, AssistantCounts, BridgeState, PermissionEvent, RecentItem, AlertsView, AllCommands, AllEvents, CallArgs, CommandName, Commands, ClipChange, ClipItem, ClipPlain, ComposerEvent, ConsentAnswer, LockState, MirrorState, MirrorView, Notice, TrayIcon, ShelfItem, TimerState, PrivacyState, RecapWeek, ConsentRequest, ModuleEntry, PluginCommands, PluginInfo, SurfacesView, Media, MonitorInfo, PinnedApp, SearchResult, Settings, Status, Audio, SysmonTick, VolumeOsd, WindowInfo } from "./bridge";
+import type { ClaudeChatDone, ClaudeChatState, AgentBridge, Attached, TrayIconX, CalendarNext, Alert, AssistantCounts, BridgeState, PermissionEvent, RecentItem, AlertsView, AllCommands, AllEvents, CallArgs, CommandName, Commands, ClipChange, ClipItem, ClipPlain, ComposerEvent, ConsentAnswer, LockState, MirrorState, MirrorView, Notice, TrayIcon, ShelfItem, TimerState, PrivacyState, RecapWeek, ConsentRequest, ModuleEntry, PluginCommands, PluginInfo, SurfacesView, Media, MonitorInfo, PinnedApp, SearchResult, Settings, Status, Audio, SysmonTick, VolumeOsd, WindowInfo } from "./bridge";
 import { APP_NAMES, iconOf } from "./fakeIcons";
 import { EMPTY_SURFACES, MODULES, PLUGINS } from "./plugin.fixtures";
 
@@ -34,8 +34,10 @@ const TRACKS = [
 
 type W4Names = "search_index_state" | "search_open" | "search_ask" | "clip_list" | "clip_copy" | "clip_pin" | "clip_delete" | "clip_clear" | "clip_reveal" | "clip_share" | "clip_edit" | "clip_drag" | "clip_visible" | "lock_state" | "lock_now" | "lock_release";
 type W5Names = "window_preview" | "share_open" | "shelf_list" | "shelf_ask" | "timer_get" | "timer_start" | "timer_control" | "privacy_get" | "tray_open" | "mirror_state" | "mirror_enable" | "mirror_disable" | "mirror_list" | "mirror_dismiss" | "mirror_open_app" | "mirror_ask";
-type W7Names = "recent_files" | "open_recent" | "start_pins" | "open_start_menu" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "agent_bridges" | "agent_bridge_install" | "agent_bridge_remove" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "window_pick" | "cc_focus_terminal" | "cc_diff" | "cc_diff_open" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus";
+type W7Names = "recent_files" | "open_recent" | "start_pins" | "open_start_menu" | "open_calendar" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "agent_bridges" | "agent_bridge_install" | "agent_bridge_remove" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "window_pick" | "cc_focus_terminal" | "cc_diff" | "cc_diff_open" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus";
 /** Peeka Phase C: clipboard, download and copy-code commands; Settings > About demo restart. */
+/** The Modules card's Claude chat. */
+type W9Names = "claude_chat_state" | "claude_chat_send" | "claude_chat_stop" | "claude_chat_new";
 type W8Names = "demo_restart" | "notif_copy_code" | "clip_open" | "clip_to_shelf" | "clip_preview" | "clip_ocr" | "download_open" | "download_show_in_folder";
 const svg = (inner: string) => "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${inner}</g></svg>`);
 const GLYPH = {
@@ -76,6 +78,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   let alerts: Alert[] = [];
   let sysmonTimer: ReturnType<typeof setInterval> | null = null;
   let sysmonRuns = 0;
+  let levelTimer: ReturnType<typeof setInterval> | null = null;
   let clips: ClipItem[] = [];
   let lock: LockState = { locked: false, reason: null };
   let hidden = false;
@@ -154,7 +157,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   const emit = <E extends keyof AllEvents>(e: E, p: AllEvents[E]) => listeners.get(e)?.forEach((f) => f(p as never));
   const pinned = (): PinnedApp[] => pins.map(ref);
   let nextHwnd = 100;
-  const handlers: { [K in Exclude<CommandName, W4Names | W5Names | W7Names | W8Names>]: (a: Commands[K]["args"]) => Commands[K]["ret"] } = {
+  const handlers: { [K in Exclude<CommandName, W4Names | W5Names | W7Names | W8Names | W9Names>]: (a: Commands[K]["args"]) => Commands[K]["ret"] } = {
     recap_get: () => (lock.locked ? null : structuredClone(recap)),
     recap_ack: () => { recap = null; },
     recap_copy_image: ({ png }) => { if (lock.locked) throw "denied"; log.push({ cmd: "recap_copy_image", args: { bytes: png.length } }); },
@@ -233,6 +236,16 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       tick(); sysmonTimer = setInterval(tick, 1000);
     },
     sysmon_stop: () => { if (sysmonTimer) clearInterval(sysmonTimer); sysmonTimer = null; },
+    // a synthetic beat (120 bpm, ~30 a second) while the fake music plays, so the preview's bars move
+    audio_level_start: () => {
+      if (levelTimer) return;
+      levelTimer = setInterval(() => {
+        if (!media?.playing || lock.locked) return;
+        const t = Date.now() / 1000, beat = Math.exp(-((t * 2) % 1) * 5), body = 0.25 + 0.15 * Math.sin(t * 1.7);
+        emit("audio_level", [Math.min(1, body + 0.6 * beat + Math.random() * 0.1), Math.min(1, body + 0.5 * beat + Math.random() * 0.1)]);
+      }, 33);
+    },
+    audio_level_stop: () => { if (levelTimer) clearInterval(levelTimer); levelTimer = null; },
     report_hit_rects: () => undefined,
     taskbar_set_mode: ({ mode }) => { settings = { ...settings, taskbarHide: mode }; emit("settings_changed", structuredClone(settings)); },
   };
@@ -306,7 +319,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   let shelf: ShelfItem[] = [];
   let timer: TimerState | null = null;
   let privacy: PrivacyState = { mic: [], camera: [], screen: false };
-  let mirror: MirrorState = { devMode: true, registered: true, access: "allowed", enabled: false, on: false, blocker: null };
+  let mirror: MirrorState = { registered: false, access: "unknown", history: true, enabled: false, on: false, blocker: null };
   let notices: Notice[] = [];
   let scanDenied = false;
   let picked: Attached[] | null = null;
@@ -315,8 +328,8 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   const mirrorEmit = () => emit("notifications_changed", mirrorView());
   const mirrorSet = (p: Partial<MirrorState>) => {
     const m = { ...mirror, ...p };
-    mirror = { ...m, blocker: !m.devMode ? "dev_mode_off" : !m.registered ? "not_registered" : m.access === "denied" ? "access_denied" : null };
-    mirror.on = mirror.enabled && !mirror.blocker;
+    mirror = { ...m, blocker: m.access === "denied" ? "access_denied" : !m.registered && !m.history ? "unavailable" : null };
+    mirror.on = mirror.enabled && !mirror.blocker && (m.history || m.access === "allowed");
     return { ...mirror };
   };
   const w5: { [K in W5Names]: (a: Commands[K]["args"]) => Commands[K]["ret"] | Promise<Commands[K]["ret"]> } = {
@@ -368,6 +381,35 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   /* Fidelity 3 (mirrors Rust `commands.rs`) */
   /** Preview/test: downloads reported by Rust (id -> name). */
   const downloads = new Map<string, string>();
+  // Claude chat: a streamed canned reply (word by word); `setClaudeChat` picks "not installed" or an error reply.
+  let chatState: ClaudeChatState = { available: true, version: "2.1.290", signedIn: true, busy: false };
+  let chatError: string | null = null;
+  let chatTimer: ReturnType<typeof setInterval> | null = null;
+  let chatHistory = 0;
+  const chatEnd = (d: ClaudeChatDone) => { if (chatTimer) clearInterval(chatTimer); chatTimer = null; chatState = { ...chatState, busy: false }; emit("claude_chat_done", d); };
+  const w9: { [K in W9Names]: (a: Commands[K]["args"]) => Commands[K]["ret"] } = {
+    claude_chat_state: () => ({ ...chatState }),
+    claude_chat_send: ({ text }) => {
+      if (lock.locked) throw "denied";
+      if (!chatState.available) throw "missing";
+      if (chatState.busy) throw "refused";
+      const t = text.trim();
+      if (!t || t.length > 8000) throw "invalid";
+      log.push({ cmd: "claude_chat_send", args: { text: t } });
+      chatState = { ...chatState, busy: true };
+      const words = (chatHistory++ === 0
+        ? "Hi! Happy to help. Ask me anything: a quick explanation, a draft to rewrite, or an idea to think through."
+        : "Sure. Here is a short answer to keep things moving, and I can go deeper on any part if you like.").split(/(?<= )/);
+      let i = 0;
+      chatTimer = setInterval(() => {
+        if (chatError) { chatEnd({ ok: false, error: chatError, stopped: false }); return; }
+        if (i < words.length) emit("claude_chat_delta", { text: words[i++] });
+        else chatEnd({ ok: true, error: null, stopped: false });
+      }, 40);
+    },
+    claude_chat_stop: () => { if (chatState.busy) chatEnd({ ok: false, error: null, stopped: true }); },
+    claude_chat_new: () => { if (chatState.busy) chatEnd({ ok: false, error: null, stopped: true }); chatHistory = 0; },
+  };
   const w8: { [K in W8Names]: (a: Commands[K]["args"]) => Commands[K]["ret"] } = {
     // The real app restarts; the fake just flips the mode so the preview shows the other state.
     demo_restart: (a) => { log.push({ cmd: "demo_restart", args: a }); settings = { ...settings, demo: a.on }; emit("settings_changed", structuredClone(settings)); },
@@ -387,6 +429,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     // Windows 11 doesn't expose Start pins: Rust always returns empty and the page falls back to its own list.
     start_pins: () => [],
     open_start_menu: () => { log.push({ cmd: "open_start_menu", args: null }); },
+    open_calendar: () => { log.push({ cmd: "open_calendar", args: null }); },
     quit_app: (a) => { log.push({ cmd: "quit_app", args: a }); },
     island_hide: ({ on }) => { log.push({ cmd: "island_hide", args: { on } }); hidden = on; emit("island_hidden_changed", on); },
     island_hidden: () => hidden,
@@ -429,7 +472,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
 
   const fake = {
     async call<K extends keyof AllCommands>(cmd: K, ...args: CallArgs<K>) {
-      const h = (cmd in w8 ? w8 : cmd in w7 ? w7 : cmd in plug ? plug : cmd in clip ? clip : cmd in w5 ? w5 : handlers) as Record<string, (a: unknown) => unknown>;
+      const h = (cmd in w9 ? w9 : cmd in w8 ? w8 : cmd in w7 ? w7 : cmd in plug ? plug : cmd in clip ? clip : cmd in w5 ? w5 : handlers) as Record<string, (a: unknown) => unknown>;
       return h[cmd]((args[0] ?? undefined) as never) as AllCommands[K]["ret"];
     },
     async on<E extends keyof AllEvents>(evt: E, cb: (p: AllEvents[E]) => void) {
@@ -438,7 +481,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       return () => { set.delete(cb as never); };
     },
     now: () => fixed ?? new Date(),
-    reset: () => { reset(); audioRefuse = false; filesIndex = true; scanDenied = false; picked = null; surfaces = EMPTY_SURFACES; consent = null; shelf = []; timer = null; privacy = { mic: [], camera: [], screen: false }; previewDelay = 0; mirror = { devMode: true, registered: true, access: "allowed", enabled: false, on: false, blocker: null }; notices = []; quiet = false; agents = structuredClone(AGENTS0); plugins = structuredClone(PLUGINS); modules = structuredClone(MODULES); log.length = 0; turn = 0; },
+    reset: () => { reset(); audioRefuse = false; filesIndex = true; scanDenied = false; picked = null; surfaces = EMPTY_SURFACES; consent = null; shelf = []; timer = null; privacy = { mic: [], camera: [], screen: false }; previewDelay = 0; mirror = { registered: false, access: "unknown", history: true, enabled: false, on: false, blocker: null }; notices = []; quiet = false; agents = structuredClone(AGENTS0); plugins = structuredClone(PLUGINS); modules = structuredClone(MODULES); log.length = 0; turn = 0; if (chatTimer) clearInterval(chatTimer); chatTimer = null; chatState = { available: true, version: "2.1.290", signedIn: true, busy: false }; chatError = null; chatHistory = 0; },
     /** Test and preview hooks: trigger by hand what Rust would do. */
     emit,
     /** Fidelity 3: the main assistant's bridge state and the "first connection" card. */
@@ -447,6 +490,8 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     setFirstConnect: (v: boolean) => { firstConnect = v; },
     /** F8: the weekly recap Rust would offer (null = none due). */
     setRecap: (w: RecapWeek | null) => { recap = w; },
+    /** Claude chat: Claude Code missing / not signed in (`state`), or the next replies end with this error. */
+    setClaudeChat: (p: Partial<ClaudeChatState> & { error?: string | null }) => { const { error, ...st } = p; chatState = { ...chatState, ...st }; if (error !== undefined) chatError = error; },
     setSurfaces,
     /** Set a consent window request (`expiresAt` defaults to now + 112 s). */
     setConsent: (c: ConsentRequest | null) => { consent = c && { ...c, expiresAt: c.expiresAt || Date.now() + 112_000 }; emit("consent_changed", null); },
@@ -464,7 +509,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     get sysmonRuns() { return sysmonRuns; },
     get sysmonOn() { return sysmonTimer !== null; },
     /** Commands the fake handles (test: same as the Rust list?). */
-    commands: Object.keys({ ...handlers, ...plug, ...clip, ...w5, ...w7, ...w8 }) as string[],
+    commands: Object.keys({ ...handlers, ...plug, ...clip, ...w5, ...w7, ...w8, ...w9 }) as string[],
     /** Preview and tests: trigger Rust's clipboard, lock and index events by hand. */
     setLocked: (locked: boolean, reason: LockState["reason"] = locked ? "windows" : null) => { lock = { locked, reason: locked ? reason : null }; emit("lock_changed", { ...lock }); },
     setFilesIndex: (on: boolean) => { filesIndex = on; },
@@ -482,7 +527,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     setTimer: (t: Omit<TimerState, "at"> | null) => { timer = t && { ...t, at: Date.now() }; emit("timer_changed", timer ? { ...timer } : null); },
     setShelf: (list: ShelfItem[]) => { shelf = structuredClone(list); emit("shelf_changed", null); },
     setPrivacy: (p: Omit<PrivacyState, "screen"> & { screen?: boolean }) => { privacy = { ...p, screen: !!p.screen }; emit("privacy_changed", { ...privacy, mic: [...p.mic], camera: [...p.camera] }); },
-    /** Wave 6 hooks: notification mirror state (blockers derive from `devMode`/`registered`/`access`), cards and quiet mode. */
+    /** Wave 6 hooks: notification mirror state (blockers derive from `registered`/`access`/`history`), cards and quiet mode. */
     setMirror: (p: Partial<MirrorState>) => { mirrorSet(p); },
     pushNotice: (n: Partial<Notice> & { id: string; app: string; title: string }) => { notices = [...notices.filter((x) => x.id !== n.id), { body: null, tile: "", tileMono: true, ripple: false, openLabel: "Open app", canOpen: true, at: nowMs(), hasCode: false, ...n }]; mirrorEmit(); },
     /** Preview/test: a download finished (`download_done`). */

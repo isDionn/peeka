@@ -38,6 +38,8 @@ export const COMMAND_NAMES = [
   "open_alert",
   "sysmon_start",
   "sysmon_stop",
+  "audio_level_start",
+  "audio_level_stop",
   "plugin_surfaces",
   "plugin_action",
   "approval_answer",
@@ -93,6 +95,7 @@ export const COMMAND_NAMES = [
   "notif_copy_code",
   "quit_app",
   "open_start_menu",
+  "open_calendar",
   "island_hide",
   "island_hidden",
   "tray_icons",
@@ -128,6 +131,10 @@ export const COMMAND_NAMES = [
   "recap_get",
   "recap_ack",
   "recap_copy_image",
+  "claude_chat_state",
+  "claude_chat_send",
+  "claude_chat_stop",
+  "claude_chat_new",
 ] as const;
 export const EVENT_NAMES = [
   "windows_changed",
@@ -140,6 +147,7 @@ export const EVENT_NAMES = [
   "media_changed",
   "alerts_changed",
   "sysmon_tick",
+  "audio_level",
   "volume_osd",
   "plugins_changed",
   "consent_changed",
@@ -170,4 +178,6 @@ export const EVENT_NAMES = [
   "cc_edit",
   "notch://outside_press",
   "notch://island_leave",
+  "claude_chat_delta",
+  "claude_chat_done",
 ] as const;

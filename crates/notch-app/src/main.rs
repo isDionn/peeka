@@ -5,6 +5,8 @@
 #[cfg(windows)]
 mod app;
 #[cfg(windows)]
+mod claude_chat;
+#[cfg(windows)]
 mod commands;
 #[cfg(windows)]
 mod downloads;

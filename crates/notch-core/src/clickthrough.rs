@@ -25,7 +25,7 @@ pub fn press_target<'a>(root: isize, island: isize, strips: impl IntoIterator<It
 }
 
 /// A page never needs more than a handful (middle content, protrusion, card); more is a bug or abuse.
-pub const MAX_RECTS: usize = 16;
+pub const MAX_RECTS: usize = 32; // every shown ghost adds up to two (lib/hitRects.ts)
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CssRect {

@@ -4,6 +4,7 @@ import { fakeBridge } from "../bridge.fake";
 import { Island } from "../components/Island";
 import { Shell } from "../components/Shell";
 import { useHitRects } from "../hooks";
+import { announceNotif } from "../lib/lineChan";
 
 // jsdom gives no measurements: getBoundingClientRect that sizes [data-hit] elements from the inline style (else 100x30)
 const rectOf = (el: HTMLElement) => ({ left: 10, top: 5, width: parseFloat(el.style.width) || (el.dataset.hit !== undefined ? 100 : 0), height: parseFloat(el.style.height) || 30 }) as DOMRect;
@@ -27,17 +28,21 @@ describe("island: clickable rects", () => {
   it("report_hit_rects is called with the new rects when the shape changes", async () => {
     const spy = vi.spyOn(fakeBridge, "call");
     render(<Island monitor="m1" init={{ view: null }} />);
-    await settle();
+    // the first report waits for an animation frame, which a loaded test machine can delay past one settle()
+    await vi.waitFor(async () => { await settle(); expect(spy.mock.calls.some((c) => c[0] === "report_hit_rects")).toBe(true); }, { timeout: 3000 });
     const first = spy.mock.calls.filter((c) => c[0] === "report_hit_rects").length;
-    expect(first).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: /Open card/ }));
-    // reports are debounced to a quiet frame; the strip ghost's cross-fade (M1) adds a few frames of motion
-    await vi.waitFor(async () => { await settle(); expect(spy.mock.calls.filter((c) => c[0] === "report_hit_rects").length).toBeGreaterThan(first); }, { timeout: 2000 });
-    const calls = spy.mock.calls.filter((c) => c[0] === "report_hit_rects");
-    const last = calls.at(-1)![1] as { page: string; rects: unknown[] };
-    expect(last.page).toBe("island");
-    expect(last.rects.length).toBeGreaterThanOrEqual(2); // the middle button + the shape box
-    expect(last.rects.some((r) => (r as { paint?: boolean }).paint)).toBe(true); // shadow margin: the window region does not clip the card's shadow
+    // reports are debounced to a quiet frame and the card opens over several (spring, ghost cross-fade): an early report
+    // can still show the closed shape, so wait until the LATEST report shows the open card instead of reading the first new one
+    await vi.waitFor(async () => {
+      await settle();
+      const calls = spy.mock.calls.filter((c) => c[0] === "report_hit_rects");
+      expect(calls.length).toBeGreaterThan(first);
+      const last = calls.at(-1)![1] as { page: string; rects: { paint?: boolean }[] };
+      expect(last.page).toBe("island");
+      expect(last.rects.length).toBeGreaterThanOrEqual(2); // the middle button + the shape box
+      expect(last.rects.some((r) => r.paint)).toBe(true); // shadow margin: the window region does not clip the card's shadow
+    }, { timeout: 3000 });
   });
   it("measures again when a CSS animation ends (a menu opening from scale .94 must not keep its smaller region)", async () => {
     const spy = vi.spyOn(fakeBridge, "call");
@@ -53,7 +58,7 @@ describe("island: clickable rects", () => {
   it("no shadow rect is reported without a card, the button stays clickable", async () => {
     const spy = vi.spyOn(fakeBridge, "call");
     render(<Island monitor="m1" init={{ view: null }} />);
-    await settle();
+    await vi.waitFor(async () => { await settle(); expect(spy.mock.calls.some((c) => c[0] === "report_hit_rects")).toBe(true); }, { timeout: 3000 });
     const rects = spy.mock.calls.filter((c) => c[0] === "report_hit_rects").at(-1)![1] as { rects: { paint?: boolean }[] };
     expect(rects.rects.some((r) => r.paint)).toBe(false);
     expect(rects.rects.length).toBeGreaterThanOrEqual(1);
@@ -121,28 +126,58 @@ describe("island: keyboard and focus", () => {
 });
 
 describe("notification list", () => {
-  it("opens on clicking the clock, focus enters the card; Esc returns focus to the clock button", async () => {
+  it("the clock opens Windows's calendar (open_calendar), not a Peeka panel; the clock doesn't move", async () => {
     render(<Shell monitor="m1" />);
     await settle();
-    const clock = await screen.findByRole("button", { name: /Notifications$/ });
-    clock.focus();
+    const clock = await screen.findByRole("button", { name: /Calendar$/ });
     fireEvent.click(clock);
     await settle();
+    expect(fakeBridge.log.filter((l) => l.cmd === "open_calendar")).toHaveLength(1);
+    expect(screen.queryByRole("dialog", { name: "Notifications" })).toBeNull();
+    expect(clock.isConnected).toBe(true);
+  });
+  it("opens when the island asks, focus enters the card; Esc closes it", async () => {
+    render(<Shell monitor="m1" />);
+    await settle();
+    act(() => announceNotif());
+    await settle(); await settle();
     const dlg = screen.getByRole("dialog", { name: "Notifications" });
     expect(dlg.contains(document.activeElement)).toBe(true);
     expect(screen.getByText("Disk 91% full")).toBeTruthy();
     fireEvent.keyDown(dlg, { key: "Escape" });
     await settle();
-    expect(document.activeElement).toBe(clock);
+    expect(screen.queryByRole("dialog", { name: "Notifications" })).toBeNull();
   });
   it("Review opens the approval card", async () => {
     render(<Shell monitor="m1" />);
     await settle();
-    fireEvent.click(await screen.findByRole("button", { name: /Notifications$/ }));
-    await settle();
+    act(() => announceNotif());
+    await settle(); await settle();
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
     await settle();
     expect(screen.getByRole("dialog", { name: "Cleanup approval" })).toBeTruthy();
     expect(screen.getByText("Delete temporary files?")).toBeTruthy();
+  });
+});
+
+describe("island: typing focus for card text fields", () => {
+  it("focusing Clipboard search holds typing_focus (so the click's focus hand-back doesn't kick the user out); blur and close release it", async () => {
+    const spy = vi.spyOn(fakeBridge, "call");
+    const typing = () => spy.mock.calls.filter((c) => c[0] === "typing_focus").map((c) => (c[1] as { on: boolean }).on);
+    render(<Island monitor="m1" init={{ view: "clipboard" }} />);
+    await settle(); await settle();
+    const box = await screen.findByRole("textbox", { name: "Search clipboard" });
+    expect(typing()).toEqual([]);
+    act(() => box.focus());
+    await settle();
+    expect(typing()).toEqual([true]);
+    act(() => box.blur());
+    await settle();
+    expect(typing()).toEqual([true, false]);
+    act(() => box.focus());
+    await settle();
+    fireEvent.keyDown(document, { key: "Escape" }); // closes the card with the field focused
+    await settle(); await settle();
+    expect(typing()).toEqual([true, false, true, false]);
   });
 });

@@ -1,7 +1,12 @@
 /* Island window (760x620 transparent, fixed size): the strip's center content + peek + card. Transparent areas pass clicks through (Rust, report_hit_rects). */
 .islandStage { position: absolute; inset: 0; pointer-events: none; }
+/* The strip bar's own paint under the island's top band. Where the window region meets the strip, transparent island pixels showed a pale box
+   (after a card closes, while the region changes; persistent on real GPUs); opaque pixels never did (VM t5). Same gradient and height as .bar, so it's seamless. */
+.islandStage::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: var(--BAR); background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,0) 60%), var(--strip); }
 .islandStage > .islandCenter, .islandStage > .dangling, .islandStage > .sideBubble, .islandStage > .sessionChip { pointer-events: auto; }
 .islandCenter { position: absolute; left: 50%; top: 0; height: var(--BAR); z-index: 6; border-radius: 8px; color: var(--l1); cursor: pointer; display: block; }
+/* the 40 px hanging ghost reaches below the strip: above a bump (.dangling, z 7: copy peek row, Shelf handle) so its body isn't cut at the strip edge (VM v0.3.4) */
+.islandStage > .islandCenter:has(.mascot[data-hang]) { z-index: 8; }
 .islandCenter:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .islandMascot { position: absolute; left: 50%; top: 0; height: var(--BAR); transform: translateX(-50%); display: flex; align-items: center; gap: 12px; white-space: nowrap; animation: islandIn .28s var(--ease) 40ms backwards; }
 .islandMascot .ms svg.lucide, .ikK svg { width: 15px; height: 15px; }
@@ -67,3 +72,8 @@ button.peek { color: inherit; cursor: pointer; width: 44px; height: 14px; displa
 @media (hover: hover) and (pointer: fine) { .sessionBtn:hover { filter: brightness(1.28); } }
 .sessionBtn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .sessionList { left: auto; right: 0; }
+
+/* The hanging 40 px ghost leads the center but stays out of its centering: the same room on the right keeps the text (clock, cover, title / the peek's label) on the screen's center line, with or without the ghost. */
+.islandMascot:has(> .ms:first-child > .mascot[data-hang]) { padding-right: 48px; }
+/* the cover's slot is always there, so a track without a cover doesn't shift the center */
+.coverSlot { width: 18px; height: 18px; flex: none; }

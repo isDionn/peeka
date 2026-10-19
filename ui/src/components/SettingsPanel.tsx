@@ -28,9 +28,8 @@ function TaskbarMode({ value }: { value: Settings["taskbarHide"] }) {
 
 /** Blocker reason: the row, the Windows setting (only addresses on Rust's allowlist open) and a manual path if that fails. */
 const BLOCKERS: Record<MirrorBlocker, { text: string; uri: string | null; link: string; manual: string }> = {
-  dev_mode_off: { text: "Developer Mode is off", uri: "ms-settings:developers", link: "Open developer settings", manual: "Windows Settings › System › For developers" },
-  not_registered: { text: "Run register.ps1, then restart Peeka", uri: null, link: "", manual: "" },
   access_denied: { text: "Windows didn't allow it", uri: "ms-settings:privacy-notifications", link: "Open notification permissions", manual: "Windows Settings › Privacy & security › Notifications" },
+  unavailable: { text: "Windows notifications can't be read on this PC", uri: null, link: "", manual: "" },
 };
 
 /** Settings › Appearance › Windows notifications (optional, off by default). The switch calls `mirror_enable` / `mirror_disable`; any blocker shows below it. */
@@ -43,7 +42,7 @@ function MirrorSetting() {
   const open = (uri: string, manual: string) => bridge.call("open_windows_settings", { uri }).then(() => setHint(null)).catch(() => setHint(manual));
   return (
     <>
-      <Row title="Windows notifications" sub="Shown as cards in the Notifications list at top right. No wave on the strip">
+      <Row title="Windows notifications" sub="Shown as cards in the Notifications list at top right. They stay on this PC and are never sent anywhere">
         <Switch on={!!st?.enabled} label="Windows notifications" onChange={toggle} />
       </Row>
       {b && (

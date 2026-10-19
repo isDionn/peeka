@@ -15,7 +15,9 @@ export type XMsg = { t: "panel"; panel: "search" | "settings" | "status" | "star
   /** Island -> strip: is the welcome card open (on launch, on every change and in reply to "welcome?"). While open the setup wizard waits. */
   | { t: "welcome"; open: boolean }
   /** Strip -> island: is the welcome card open? */
-  | { t: "welcome?" };
+  | { t: "welcome?" }
+  /** Strip -> island: a strip panel shows its own ghost right now (the empty Notifications panel's 96 px one): the strip ghost steps aside (one mascot on screen). */
+  | { t: "ghost"; on: boolean };
 const NAME = "notch-xwin";
 
 export function sendX(m: XMsg) {

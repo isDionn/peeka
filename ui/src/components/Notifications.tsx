@@ -52,7 +52,7 @@ function useHeldSlots() {
 }
 
 /** Notifications list (click the clock, top-right card): Peeka's own alert list, monochrome app tile; "Clear all" only empties the list. */
-export function NotificationList({ onReview, onClose }: { onReview: (a: Alert) => void; onClose?: () => void }) {
+export function NotificationList({ onReview, onClose, onEmpty }: { onReview: (a: Alert) => void; onClose?: () => void; /** Is the empty board (with its 96 px ghost) showing. */ onEmpty?: (empty: boolean) => void }) {
   const { alerts } = useAlerts();
   const mirror = useMirror().items;
   const total = alerts.length + mirror.length;
@@ -79,6 +79,8 @@ export function NotificationList({ onReview, onClose }: { onReview: (a: Alert) =
     )),
     ...mirror.map((n) => <MirrorCard key={n.id} n={n} onClose={onClose} onHold={held.hold} />),
   ];
+  const empty = !hide && total === 0;
+  useEffect(() => { onEmpty?.(empty); }, [empty, onEmpty]);
   return (
     <div className="body">
       <div style={{ display: "flex", alignItems: "center" }}>
@@ -90,7 +92,7 @@ export function NotificationList({ onReview, onClose }: { onReview: (a: Alert) =
       {hide && mirror.length > 0 && <div className="notifs" role="list">
         {mirror.map((n) => <div key={n.id} role="listitem" className="notif plat glass"><span className="app"><b aria-hidden="true">{initial(n.app)}</b></span><div style={{ flex: 1, minWidth: 0 }}><div className="b6">{n.app}</div><div className="t12 l3">{lock.locked ? "Locked" : "Hidden"}</div></div></div>)}
       </div>}
-      {!hide && total === 0 && <EmptyBoard title="No notifications" hint="You're all caught up. New alerts land here." mood="sleeping" />}
+      {empty && <EmptyBoard title="No notifications" hint="You're all caught up. New alerts land here." mood="sleeping" />}
       {!hide && <div className="notifs" role="list" onPointerLeave={held.clear}>{held.fill(rows)}</div>}
     </div>
   );

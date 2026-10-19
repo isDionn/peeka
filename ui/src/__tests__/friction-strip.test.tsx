@@ -6,6 +6,7 @@ import { panelMaxH } from "../components/common";
 import { SearchPanel } from "../components/SearchPanel";
 import { Shell } from "../components/Shell";
 import { onX, type XMsg } from "../lib/xwin";
+import { announceNotif } from "../lib/lineChan";
 
 const proto = HTMLElement.prototype;
 beforeEach(() => {
@@ -17,7 +18,8 @@ afterEach(() => { cleanup(); Reflect.deleteProperty(proto, "offsetHeight"); Refl
 const settle = (ms = 60) => act(async () => { await new Promise((r) => setTimeout(r, ms)); });
 const logged = (cmd: string) => fakeBridge.log.filter((l) => l.cmd === cmd);
 const panel = (k: string) => document.querySelector(`[data-panel=${k}]`)!;
-const trigger = (k: string) => fireEvent.click(document.querySelector(`[data-panel-trigger="${k}"]`)!);
+// Notifications has no strip button (the clock opens Windows's calendar): the island asks for it
+const trigger = (k: string) => k === "notif" ? act(() => announceNotif()) : fireEvent.click(document.querySelector(`[data-panel-trigger="${k}"]`)!);
 
 describe("strip pins", () => {
   it("O1: every pin is icon + name (fixed slot); the name is there both closed and open, the full name is in title and aria-label", async () => {

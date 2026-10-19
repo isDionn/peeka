@@ -9,6 +9,7 @@ import { FirstRunCard, modulesKw } from "../components/IslandCards";
 import { ApprovalCard, ApprovalCenter, ComposerCard, ProtrusionBump, ProtrusionCenter } from "../components/Plugin";
 import { shortApprovalTitle } from "../lib/cardsText";
 import { resetMascotRegistry } from "../mascot/useSingleMascot";
+import { onX, type XMsg } from "../lib/xwin";
 import { APPROVAL_CHOICE, APPROVAL_HIGH, APPROVAL_LOW, COMPASS, OTHER } from "../plugin.fixtures";
 
 const proto = HTMLElement.prototype;
@@ -162,15 +163,31 @@ describe("Ctrl+Space box", () => {
 });
 
 describe("Modules (j)", () => {
-  it("11 tabs, no gear; General has the Compass and Claude Code boxes, then one tile per module; quota bars, session states, Stop", async () => {
+  it("the gear opens Settings › Modules in the strip; the Claude tab shows the chat", async () => {
+    const got: XMsg[] = [];
+    const off = onX((m) => got.push(m));
+    render(<Island monitor="m1" init={{ view: "modules" }} />);
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Modules settings" }));
+    await vi.waitFor(() => expect(got).toContainEqual({ t: "open-panel", panel: "modules" }));
+    off();
+    fireEvent.click(within(screen.getByRole("tablist", { name: "Modules" })).getByRole("tab", { name: "Claude" }));
+    await settle();
+    expect(screen.getByRole("region", { name: "Claude chat" })).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Message to Claude" })).toBeTruthy();
+  });
+  it("12 tabs (Claude chat last of Peeka's own) and a gear; General has the Compass and Claude Code boxes, then one tile per module; quota bars, session states, Stop", async () => {
     fakeBridge.setSurfaces(SURFACES_J);
     const { container } = render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
     const tabs = within(screen.getByRole("tablist", { name: "Modules" })).getAllByRole("tab").map((t) => t.getAttribute("aria-label") ?? t.textContent);
-    expect(tabs).toEqual(["General", "Music", "Clipboard", "Shelf", "Calendar", "Timer", "System", "Notifications", "Compass", "Compass › Claude Code", "Compass › Team"]);
-    expect(screen.queryByRole("button", { name: "Module settings" })).toBeNull(); // owner: settings live in the strip, not in the card
+    expect(tabs).toEqual(["General", "Music", "Clipboard", "Shelf", "Calendar", "Timer", "System", "Notifications", "Claude", "Compass", "Compass › Claude Code", "Compass › Team"]);
+    expect(screen.getByRole("button", { name: "Modules settings" })).toBeTruthy(); // owner: a gear to Settings › Modules (hide Calendar / Timer)
     expect(container.querySelectorAll(".grid.general3 > .box")).toHaveLength(2);
-    expect([...container.querySelectorAll(".genTiles .genTile h4")].map((h) => h.textContent)).toEqual(["Music", "Clipboard", "Calendar", "Timer", "Notifications", "System"]);
+    // General home: every enabled module is one click away (a pill when it has something to say, otherwise a dock shortcut), in module order
+    expect([...container.querySelectorAll(".genHome :is(.genPill, .genKey)")].map((b) => b.getAttribute("aria-label")).filter((l) => l?.endsWith(": open tab")).sort())
+      .toEqual(["Calendar", "Clipboard", "Music", "Notifications", "System", "Timer"].map((m) => m + ": open tab"));
+    expect(container.querySelectorAll(".genPills .genPill").length).toBeLessThanOrEqual(3);
     expect(container.querySelectorAll(".quota .meter")).toHaveLength(2);
     expect(container.querySelector(".quota .threshold")).toBeTruthy();
     expect(screen.getByText("Resets in 2h 14m")).toBeTruthy();
@@ -179,7 +196,9 @@ describe("Modules (j)", () => {
     expect(container.querySelector(".sessions .tickGreen")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Stop" })).toBeTruthy();
     expect(screen.getByText("3 note suggestions")).toBeTruthy();
-    expect(container.querySelector(".box h4 .mascot")?.getAttribute("data-size")).toBe("24");
+    // one mascot: General's 56 px ghost outranks the Compass box's 24 px one (single-mascot registry)
+    expect([...container.querySelectorAll(".mascot")].map((m) => m.getAttribute("data-size"))).toEqual(["56"]);
+    expect(container.querySelector(".genHome .genGhost .mascot")).toBeTruthy();
   });
   it("Music and Timer on their own tabs", async () => {
     render(<Island monitor="m1" init={{ view: "modules" }} />);
@@ -190,10 +209,21 @@ describe("Modules (j)", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Music" }));
     expect(screen.getByRole("button", { name: "Previous track" })).toBeTruthy();
   });
-  it("a General tile opens its own tab in one click; an empty module keeps its tile", async () => {
+  it("General home: the now line follows the music, the clipboard pill shows count/kind/age only, never the copied text", async () => {
+    fakeBridge.addClip({ id: "s1", createdAt: Date.now(), pinned: false, source: "Chrome", kind: "text", text: "secret text", sub: null, thumb: null, screenshot: false } as never);
+    const { container } = render(<Island monitor="m1" init={{ view: "modules" }} />);
+    await settle();
+    const home = container.querySelector(".genHome")!;
+    expect(home.querySelector(".genNow .t20")?.textContent).toBe("Night Train");
+    const clip = home.querySelector('.genPill[aria-label="Clipboard: open tab"]');
+    expect(clip?.textContent).toMatch(/^\d+ items?text, /); // count, then kind and age of the newest (the text item)
+    expect(home.textContent).not.toContain("secret");
+    expect(home.textContent).not.toContain("Chrome");
+  });
+  it("a General shortcut opens its own tab in one click; an empty module keeps a shortcut", async () => {
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
-    expect(screen.getByText("No timer running")).toBeTruthy();
+    expect(screen.queryByText("No timer running")).toBeNull(); // an empty module is a dock shortcut, not a tile
     fireEvent.click(screen.getByRole("button", { name: "Timer: open tab" }));
     expect(screen.getByRole("tab", { name: "Timer" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByLabelText("Minutes")).toBeTruthy();

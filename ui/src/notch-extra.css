@@ -10,7 +10,8 @@ body { -webkit-user-select: none; user-select: none; }
 
 /* monochrome icon: the alpha mask is painted with the text color (§0i item 7) */
 .appIcon.mono { background: currentColor; -webkit-mask: center / contain no-repeat; mask: center / contain no-repeat; }
-html[data-color] .appIcon.mono[style*="--icon-color"] { background: var(--icon-color) center / contain no-repeat; -webkit-mask: none; mask: none; }
+/* Rust sends a colour icon only while Color app icons is on, or when the mask would be a blank square or circle */
+.appIcon.mono[style*="--icon-color"] { background: var(--icon-color) center / contain no-repeat; -webkit-mask: none; mask: none; }
 .row > .appIcon, .row > svg.lucide { color: var(--l3); }
 
 /* strip */
@@ -100,7 +101,7 @@ html[data-narrow] .pin.openPinned { position: relative; }
 .timeRow input::placeholder{color:var(--l3);opacity:1}
 .mWarning{flex-direction:column;align-items:flex-start;gap:6px}
 
-/* Strip mascot (40 px, hanging pose): the body hangs ~12 px below the strip, no parent clips it. Island reports its clickable area via `addHitProvider`. */
+/* Strip mascot (40 px, hanging pose): the body hangs ~12 px below the strip, no parent clips it. The region code (lib/hitRects.ts) adds every ghost's drawn box and its body's click area. */
 .islandCenter, .islandMascot, .islandMascot > .ms { overflow: visible; }
 /* Count bubble: below the strip (30 px) and the hanging body (42 px); passes clicks through, doesn't cover strip items. */
 .mkBubble { position: absolute; left: 50%; top: 48px; transform: translateX(-50%); z-index: 8; pointer-events: none; white-space: nowrap; padding: 4px 10px; border-radius: 10px;

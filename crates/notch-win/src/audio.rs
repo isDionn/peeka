@@ -147,3 +147,26 @@ pub fn set_mic_muted(muted: bool) -> bool {
     // SAFETY: a live endpoint; the context GUID outlives the call.
     mic().is_some_and(|m| unsafe { m.SetMute(muted, &crate::volume::NOTCH_CONTEXT) }.is_ok())
 }
+
+/// The default speaker's level meter (`IAudioMeterInformation`): it gives the output's peak level only, never the sound.
+#[cfg(windows)]
+pub fn meter() -> Option<windows::Win32::Media::Audio::Endpoints::IAudioMeterInformation> {
+    // SAFETY: plain COM calls on objects released on drop.
+    unsafe { enumerator()?.GetDefaultAudioEndpoint(eRender, eConsole).ok()?.Activate(CLSCTX_ALL, None).ok() }
+}
+
+/// The current peak [left, right], 0..1 linear; a mono or surround device gives its overall peak on both.
+#[cfg(windows)]
+pub fn peaks(m: &windows::Win32::Media::Audio::Endpoints::IAudioMeterInformation) -> Option<[f32; 2]> {
+    // SAFETY: a live meter; the buffer holds exactly the 2 channels asked for.
+    unsafe {
+        if m.GetMeteringChannelCount().ok()? == 2 {
+            let mut p = [0f32; 2];
+            m.GetChannelsPeakValues(&mut p).ok()?;
+            Some(p)
+        } else {
+            let p = m.GetPeakValue().ok()?;
+            Some([p, p])
+        }
+    }
+}
