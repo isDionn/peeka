@@ -17,9 +17,9 @@
   <br><sub>v0.3.4 · ~4.3 MB · Windows 10/11 · <a href="#download">other downloads and SmartScreen note</a></sub>
 </p>
 
-<img src="docs/images/demo.gif" alt="Peeka in action: the island grows out of the strip, then a second task moves into the side bubble" width="100%">
+<img src="docs/images/demo.gif" alt="Peeka trailer: the old taskbar breaks, the Peeka strip and ghost drop in, then music, a Claude Code approval, clipboard and quick peeks in the island" width="100%">
 
-<p><a href="https://isdionn.github.io/peeka/#trailer"><img src="docs/images/trailer.jpg" alt="Watch the 30-second Peeka trailer" width="49%"></a><br><sub>▶ <a href="https://isdionn.github.io/peeka/#trailer">Watch the 30-second trailer</a></sub></p>
+<p><sub>▶ <a href="https://isdionn.github.io/peeka/#trailer">Watch the 30-second trailer</a> (with sound)</sub></p>
 
 <p>
   <a href="#download">Download</a> ·
