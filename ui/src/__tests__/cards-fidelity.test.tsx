@@ -265,7 +265,7 @@ describe("Modules card width follows the tab", () => {
     await act(async () => { vi.advanceTimersByTime(450); });
     expect(screen.getByRole("tooltip").textContent).toBe("Compass › Claude Code");
     vi.useRealTimers();
-  });
+  }, 20_000); // 12 tabs x 400 ms tooltip waits; slow CI runners need the room
 });
 
 describe("new cards", () => {
