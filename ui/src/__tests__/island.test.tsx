@@ -30,9 +30,9 @@ describe("island: clickable rects", () => {
     const first = spy.mock.calls.filter((c) => c[0] === "report_hit_rects").length;
     expect(first).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: /Open card/ }));
-    await settle();
+    // reports are debounced to a quiet frame; the strip ghost's cross-fade (M1) adds a few frames of motion
+    await vi.waitFor(async () => { await settle(); expect(spy.mock.calls.filter((c) => c[0] === "report_hit_rects").length).toBeGreaterThan(first); }, { timeout: 2000 });
     const calls = spy.mock.calls.filter((c) => c[0] === "report_hit_rects");
-    expect(calls.length).toBeGreaterThan(first);
     const last = calls.at(-1)![1] as { page: string; rects: unknown[] };
     expect(last.page).toBe("island");
     expect(last.rects.length).toBeGreaterThanOrEqual(2); // the middle button + the shape box

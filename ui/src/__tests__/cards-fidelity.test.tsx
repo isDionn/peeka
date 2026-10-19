@@ -248,11 +248,11 @@ describe("new cards", () => {
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(retry).toHaveBeenCalledOnce();
   });
-  it("kb: sleeping mascot 96 and the empty Clipboard text", () => {
+  it("kb: searching mascot 96 (M1) and the empty Clipboard text", () => {
     const { container } = render(<EmptyBoard />);
     expect(screen.getByText("Clipboard is empty")).toBeTruthy();
     expect(container.querySelector(".mascot")?.getAttribute("data-size")).toBe("96");
-    expect(container.querySelector(".mascot")?.getAttribute("data-mood")).toBe("drowsy");
+    expect(container.querySelector(".mascot")?.getAttribute("data-mood")).toBe("searching");
   });
 });
 

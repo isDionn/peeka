@@ -10,7 +10,7 @@ import { askLabel } from "../hooks";
 import { listenLine, LINE_IDLE, type LineState } from "../lib/lineChan";
 import { lineVars } from "../lib/line";
 import { useGuard } from "../lib/useGuard";
-import { Mascot, type MascotHandle } from "../mascot";
+import { Mascot, type MascotHandle, type Mood } from "../mascot";
 import { REMINDER_PLUGIN, type ReminderItem } from "../lib/meetingReminder";
 import { Attr, JoinButton, Lead } from "./Plugin";
 import { NotchIcon } from "./IslandCards";
@@ -65,11 +65,11 @@ export function DndRest({ approvals, until, lock }: { approvals: number; until?:
   );
 }
 
-/** Task done: only the strip mascot hops once; no peek opens. */
-export function JobDoneCenter({ title, took }: { title: string; took: string }) {
+/** Task done: the 40 px strip ghost cheers (raised hands, sparkles) and hops once; no peek opens. `mood` is idle while locked/presenting. */
+export function JobDoneCenter({ title, took, mood = "done" }: { title: string; took: string; mood?: Mood }) {
   const mk = useRef<MascotHandle>(null);
   useEffect(() => { const t = setTimeout(() => mk.current?.hop(), 200); return () => clearTimeout(t); }, []);
-  return <span className="ms"><span className="leadMascot"><Mascot ref={mk} size={24} mood="done" isMainAssistant /></span><span className="b6">{flat(title, 60)}</span><span className="l3">{flat(took, 24)}</span></span>;
+  return <span className="ms"><Mascot ref={mk} size={40} mood={mood} isMainAssistant /><span className="b6">{flat(title, 60)}</span><span className="l3">{flat(took, 24)}</span></span>;
 }
 
 export const MeetingCenter = ({ main }: { main: PluginInfo | null }) => <span className="ms">{main && <Lead plugin={refOf(main)} mascot="ready" />}<Calendar /><span className="b6">Meeting</span></span>;

@@ -1,8 +1,9 @@
-import { fireEvent, render } from "@testing-library/react";
+import { act, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Mascot } from "../Mascot";
 import { MOODS, pickScale, sizePlan, type Mood } from "../moods";
 import { resetMascotRegistry } from "../useSingleMascot";
+import { FADE_MS } from "../react";
 
 afterEach(resetMascotRegistry);
 
@@ -70,12 +71,18 @@ describe("<Mascot />", () => {
     fireEvent.pointerDown(container.querySelector(".mascot")!);
     expect(onPoke).toHaveBeenCalledTimes(1);
   });
-  it("single mascot: the strip one hides when the card appears", () => {
-    const { container, rerender } = render(<Mascot size={20} mood="idle" isMainAssistant still />);
-    expect(container.querySelectorAll(".mascot")).toHaveLength(1);
-    rerender(<><Mascot size={20} mood="idle" isMainAssistant still /><Mascot size={28} mood="approval" isMainAssistant still /></>);
-    const all = container.querySelectorAll(".mascot");
-    expect(all).toHaveLength(1);
-    expect((all[0] as HTMLElement).dataset.size).toBe("28");
+  it("single mascot: the strip one fades out when the card appears, then leaves", () => {
+    vi.useFakeTimers();
+    try {
+      const { container, rerender } = render(<Mascot size={20} mood="idle" isMainAssistant still />);
+      expect(container.querySelectorAll(".mascot")).toHaveLength(1);
+      rerender(<><Mascot size={20} mood="idle" isMainAssistant still /><Mascot size={28} mood="approval" isMainAssistant still /></>);
+      const shown = () => [...container.querySelectorAll<HTMLElement>(".mascot:not(.out)")].map((m) => m.dataset.size);
+      expect(shown()).toEqual(["28"]);   // only one ghost is ever "in"; the old one is fading
+      act(() => { vi.advanceTimersByTime(FADE_MS); });
+      const all = container.querySelectorAll(".mascot");
+      expect(all).toHaveLength(1);
+      expect((all[0] as HTMLElement).dataset.size).toBe("28");
+    } finally { vi.useRealTimers(); }
   });
 });

@@ -1,6 +1,7 @@
 import { act, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeBridge } from "../bridge.fake";
+import { bridge } from "../bridge";
 import { Island } from "../components/Island";
 import { PLUGINS } from "../plugin.fixtures";
 
@@ -12,6 +13,7 @@ beforeEach(() => {
   Object.defineProperty(proto, "offsetHeight", { configurable: true, get: () => 100 });
   Object.defineProperty(proto, "offsetWidth", { configurable: true, get: () => 100 });
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) { return rectOf(this); });
+  vi.spyOn(bridge, "now").mockReturnValue(new Date(new Date().setHours(14))); // daytime: the mascot asserts don't depend on the wall clock (M1 makes a calm ghost drowsy at night)
   fakeBridge.reset();
   localStorage.clear();
 });

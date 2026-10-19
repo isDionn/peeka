@@ -1,7 +1,7 @@
 import { focusables } from "./useFocusTrap";
 // The strip page and the island page are separate windows: their only link is a same-origin BroadcastChannel (same method as centerClock.ts).
 // Strip -> island: which panel is open (short label in the middle), "show first run again", "open the reply view" (let the assistant reply in the notification mirror). Without a channel the message is silently dropped.
-export type XMsg = { t: "panel"; panel: "search" | "settings" | "status" | "start" | "cleanup" | null } | { t: "firstrun" } | { t: "ask" } | { t: "open-panel"; panel: "modules" }
+export type XMsg = { t: "panel"; panel: "search" | "settings" | "status" | "start" | "cleanup" | "notif" | null } | { t: "firstrun" } | { t: "ask" } | { t: "open-panel"; panel: "modules" }
   /** Strip -> island: a strip panel opened (Ctrl+K, gear, Start...). The island closes its open card, so one Esc closes the top surface. */
   | { t: "panel-open"; panel: string }
   /** Island -> strip: a click inside the island; the open strip panel closes. */

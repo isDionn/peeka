@@ -270,9 +270,9 @@ export const STRIP_TXT: Record<StripKind, string> = { image: "Image copied", fil
 const STRIP_ICON = { image: FileImage, file: File, link: Link } as const;
 
 /** Win+Shift+S peek (mockup h1) and other copies: a thumbnail for images, icon and name for files/links. */
-export function ShotCenter({ main, item }: { main: PluginInfo | null; item?: ClipPlain }) {
+export function ShotCenter({ main, item, ghost }: { main: PluginInfo | null; item?: ClipPlain; /** The 40 px strip ghost (spots the copied item) instead of the small lead. */ ghost?: ReactNode }) {
   const k = stripKind(item ?? null) ?? "image", Ic = item?.screenshot ? Scissors : STRIP_ICON[k];
-  return <span className="ms">{main && <Lead plugin={{ id: main.id, name: main.name, main: true }} mascot="ready" size={24} />}<Ic /><span className="b6">{item?.screenshot || !item ? "Screenshot" : STRIP_TXT[k]}</span></span>;
+  return <span className="ms">{ghost ?? (main && <Lead plugin={{ id: main.id, name: main.name, main: true }} mascot="ready" size={24} />)}<Ic /><span className="b6">{item?.screenshot || !item ? "Screenshot" : STRIP_TXT[k]}</span></span>;
 }
 /**
  * Copy peek (decision 2026-10-17). The top row never changes; `big` (pointer over it, images only) adds a large preview and Copy / Keep below:

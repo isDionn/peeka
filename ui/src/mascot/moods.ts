@@ -3,7 +3,7 @@
 export type Mood =
   | "idle" | "drowsy" | "listening" | "thinking" | "speaking" | "approval" | "serious"
   | "attention" | "tired" | "done" | "error" | "quiet" | "sleeping" | "music"
-  | "searching" | "question" | "ratelimit" | "dizzy";
+  | "searching" | "question" | "ratelimit" | "dizzy" | "hello" | "message";
 
 export type Body = "neutral" | "hands-up" | "chin" | "cheeks" | "tilted" | "squashed" | "tall" | "three-quarter";
 export type Fx = "zzz" | "mintLeft" | "mintRight" | "dots" | "redRight" | "redLeft" | "sign" | "sparkle" | "sparkle2" | "note" | "note2" | "ring" | "amber" | "wave" | "sweat";
@@ -41,6 +41,9 @@ export const MOODS: Record<Mood, MoodSpec> = {
   question:  { body: "tilted",         eyes: "eye-up", mouth: SMILE,          fx: [],                       light: "var(--purple,#BF5AF2)",   speed: .8,  tag: "?", tilt: 6, sil: "three-quarter" },
   ratelimit: { body: "tilted",         eyes: "eye-sad",  mouth: "mouth-wavy",   fx: ["sweat"],                  light: "var(--quota,#FF7A1A)",  speed: .5,  tag: "dot", sil: "closed" },
   dizzy:     { body: "tilted",         eyes: "eye-dizzy", mouth: "mouth-tongue",     fx: ["ring"],                light: "var(--yellow,#FFD60A)",  speed: 1.2, roll: true, tilt: -5, sil: "open" },
+  // M1 short reactions (Peeka's own, never sent by plugins): launch greeting (waves once), a new message (raised brows + small sparkle)
+  hello:     { body: "neutral",         eyes: "eye-happy",  mouth: SMILE,          fx: ["wave"],                 light: null,                 speed: 1,   sil: "hands" },
+  message:   { body: "neutral",         eyes: "eye-brows-2", mouth: SMILE,         fx: ["sparkle2"],             light: null,                 speed: .8,  sil: "open" },
   music:     { body: "tilted",         eyes: "eye-closed", mouth: SMILE,          fx: ["note", "note2"],        light: null,                 speed: 1,   sway: true, sil: "closed" },
 };
 

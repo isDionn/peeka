@@ -90,7 +90,7 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
   useEffect(() => { if (primary && welcome === false && !setupAsked.current && (inTauri || init?.setup) && !setupDone()) { setupAsked.current = true; setPanel((p) => p ?? "setup"); } }, [primary, init?.setup, welcome]);
   // the island window shows the short label in the strip center ("say it once"): tell it which panel is open
   panelRef.current = panel;
-  useEffect(() => { if (monitor?.primary) sendX({ t: "panel", panel: panel === "search" ? "search" : SETTINGS_PAGES.includes(panel) ? "settings" : panel === "status" || panel === "start" || panel === "cleanup" ? panel : null }); if (monitor?.primary && panel) sendX({ t: "panel-open", panel }); }, [panel, monitor?.primary]);
+  useEffect(() => { if (monitor?.primary) sendX({ t: "panel", panel: panel === "search" ? "search" : SETTINGS_PAGES.includes(panel) ? "settings" : panel === "status" || panel === "start" || panel === "cleanup" || panel === "notif" ? panel : null }); if (monitor?.primary && panel) sendX({ t: "panel-open", panel }); }, [panel, monitor?.primary]);
   useEffect(() => {
     if (panel !== "tray") return;
     const el = document.querySelector('[data-panel-trigger="tray"]'); // the panel sits under the arrow, right edges aligned

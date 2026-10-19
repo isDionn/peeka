@@ -78,11 +78,11 @@ export function makeErrorBudget(now: () => number = Date.now, windowMs = 600_000
   return (key: string): boolean => { const t = now(), last = seen.get(key); if (last !== undefined && t - last < windowMs) return false; seen.set(key, t); return true; };
 }
 
-/** `kb`: empty Clipboard (and empty cards): dozing mascot at 96, glides in over the first 600 ms; the zzz text is text gray 3. */
-export function EmptyBoard({ title = "Clipboard is empty", hint = "Things you copy show up here: text, images and files." }: { title?: string; hint?: string }) {
+/** `kb`: empty Clipboard (and empty panels): the 96 px ghost glides in over the first 600 ms. Clipboard: searching (eyes scan); Notifications: sleeping. */
+export function EmptyBoard({ title = "Clipboard is empty", hint = "Things you copy show up here: text, images and files.", mood = "searching" }: { title?: string; hint?: string; mood?: Mood }) {
   return (
     <div className="mkCenter">
-      <span className="faceIn"><Mascot size={96} mood="drowsy" isMainAssistant fallback={<span className="notchIcon" style={{ width: 56, height: 56 }}><Clipboard /></span>} /></span>
+      <span className="faceIn"><Mascot size={96} mood={mood} isMainAssistant fallback={<span className="notchIcon" style={{ width: 56, height: 56 }}><Clipboard /></span>} /></span>
       <div className="t15 b6">{plain(title, 60)}</div>
       <div className="t13 l2 b4">{plain(hint, 160)}</div>
     </div>

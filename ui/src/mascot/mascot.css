@@ -1,5 +1,11 @@
 /* Ghost mascot (CSS from maskot-motor.js). Motion is always on: prefers-reduced-motion is not read. */
 .mascot { position: relative; flex: none; display: inline-block; line-height: 0; cursor: pointer; user-select: none; -webkit-user-select: none; }
+/* One-mascot cross-fade (react.ts FADE_MS): the incoming ghost fades in, the outgoing one fades out without taking clicks. */
+.mascot { animation: mascot-in 160ms ease-out backwards; }
+.mascot.out { opacity: 0; transition: opacity 160ms ease-in; }
+.mascot.out, .mascot.out * { pointer-events: none !important; }
+@keyframes mascot-in { from { opacity: 0; } }
+[data-leaving] .mascot { animation: none; }   /* a leaving center/card layer remounts its ghost: it fades with the layer, not in again */
 .mascot-neutral { display: inline-grid; place-items: center; color: var(--l2, rgba(235,235,245,.74)); flex: none; }
 .g { position: relative; width: 100%; aspect-ratio: 600 / 800; }
 .g * { position: absolute; }

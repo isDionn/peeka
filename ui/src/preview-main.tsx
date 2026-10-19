@@ -18,6 +18,8 @@ const SHELL_STATES: Record<string, ShellInit> = {
   // Fidelity 3: sr strip menu, p1 app menu (kur, y1, y2, gz below with a special layout)
   kur: { panel: "setup", setup: true, setupStep: 1 }, y1: { panel: "tray" },
   sr: { menu: { kind: "strip", x: 960 } }, p1: { menu: { kind: "app", appId: "discord", x: 626 } },
+  // M1: m0 empty Notifications panel (the 96 px ghost sleeps there; the strip's ghost steps aside)
+  m0: { panel: "notif" },
 };
 // island states (mockup ids): b1 music peek, b2 player, e volume indicator, hov hover, x0 assistant not connected (resting), x1 Ctrl+Space, ilk first run, u alert, j System card
 const ISLAND_STATES: Record<string, IslandInit> = {
@@ -39,6 +41,11 @@ const ISLAND_STATES: Record<string, IslandInit> = {
   by: { burst: { n: 6, apps: ["Discord", "Outlook", "Teams"] }, pin: true }, os: { pin: true }, hn: { view: "error", err: "Bash" },
   // F8 weekly recap card ("Your week"; the fake bridge offers last week's counts)
   rc: {},
+  // M1 (mascot more often; gr/ms/nt run without an assistant so the ghost is calm): gr launch greeting (waves once, 1.2 s), ms a new Windows notification at a calm rest (eyes turn top right, raised brows),
+  // dl download done (the 40 px ghost cheers in the strip center), nt calm rest for the time-of-day mood: open with &time=2026-10-19T23:47 (sleepy) or T14:00 (awake).
+  // b2 music card (the 56 px ghost sways in the player), kb empty Clipboard (96 px, searching), bit task done (40 px ghost cheers), k2 copy catch (40 px ghost spots the item).
+  // Wink after listening: mascot-demo.html?mood=listening&then=idle&after=1000 (the engine winks once when listening ends, any size from 28 px).
+  gr: { greet: true }, ms: {}, dl: { pin: true }, nt: {},
   sarj: { charge: true, pin: true }, pil: {}, bt: { bt: { name: "Buds Pro", battery: 80 }, pin: true }, zam: {}, dik: {}, tik: {}, kay: {}, f0: {}, g0: { shelfDrag: true, pin: true }, g: { view: "shelf" },
 };
 const state = param("state", "a");
@@ -118,6 +125,10 @@ if (state === "n" || state === "n2") {
   if (state === "n2") setTimeout(() => document.querySelector<HTMLElement>(".toast .btn.assistant")?.click(), 1000);
 }
 if (state === "aye") fakeBridge.setPlugins([PLUGINS[0]]);
+if (state === "m0") void fakeBridge.call("clear_alerts");
+if (state === "gr" || state === "ms" || state === "nt") fakeBridge.setPlugins([]); // a calm strip ghost: the fake assistant always reports 2 jobs and 1 approval, which win over reactions
+if (state === "ms") setTimeout(() => fakeBridge.pushNotice({ id: "win.ms", app: "Discord", title: "Sam", body: "Does 8 tonight work?" }), 1500);
+if (state === "dl") setTimeout(() => fakeBridge.emit("download_done", { id: "d1", name: "q3-report.xlsx", size: 1_200_000 }), 400);
 if (state === "aym") fakeBridge.call("modules_set", { order: MODULES.map((m) => m.id), off: ["timer"] });
 if (state === "gz") fakeBridge.call("island_hide", { on: true });
 if (state === "h2") setClipboardDrag("c2");

@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FAKE_SECRET, fakeBridge } from "../bridge.fake";
+import { bridge } from "../bridge";
 import { Island } from "../components/Island";
 import { ShelfBump, ShelfCard } from "../components/Extras";
 import { ContextMenu } from "../components/Menus";
@@ -101,6 +102,7 @@ describe("live transcript: speaker label (decision 18)", () => {
 });
 
 describe("mascot", () => {
+  beforeEach(() => { vi.spyOn(bridge, "now").mockReturnValue(new Date(new Date().setHours(14))); }); // daytime: the mascot asserts don't depend on the wall clock (M1 makes a calm ghost drowsy at night)
   it("state name -> mascot mood; every mood is in the table", () => {
     expect(moodOf("listening")).toBe("listening");
     expect(moodOf("thinking")).toBe("thinking");
@@ -217,7 +219,7 @@ describe("mascot", () => {
     fireEvent.click(center());
     await settle();
     expect(screen.getByRole("dialog", { name: /^Modules/ })).toBeTruthy();
-    expect(center().querySelector(".mascot")).toBeNull(); // one piece of information once on the card
+    expect(center().querySelector(".mascot:not(.out)")).toBeNull(); // one piece of information once on the card (the strip ghost cross-fades out, M1)
   });
 });
 

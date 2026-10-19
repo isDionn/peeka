@@ -61,7 +61,9 @@ export function OsdBump({ osd }: { osd: VolumeOsd }) {
 
 /* ---- cards (.govde) ---- */
 
-export function MusicCard({ media, pos }: { media: Media; pos: number }) {
+/** b2 player card. M1: the ghost rides in at 56 px (swaying to the beat while playing; idle when paused or `calm` = locked/presenting); the strip's ghost steps aside (one mascot). */
+export function MusicCard({ media, pos, calm = false }: { media: Media; pos: number; calm?: boolean }) {
+  const main = useMainAssistant();
   const d = durationSec(media) ?? 0;
   const [scrub, setScrub] = useState<number | null>(null);
   const val = scrub ?? pos;
@@ -69,7 +71,7 @@ export function MusicCard({ media, pos }: { media: Media; pos: number }) {
   const commit = () => { if (scrub !== null) { bridge.call("media_control", { action: "seek", positionMs: Math.round(scrub * 1000) }).catch(() => undefined); setScrub(null); } };
   return (
     <div className="body">
-      <div className="player">
+      <div className={"player" + (main ? " rider" : "")}>
         {media.art ? <img className="cover" data-share="cover" src={media.art} alt="" /> : <span className="cover notchIcon" data-share="cover"><Music /></span>}
         <div style={{ minWidth: 0 }}>
           <div className="t20 b6" data-share="title" title={trackTitle(media)} style={{ width: "max-content", maxWidth: "100%" }}>{trackTitle(media)}</div>
@@ -87,6 +89,7 @@ export function MusicCard({ media, pos }: { media: Media; pos: number }) {
             <button className="filled" title="Next" aria-label="Next track" disabled={!media.canNext} onClick={next}><SkipForward fill="currentColor" /></button>
           </div>
         </div>
+        {main && <Lead plugin={{ id: main.id, name: main.name, main: true }} mascot={media.playing && !calm ? "music" : "ready"} size={56} />}
       </div>
     </div>
   );

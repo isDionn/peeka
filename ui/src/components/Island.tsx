@@ -10,6 +10,7 @@ import { Mascot, createIdlePrank, type Mood, type MascotHandle } from "../mascot
 import { firstRunDone, markFirstRun } from "../lib/firstRun";
 import { focusViaKeys, onX, sendX, tabLeaves } from "../lib/xwin";
 import { ambientMood } from "../mascot/ambient";
+import { eventMood, newIds, REACT_MS, withReaction } from "../mascot/react";
 import { createCcMood } from "../mascot/ccMood";
 import { BtBump, BtCenter, ChargeBump, ChargeCenter, LowBatteryBump, LowBatteryCenter, ShelfBump, ShelfCard, ShelfCenter, TimerBump, TimerCenter, TimerDoneBump, TimerDoneCenter, NetBump, NetCenter, AwayBump, AwayCenter } from "./Extras";
 import { announceCenterClock } from "../lib/centerClock";
@@ -68,6 +69,8 @@ export interface IslandInit {
   /** Preview (mockup cev, bit): assistant offline / task done strip. */
   offline?: boolean;
   done?: { title: string; took: string };
+  /** Preview (gr): the launch greeting. Without `init` (the real app) it always plays once. */
+  greet?: boolean;
   /** Preview: timer done card ("Time's up"). */
   timerDone?: string;
   /** Preview: connection lost / back peek. */
@@ -155,7 +158,10 @@ interface CenterOpts {
   time: string; media: Media | null; alert: Alert | null; osd: VolumeOsd | null; approval: ApprovalItem | null; plug: ProtrusionItem | null; composerLabel: string | null;
   net: NetNote | null; shot: ClipPlain | null; timerDone: string | null; main: ReturnType<typeof useMainAssistant>; locked: boolean; alertsN: number; done: { title: string; took: string } | null; meeting: ProtrusionItem | null; burst: Burst | null; stopped: MusicStopped | null; dl: DownloadDone | null; cpu: CpuHigh | null; edit: CcEdit | null;
   /** Resting center (mascot, "Compass ready", counts or the clock); Island picks which piece shows for which card. */
-  rest: ReactNode; battery: Status["battery"]; bt: BluetoothEvent | null; timer: TimerState | null; shelfCount: number; panel: "search" | "settings" | "status" | "start" | "cleanup" | null;
+  rest: ReactNode;
+  /** The 40 px strip ghost in an event's mood (download, copy catch, task done); null = no ghost there. */
+  ghost: (kind: Kind) => ReactNode;
+  battery: Status["battery"]; bt: BluetoothEvent | null; timer: TimerState | null; shelfCount: number; panel: "search" | "settings" | "status" | "start" | "cleanup" | "notif" | null;
 }
 /* While locked, the strip and bubble show generic labels instead of content: LOCK_MUSIC, LOCK_ALERT (SideBubble.tsx). */
 const centerOf = (kind: Kind, o: CenterOpts): ReactNode => {
@@ -163,7 +169,7 @@ const centerOf = (kind: Kind, o: CenterOpts): ReactNode => {
   switch (kind) {
     case "clipboard": return <ClipboardCenter />;
     case "lock": return <LockCenter />;
-    case "shot": return <ShotCenter main={main} item={o.shot ?? undefined} />;
+    case "shot": return <ShotCenter main={main} item={o.shot ?? undefined} ghost={o.ghost(kind)} />;
     case "approval": return approval && <ApprovalCenter a={approval} />;
     case "approval-card": return <ApprovalShort />;
     case "plugin": return plug && <ProtrusionCenter item={plug} />;
@@ -172,7 +178,7 @@ const centerOf = (kind: Kind, o: CenterOpts): ReactNode => {
     case "burst": return o.burst && <BurstCenter b={o.burst} generic={o.locked} />;
     case "quota": return <QuotaCenter />;
     case "cpu": return o.cpu && <CpuCenter app={o.cpu.app} generic={o.locked} />;
-    case "download": return o.dl && <DownloadCenter name={o.dl.name} generic={o.locked} />;
+    case "download": return o.dl && <DownloadCenter name={o.dl.name} generic={o.locked} ghost={o.ghost(kind)} />;
     case "edit": return o.edit && <EditCenter e={o.edit} generic={o.locked} />;
     case "musicstop": return o.stopped && <MusicStoppedCenter name={o.stopped.name} generic={o.locked} />;
     case "error": return <ErrorCenter />;
@@ -183,7 +189,7 @@ const centerOf = (kind: Kind, o: CenterOpts): ReactNode => {
     case "timerdone": return <TimerDoneCenter label={o.locked ? null : o.timerDone} />;
     case "shelfdrag": return <ShelfCenter main={main} count={o.shelfCount} />;
     case "shelf": return <ShelfOpenCenter />;
-    case "jobdone": return o.done && <JobDoneCenter title={o.done.title} took={o.done.took} />;
+    case "jobdone": return o.done && <JobDoneCenter title={o.done.title} took={o.done.took} mood={eventMood(kind, o.locked) ?? "done"} />;
     case "meeting": return <MeetingCenter main={main} />;
     case "firstconnect": return <FirstConnectCenter />;
     case "recap": return <RecapCenter />;
@@ -265,7 +271,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const [offline, setOffline] = useState(!!init?.offline);
   const [done, setDone] = useState<{ title: string; took: string } | null>(init?.done ?? null);
   const doneAt = useRef<number[]>([]);
-  const [panelLabel, setPanelLabel] = useState<"search" | "settings" | "status" | "start" | "cleanup" | null>(init?.panel ?? null);
+  const [panelLabel, setPanelLabel] = useState<"search" | "settings" | "status" | "start" | "cleanup" | "notif" | null>(init?.panel ?? null);
   // the assistant connected for the first time (ilk2, once ever)
   const [fc, ackFc] = useFirstConnect();
   useEffect(() => { if (fc) setUser((u) => (u === null ? "firstconnect" : u)); }, [fc]);
@@ -392,6 +398,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   // while Search / Settings is open on the strip page, a short label in the center (say it once); if something else is in the peek, it stays
   const kind: Kind = (panelLabel === "search" || panelLabel === "settings" || panelLabel === "cleanup") && (base === "rest" || base === "hov") ? "panel" : base;
   const plainPanel = panelLabel === "status" || panelLabel === "start"; // no mascot in the center while Status / Start is open (one mascot, in the card or panel)
+  const mkAside = plainPanel || panelLabel === "notif"; // the Notifications panel (strip window, so the one-mascot registry can't see it) shows the ghost: the strip's steps aside
   const meetingItem = surf.protrusion?.icon === "calendar" ? surf.protrusion : null;
   const sys = useSysmon(kind === "modules");
   useEffect(() => { if (kind !== "modules") { setModPage("general"); setModName("General"); setModStart(undefined); } }, [kind]);
@@ -499,7 +506,13 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   // Claude Code events (cc_event) ride on top of the calm state; the assistant's approval, work and error always come first
   // with no assistant / while it sleeps, assistant states stay calm; Claude Code events (Peeka's own hook) still drive the mascot. When connected, the assistant's own approval/work/error comes first.
   const baseMood: Mood = mainP && !asleep && mood !== "idle" ? mood : ccMood ?? "idle";
-  const moodShown = ambientMood({ base: baseMood, batteryPercent: batt?.percent ?? null, powered: !!batt && (batt.charging || batt.plugged), justPlugged: charge, idleMs });
+  const ambientShown = ambientMood({ base: baseMood, batteryPercent: batt?.percent ?? null, powered: !!batt && (batt.charging || batt.plugged), justPlugged: charge, idleMs, hour: now.getHours() });
+  // M1 short reactions on the strip ghost (launch greeting, a new message): REACT_MS, calm moods only, never while locked/presenting
+  const [reaction, setReaction] = useState<Mood | null>(null);
+  const reactT = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const react = (m: Mood) => { clearTimeout(reactT.current); setReaction(m); reactT.current = setTimeout(() => setReaction(null), REACT_MS); };
+  useEffect(() => () => clearTimeout(reactT.current), []);
+  const moodShown = withReaction(ambientShown, reaction, priv);
   // mascot: click = ask box; dropping a file = it swallows it and the box opens with the Shelf files attached; hover shows counts
   const [autoShelf, setAutoShelf] = useState(false);
   const feed = () => { if (!owner.current) return; setAutoShelf(true); openAsk("composer"); };
@@ -550,6 +563,25 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     return () => { removeEventListener(UNSUPPORTED_EVENT, on); clearTimeout(t); };
   }, []);
   const restShown = kind === "rest" || kind === "hov";
+  // launch greeting: once, the first time the strip ghost is on screen
+  const greeted = useRef(init ? !init.greet : false);
+  useEffect(() => {
+    if (greeted.current || !restShown || mkAside || priv) return;
+    greeted.current = true;
+    const t = setTimeout(() => react("hello"), 300);
+    return () => clearTimeout(t);
+  }, [restShown, mkAside, priv]); // eslint-disable-line react-hooks/exhaustive-deps
+  // a new Windows notification: the ghost's eyes turn toward it (top right) and it raises its brows; the first list is silent
+  const seenMirror = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!mir.ready) return;
+    const ids = mirrorIds ? mirrorIds.split("|") : [];
+    const fresh = newIds(seenMirror.current, ids);
+    seenMirror.current = new Set(ids);
+    if (!fresh.length || priv || !restShown) return;
+    react("message");
+    mascotRef.current?.glance(innerWidth * 4, 0, REACT_MS);
+  }, [mirrorIds, mir.ready]); // eslint-disable-line react-hooks/exhaustive-deps
   prankEnv.current = { on: (settings?.mascotPranks ?? true) && restShown, dnd: !!status?.dnd || input.busy, presentation: input.presentation, meeting: meetingOn || surf.protrusion?.icon === "calendar", music: !!media?.playing, cardOpen: !restShown, fullscreen };
   const lastInputAgoMs = input.lastInputAgoMs;
   useEffect(() => {
@@ -626,7 +658,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   /* ---- content ---- */
   const { time, label } = clockParts(now);
   const pos = Math.floor(position()); // seconds: so the card's props don't change on spring frames
-  const musicCard = useMemo(() => media && <MusicCard media={media} pos={pos} />, [media, pos]);
+  const musicCard = useMemo(() => media && <MusicCard media={media} pos={pos} calm={priv} />, [media, pos, priv]);
   const editSid = !priv && edit?.file ? edit.sid : null;
   const showDiff = editSid ? () => { setDiffSid(editSid); setUser("diff"); } : null;
   const openApproval = useCallback((id: string) => { setDetailId(id); setUser("approval-card"); }, []);
@@ -686,7 +718,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       const card = kind === "modules" || plainPanel; // while a card is open, counts and mascot live in the card (say it once)
       return (
         <>
-          <span className="ms">{lockIcon}{!card && <Mascot ref={mascotRef} size={40} mood={moodShown} isMainAssistant cursor={input.cursor} onFileDrop={feed} onPoke={pick} />}<span className="l2" title={composerLabel ?? `${pluginName(mainP)} ready`}>{composerLabel ?? `${pluginName(mainP)} ready`}</span></span>
+          <span className="ms">{lockIcon}<Mascot ref={mascotRef} size={40} mood={moodShown} isMainAssistant cursor={input.cursor} onFileDrop={feed} onPoke={pick} hide={card || mkAside} /><span className="l2" title={composerLabel ?? `${pluginName(mainP)} ready`}>{composerLabel ?? `${pluginName(mainP)} ready`}</span></span>
           {!card && approvalsN > 0 && <span className="t12 b6 approvalCount num">{cap99(approvalsN)} {approvalsN === 1 ? "approval" : "approvals"}</span>}
           {alerts.length > 0 && <span className="t12 l3 num">{cap99(alerts.length)} {alerts.length === 1 ? "notification" : "notifications"}</span>}
         </>
@@ -694,7 +726,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     }
     return (
       <>
-        <span className="ms keep">{lockIcon}{restShown && !plainPanel && <Mascot ref={mascotRef} size={40} mood={moodShown} isMainAssistant cursor={input.cursor} />}<span className="b6 num">{time}</span></span>
+        <span className="ms keep">{lockIcon}<Mascot ref={mascotRef} size={40} mood={moodShown} isMainAssistant cursor={input.cursor} hide={!restShown || mkAside} /><span className="b6 num">{time}</span></span>
         {approvalsN > 0 && <span className="t12 b6 approvalCount num">{cap99(approvalsN)} {approvalsN === 1 ? "approval" : "approvals"}</span>}{/* pending approvals are counted on the strip even when the connection is lost */}
         {media && (priv
           ? <span className="ms"><span className="l2">{LOCK_MUSIC}</span>{media.playing && <Bars />}</span>
@@ -702,7 +734,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       </>
     );
   })();
-  const centerNode = centerOf(kind, { time, media, alert, osd, approval: kind === "approval" ? approvalTop : null, plug: surf.protrusion, composerLabel: composerLabel, net: netNote, shot: shotNow, timerDone: timerDone?.label ?? null, main, locked: priv, alertsN: alerts.length, done, meeting: meetingItem, burst, stopped, dl, cpu: cpuHigh, edit, rest, battery: batt, bt, timer, shelfCount: shelf.length, panel: panelLabel });
+  const centerNode = centerOf(kind, { time, media, alert, osd, approval: kind === "approval" ? approvalTop : null, plug: surf.protrusion, composerLabel: composerLabel, net: netNote, shot: shotNow, timerDone: timerDone?.label ?? null, main, locked: priv, alertsN: alerts.length, done, meeting: meetingItem, burst, stopped, dl, cpu: cpuHigh, edit, rest, ghost: (k) => { const m = eventMood(k, priv); return m && <Mascot size={40} mood={m} isMainAssistant cursor={input.cursor} />; }, battery: batt, bt, timer, shelfCount: shelf.length, panel: panelLabel });
 
   const centerOld = useOld(centerKey, centerNode);
   const shapeOld = useOld(spec?.key ?? "none", spec?.node ?? null, spec?.mode === "card" ? spec.kw : undefined);

@@ -4,6 +4,7 @@
 // Continuous float/breathe/effect sway is CSS animation (mascot.css); the JS loop only runs springs, gaze and timed tracks.
 // Part names ("body-*", "eye-*", "mouth-*", "fx-*") are the artwork file names under public/mascot/parts.
 import { CLOSED_EYES, MOODS, pickScale, sizePlan, type Fx, type Mood } from "./moods";
+import { WINK_MS, winkAfter } from "./react";
 import { BADGE, CHEW, CHEW_Y, POKE_X, POKE_Y, REACT, SPARKLE, SWALLOW_FILE_MS, SWALLOW_MOUTH_MS, SWALLOW_X, SWALLOW_Y, dizzyTrack, gazeStep, gazeTarget, sample, shakeTrack, swayTrack, trackMs, type Track } from "./motion";
 
 export const ASSET_BASE = `${import.meta.env.BASE_URL}mascot/`;
@@ -87,6 +88,7 @@ export class Ghost {
   private badgeT?: ReturnType<typeof setTimeout>; private eyesT?: ReturnType<typeof setTimeout>; private dazeT?: ReturnType<typeof setTimeout>; private dazeEnd = 0;
   /** Last keyboard input (ms, performance.now): no blinking within 3 s (item 19, rule 3). Fed from outside. */
   lastInput = -Infinity;
+  private glanceEnd = 0;
 
   constructor(host: HTMLElement, { size, mood, still = false }: GhostOptions) {
     this.plan = sizePlan(size); this.mood = mood; this.still = still; this.size = size;
@@ -171,6 +173,7 @@ export class Ghost {
   setMood(mood: Mood, first = false) {
     if (!first && mood === this.mood) return;
     if (!first) { clearTimeout(this.eyesT); this.ovEyes = null; }   // slap/love eyes mustn't cover the new mood's eyes
+    const prev = this.mood;
     this.mood = mood;
     const m = MOODS[mood];
     const on = new Set(m.fx.filter((f) => f !== "sign" || this.plan.sign));
@@ -196,6 +199,7 @@ export class Ghost {
       if (mood === "error" && this.plan.shake) this.anim("shake", 0, shakeTrack(this.size));
       if (mood === "done" && this.plan.sparkle) this.sparkle();
       if (m.roll) this.anim("daze", 0, dizzyTrack(REACT.dizzyMs));
+      if (!this.plan.silhouette && winkAfter(prev, mood)) this.eyesFor("eye-wink", WINK_MS);
     }
     this.wake();
   }
@@ -294,7 +298,7 @@ export class Ghost {
 
   /** Turns the eyes toward the cursor; px/py are client coordinates in this element's window. No eye tracking below 28 px. */
   lookAt(px: number | null, py = 0) {
-    if (!this.plan.eyeTracking) return;
+    if (!this.plan.eyeTracking || performance.now() < this.glanceEnd) return;
     const g = this.gz;
     if (px === null) { g.tx = g.ty = 0; }
     else {
@@ -304,6 +308,14 @@ export class Ghost {
     }
     if (this.still) { g.x = g.tx; g.y = g.ty; }
     this.wake();
+  }
+
+  /** Eyes turn toward a point (a new notification) for `ms`; the cursor feed is ignored meanwhile, then the eyes come back to the center. */
+  glance(px: number, py: number, ms: number) {
+    if (!this.plan.eyeTracking || this.still) return;
+    this.glanceEnd = 0; this.lookAt(px, py);
+    this.glanceEnd = performance.now() + ms;
+    this.afterTimer(() => { this.glanceEnd = 0; this.lookAt(null); }, ms);
   }
 
   private async seq(steps: [number, () => void][]) {

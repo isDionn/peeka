@@ -3,6 +3,7 @@ import { useEffect, useImperativeHandle, useRef, useState, type DragEvent, type 
 import { Ghost } from "./ghost";
 import { DAZE_SIZE, HANG, sizePlan, type Mood } from "./moods";
 import { LOVE_MOODS, REACT, createClickCounter, createReactionGate } from "./motion";
+import { FADE_MS } from "./react";
 import { useSingleMascot } from "./useSingleMascot";
 import "./mascot.css";
 
@@ -15,6 +16,8 @@ export interface MascotHandle {
   slap(): void; love(): void;
   /** File swallow: sy 0.78 -> 1.18 -> 1 (80/130/220 ms), mouth open. */
   swallow(): void;
+  /** Eyes turn toward a client point for `ms` (a new notification), then back. */
+  glance(x: number, y: number, ms: number): void;
   /** In the hanging pose (size=40) the body's clickable rectangle; at other sizes the whole box. null while invisible. */
   hitRect(): HitRect | null;
   /** Is the draw loop running (false when still). */
@@ -34,6 +37,8 @@ export interface MascotProps {
   cursor?: { x: number; y: number } | null;
   /** One-mascot-on-screen rule (§0i item 23): on by default; priority = size, the larger wins. */
   single?: boolean;
+  /** Fades out (same cross-fade as losing the one-mascot slot): another surface shows the mascot, e.g. a strip panel in another window. */
+  hide?: boolean;
   /** Still frame (screenshots, static spots): no spring, blink or float. */
   still?: boolean;
   /** When a file is dropped on the mascot: it swallows it, then this is called. */
@@ -54,9 +59,14 @@ export function Mascot(props: MascotProps) {
 
 const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
 
-function MainMascot({ size, mood, onPoke, cursor, single = true, still = false, onFileDrop, badgeHint, className, ref }: MascotProps) {
-  const owner = useSingleMascot(size, single);
-  const visible = !single || owner;
+function MainMascot({ size, mood, onPoke, cursor, single = true, still = false, hide = false, onFileDrop, badgeHint, className, ref }: MascotProps) {
+  const owner = useSingleMascot(size, single && !hide);
+  const want = (!single || owner) && !hide;
+  // one-mascot cross-fade: a ghost that loses its slot stays FADE_MS while fading out (clicks pass through), the new one fades in on mount (mascot.css)
+  const [visible, setVisible] = useState(want);
+  if (want && !visible) setVisible(true);
+  useEffect(() => { if (want || !visible) return; const t = setTimeout(() => setVisible(false), FADE_MS); return () => clearTimeout(t); }, [want, visible]);
+  const wantRef = useRef(want); wantRef.current = want;
   const host = useRef<HTMLDivElement>(null);
   const hit = useRef<HTMLDivElement>(null);
   const ghost = useRef<Ghost | null>(null);
@@ -82,8 +92,10 @@ function MainMascot({ size, mood, onPoke, cursor, single = true, still = false, 
 
   useImperativeHandle(ref, () => ({
     hop: () => ghost.current?.hop(), slap: () => ghost.current?.slap(), love: () => ghost.current?.love(), prank: () => ghost.current?.prank(), swallow: () => ghost.current?.swallow(),
+    glance: (x, y, ms) => ghost.current?.glance(x, y, ms),
     running: () => !!ghost.current?.running,
     hitRect: () => {
+      if (!wantRef.current) return null;   // fading out: takes no clicks
       const r = (hit.current ?? host.current)?.getBoundingClientRect();
       return r ? { x: r.left, y: r.top, width: r.width, height: r.height } : null;
     },
@@ -133,7 +145,7 @@ function MainMascot({ size, mood, onPoke, cursor, single = true, still = false, 
   const hang = plan.hang;
   return (
     <div
-      ref={host} className={`mascot${className ? ` ${className}` : ""}`} aria-hidden="true"
+      ref={host} className={`mascot${want ? "" : " out"}${className ? ` ${className}` : ""}`} aria-hidden="true"
       data-mood={shown} data-size={size} data-hang={hang ? "1" : undefined}
       style={{ width: size, height: hang ? HANG.box.h : (size * 4) / 3 }}
       {...(hang ? {} : handlers)}

@@ -6,6 +6,7 @@ import { sendX } from "../lib/xwin";
 import { ageLabel } from "../lib/alerts";
 import { AlertIcon } from "../lib/alertIcon";
 import { NotchIcon } from "./IslandCards";
+import { EmptyBoard } from "./CardsExtra";
 import { Lead } from "./Plugin";
 import { initial, MASCOT_STATES, pluginName } from "../lib/plugin";
 import { delOk, SAFE_ICON } from "./common";
@@ -89,7 +90,7 @@ export function NotificationList({ onReview, onClose }: { onReview: (a: Alert) =
       {hide && mirror.length > 0 && <div className="notifs" role="list">
         {mirror.map((n) => <div key={n.id} role="listitem" className="notif plat glass"><span className="app"><b aria-hidden="true">{initial(n.app)}</b></span><div style={{ flex: 1, minWidth: 0 }}><div className="b6">{n.app}</div><div className="t12 l3">{lock.locked ? "Locked" : "Hidden"}</div></div></div>)}
       </div>}
-      {!hide && total === 0 && <div className="noResults">No notifications</div>}
+      {!hide && total === 0 && <EmptyBoard title="No notifications" hint="You're all caught up. New alerts land here." mood="sleeping" />}
       {!hide && <div className="notifs" role="list" onPointerLeave={held.clear}>{held.fill(rows)}</div>}
     </div>
   );

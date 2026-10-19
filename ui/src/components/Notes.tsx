@@ -1,5 +1,5 @@
 // Small peeks: notification burst, usage limit reached, "N sessions" chip. Logic lives in lib/notes.ts; Island picks, this file only draws.
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Bell, Cpu, Download, FilePen, Gauge, Headphones } from "lucide-react";
 import { bridge, type CcDiff, type CcEdit } from "../bridge";
 import { agentOf, burstLabel, type Burst, type CcSession } from "../lib/notes";
@@ -20,8 +20,8 @@ export const MusicStoppedBump = ({ onResume }: { onResume: () => void }) => <div
 export const resumeMusic = () => bridge.call("media_control", { action: "play_pause" }).catch(() => undefined);
 
 /** Download finished (Rust `download_done {id, name, size}`): only name and size arrive. When generic, no name or buttons (Rust refuses anyway). Failures are silent. */
-export const DownloadCenter = ({ name, generic }: { name: string; generic: boolean }) =>
-  <span className="ms"><Download /><span className="b6">{generic ? "Download complete" : `Downloaded: ${flat(name, 40)}`}</span></span>;
+export const DownloadCenter = ({ name, generic, ghost }: { name: string; generic: boolean; /** The 40 px strip ghost (cheers), if any. */ ghost?: ReactNode }) =>
+  <span className="ms">{ghost}<Download /><span className="b6">{generic ? "Download complete" : `Downloaded: ${flat(name, 40)}`}</span></span>;
 export function DownloadBump({ id, generic }: { id: string; generic: boolean }) {
   const go = (cmd: "download_open" | "download_show_in_folder") => () => bridge.call(cmd, { id }).catch(() => undefined);
   return generic

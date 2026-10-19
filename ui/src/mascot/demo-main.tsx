@@ -1,5 +1,6 @@
 // Mascot preview page (for headless Playwright frames).
 // Default: every mood x {20, 28, 40 hanging, 56}. ?still a still frame, ?mood=x one mood, ?view=fx behavior page (badge, shake, sparkle, gaze, swallow, daze, strip).
+// ?then=y&after=ms: every cell switches to mood y after ms (M1: ?mood=listening&then=idle shows the wink after listening).
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "../notch.css";
@@ -11,8 +12,11 @@ const still = q.has("still");
 const only = q.get("mood");
 const moods = (only ? [only] : Object.keys(MOODS)) as Mood[];
 const SIZES = [20, 28, 40, 56];
+const then = q.get("then") as Mood | null;
 
 function Grid() {
+  const [late, setLate] = useState(false);
+  useEffect(() => { if (!then) return; const t = setTimeout(() => setLate(true), Number(q.get("after") ?? 1000)); return () => clearTimeout(t); }, []);
   return (
     <div style={{ display: "grid", gridTemplateColumns: "110px repeat(4, 1fr)", gap: 8, padding: 16, background: "var(--card)", width: "max-content" }}>
       {moods.map((m) => (
@@ -20,7 +24,7 @@ function Grid() {
           <span style={{ color: "var(--l2)", alignSelf: "center" }}>{m}</span>
           {SIZES.map((s) => (
             <div key={s} data-cell={`${m}-${s}`} style={{ width: 96, height: 90, display: "grid", placeItems: s === 40 ? "start center" : "center", background: s === 20 ? "var(--strip)" : "var(--card2)", borderRadius: 12, paddingTop: s === 40 ? 0 : undefined }}>
-              <Mascot size={s} mood={m} isMainAssistant single={false} still={still} />
+              <Mascot size={s} mood={late && then ? then : m} isMainAssistant single={false} still={still} />
             </div>
           ))}
         </div>
