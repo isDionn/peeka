@@ -19,6 +19,8 @@
 
 <img src="docs/images/demo.gif" alt="Peeka in action: the island grows out of the strip, then a second task moves into the side bubble" width="100%">
 
+<p><a href="https://isdionn.github.io/peeka/#trailer"><img src="docs/images/trailer.jpg" alt="Watch the 30-second Peeka trailer" width="49%"></a><br><sub>▶ <a href="https://isdionn.github.io/peeka/#trailer">Watch the 30-second trailer</a></sub></p>
+
 <p>
   <a href="#download">Download</a> ·
   <a href="#features">Features</a> ·
