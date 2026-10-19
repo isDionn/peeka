@@ -49,7 +49,7 @@ describe("M1 mood selection", () => {
   it("new reactions are short and only use real parts", () => {
     expect(REACT_MS).toBeLessThanOrEqual(1200);
     expect(WINK_MS).toBeLessThanOrEqual(1200);
-    expect(MOODS.hello).toMatchObject({ eyes: "eye-happy", fx: ["wave"] });
+    expect(MOODS.hello).toMatchObject({ eyes: "eye-happy", fx: ["hi"] });
     expect(MOODS.message.eyes).toBe("eye-brows-2");
   });
 });

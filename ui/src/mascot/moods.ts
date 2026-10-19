@@ -6,7 +6,7 @@ export type Mood =
   | "searching" | "question" | "ratelimit" | "dizzy" | "hello" | "message" | "hot" | "shy";
 
 export type Body = "neutral" | "hands-up" | "chin" | "cheeks" | "tilted" | "squashed" | "tall" | "three-quarter";
-export type Fx = "zzz" | "mintLeft" | "mintRight" | "dots" | "redRight" | "redLeft" | "sign" | "sparkle" | "sparkle2" | "note" | "note2" | "ring" | "amber" | "wave" | "sweat" | "point" | "qsign" | "cover";
+export type Fx = "zzz" | "mintLeft" | "mintRight" | "dots" | "redRight" | "redLeft" | "sign" | "sparkle" | "sparkle2" | "note" | "note2" | "ring" | "amber" | "wave" | "sweat" | "point" | "qsign" | "cover" | "fist" | "reach" | "hi";
 export type Silhouette = "open" | "closed" | "hands" | "three-quarter";
 
 export interface MoodSpec {
@@ -29,7 +29,7 @@ export const MOODS: Record<Mood, MoodSpec> = {
   thinking:  { body: "chin",         eyes: "eye-up", mouth: SMILE,          fx: ["dots"],                light: "var(--orange,#FF9F0A)", speed: .9, sil: "open" },
   speaking:  { body: "neutral",         eyes: "eye-open",   mouth: "mouth-laugh", fx: ["redRight", "redLeft"], light: "var(--crimson,#F2555A)", speed: 1.1, talk: true, sil: "open" },
   approval:  { body: "three-quarter",     eyes: "eye-wink", mouth: SMILE,          fx: ["sign", "wave"],               light: "var(--orange,#FF9F0A)", speed: 1,  sil: "three-quarter" },
-  serious:   { body: "neutral",         eyes: "eye-open",   mouth: "mouth-wavy",   fx: [],                       light: "var(--orange,#FF9F0A)", speed: .6, sil: "open" },
+  serious:   { body: "three-quarter",   eyes: "eye-open",   mouth: "mouth-wavy",   fx: ["fist"],                       light: "var(--orange,#FF9F0A)", speed: .6, sil: "open" },
   attention: { body: "three-quarter",     eyes: "eye-surprised", mouth: "mouth-o",       fx: [],                       light: "var(--orange,#FF9F0A)", speed: .8, sil: "three-quarter" },
   tired:     { body: "tilted",         eyes: "eye-narrow",  mouth: "mouth-wavy",   fx: [],                       light: null,                 speed: .5,  sil: "closed" },
   done:      { body: "hands-up", eyes: "eye-happy",  mouth: SMILE,          fx: ["sparkle", "sparkle2"],  light: "var(--green,#30D158)",  speed: 1.1, sil: "hands" },
@@ -42,8 +42,9 @@ export const MOODS: Record<Mood, MoodSpec> = {
   ratelimit: { body: "tilted",         eyes: "eye-sad",  mouth: "mouth-wavy",   fx: ["sweat"],                  light: "var(--quota,#FF7A1A)",  speed: .5,  tag: "dot", sil: "closed" },
   dizzy:     { body: "tilted",         eyes: "eye-dizzy", mouth: "mouth-tongue",     fx: ["ring"],                light: "var(--yellow,#FFD60A)",  speed: 1.2, roll: true, tilt: -5, sil: "open" },
   // M1 short reactions (Peeka's own, never sent by plugins): launch greeting (waves once), a new message (raised brows + small sparkle)
-  hello:     { body: "neutral",         eyes: "eye-happy",  mouth: SMILE,          fx: ["wave"],                 light: null,                 speed: 1,   sil: "hands" },
-  message:   { body: "neutral",         eyes: "eye-brows-2", mouth: SMILE,         fx: ["sparkle2"],             light: null,                 speed: .8,  sil: "open" },
+  // M1c: hello, message and serious use the three-quarter body's one free hand (paw wave, reach toward the notification, fist)
+  hello:     { body: "three-quarter",   eyes: "eye-happy",  mouth: SMILE,          fx: ["hi"],                   light: null,                 speed: 1,   sil: "hands" },
+  message:   { body: "three-quarter",   eyes: "eye-brows-2", mouth: SMILE,         fx: ["sparkle2", "reach"],            light: null,                 speed: .8,  sil: "open" },
   // M1b: CPU very busy (the cpu_high strip event; heat waves + sweat), presentation mode just turned on (one hand covers the eyes, 1.2 s, no content)
   hot:       { body: "tilted",         eyes: "eye-narrow", mouth: "mouth-wavy",   fx: ["redRight", "redLeft", "sweat"], light: "var(--crimson,#F2555A)", speed: .9, sil: "closed" },
   shy:       { body: "three-quarter",   eyes: "eye-closed", mouth: SMILE,          fx: ["cover"],                light: null,                 speed: .6,  sil: "closed" },

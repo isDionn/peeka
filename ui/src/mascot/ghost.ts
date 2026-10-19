@@ -38,7 +38,21 @@ const FX: Record<Exclude<Fx, "sweat">, [string, number, number, number, string?]
   point: ["hand-point", 40, 330, 120],
   qsign: ["hand-question-sign", 20, 330, 170],
   cover: ["hand-flat", 200, 290, 190],
+  // M1c, same free-hand slot: serious holds a fist, a new notification reaches up toward it, hello waves a paw
+  fist: ["hand-fist", 62, 335, 112],
+  reach: ["hand-reach", 58, 262, 130, "transform:rotate(-55deg)"],   // finger up toward the strip, where the notification arrives
+  hi: ["hand-paw", 50, 300, 122],
 };
+// shortcut: frames share the first frame's box (their art widths differ by under 5%), add per-frame geometry if a frame ever looks off.
+/** M1c hand wiggle: near-duplicate hand art swapped as frames when the mood starts (FX[name][0] is frame 0). */
+const FRAMES: Partial<Record<Exclude<Fx, "sweat">, string[]>> = {
+  point: ["hand-point", "hand-point-2"],
+  qsign: ["hand-question-sign", "hand-question-sign-2", "hand-question-sign-3"],
+  hi: ["hand-paw", "hand-paw-2", "hand-paw-3"],
+  fist: ["hand-fist", "hand-round-2", "hand-round-3"],
+};
+/** 6 steps (a multiple of 2 and 3, so every wiggle ends on frame 0) x 180 ms = 1080 ms, within REACT_MS. */
+export const WIGGLE_STEP_MS = 180, WIGGLE_STEPS = 6;
 // shortcut: the .cut-top mask and tuft anchor fit body-neutral only, add per-body geometry if another body ever fidgets.
 /** M1b tuft flick: the neutral body's own tuft is masked off (mascot.css .cut-top) and these parts stand in, one after another.
  *  [file, native width, native height]; bottom-center at (304, 239) at 0.6 scale. (skirt-* tails were tried the same way: the cut left a hem line that reads as clothing.) */
@@ -102,7 +116,7 @@ export class Ghost {
   /** Last keyboard input (ms, performance.now): no blinking within 3 s (item 19, rule 3). Fed from outside. */
   lastInput = -Infinity;
   private glanceEnd = 0;
-  private fidgetN = 0; private extra = new Map<string, HTMLImageElement>();
+  private fidgetN = 0; private moodN = 0; private extra = new Map<string, HTMLImageElement>();
 
   constructor(host: HTMLElement, { size, mood, still = false }: GhostOptions) {
     this.plan = sizePlan(size); this.mood = mood; this.still = still; this.size = size;
@@ -192,10 +206,12 @@ export class Ghost {
     this.mood = mood;
     const m = MOODS[mood];
     const on = new Set(m.fx.filter((f) => !CARD_FX.has(f) || this.plan.sign));
+    const gen = ++this.moodN;
     this.sweat?.classList.toggle("shown", on.has("sweat"));
     for (const [name, f] of this.fx) {
-      if (on.has(name) && !f.src) f.src = `${PARTS}${FX[name][0]}.webp`;   // an effect image isn't loaded until first needed
+      if (on.has(name) && (!f.src || FRAMES[name])) f.src = `${PARTS}${FX[name][0]}.webp`;   // an effect image isn't loaded until first needed
       f.classList.toggle("shown", on.has(name));
+      if (on.has(name) && FRAMES[name] && !this.still) this.wiggle(f, FRAMES[name]!, gen);
       this.fxw.get(name)!.classList.toggle("shown", on.has(name));
     }
     this.root.style.setProperty("--speed", String(m.speed));
@@ -217,6 +233,13 @@ export class Ghost {
       if (!this.plan.silhouette && winkAfter(prev, mood)) this.eyesFor("eye-wink", WINK_MS);
     }
     this.wake();
+  }
+
+  /** Swaps the hand frames once the mood starts; a newer mood (gen) stops it. Frames are decoded first, so the hand never blinks out. */
+  private wiggle(f: HTMLImageElement, frames: string[], gen: number) {
+    void Promise.all(frames.map((n) => { const i = new Image(); i.src = `${PARTS}${n}.webp`; return i.decode?.().catch(() => undefined); })).then(() => {
+      for (let i = 1; i <= WIGGLE_STEPS; i++) this.afterTimer(() => { if (gen === this.moodN) f.src = `${PARTS}${frames[i % frames.length]}.webp`; }, i * WIGGLE_STEP_MS);
+    });
   }
 
   /** "!" badge: the old badge fades in 90 ms, then 100 ms later springs back in over 280 ms (timings in CSS, motion.ts BADGE). */

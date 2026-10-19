@@ -1,6 +1,6 @@
 // Mascot preview page (for headless Playwright frames).
 // Default: every mood x {20, 28, 40 hanging, 56}. ?still a still frame, ?mood=x one mood, ?view=fx behavior page (badge, shake, sparkle, gaze, swallow, daze, strip).
-// ?view=fidget (M1b): the three idle fidgets at 96/56/40 px (each replays every 2.5 s, first at 600 ms), plus the new hot/shy moods and the hands on searching/question.
+// ?view=fidget (M1b): the three idle fidgets at 96/56/40 px (each replays every 2.5 s, first at 600 ms), plus the new hot/shy moods and the hands on searching/question (M1c: serious fist, hello paw wave, message reach; the hand frames wiggle for ~1 s at mount).
 // ?then=y&after=ms: every cell switches to mood y after ms (M1: ?mood=listening&then=idle shows the wink after listening).
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -123,7 +123,7 @@ function Fidgets() {
     <div style={{ padding: 16, background: "var(--card)", color: "var(--l1, #fff)", display: "flex", flexDirection: "column", gap: 12, width: 1000 }}>
       {[96, 56, 40].map((s) => <div key={s} style={{ display: "flex", gap: 12 }}>{FIDGETS.map((k) => <FidgetCell key={k} kind={k} size={s} />)}</div>)}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        {(["hot", "shy", "searching", "question"] as Mood[]).flatMap((m) => [96, 56, 40].map((s) => <div key={m + s} data-cell={`${m}-${s}`} style={{ ...box, minWidth: 100 }}><b>{m} {s}</b><Mascot size={s} mood={m} isMainAssistant single={false} /></div>))}
+        {(["hot", "shy", "searching", "question", "serious", "hello", "message"] as Mood[]).flatMap((m) => [96, 56, 40].map((s) => <div key={m + s} data-cell={`${m}-${s}`} style={{ ...box, minWidth: 100 }}><b>{m} {s}</b><Mascot size={s} mood={m} isMainAssistant single={false} /></div>))}
       </div>
     </div>
   );

@@ -23,7 +23,7 @@ describe("rename wires", () => {
     const keys = [...table.matchAll(/^\s+(\w+): \[/gm)].map((m) => m[1]);
     expect(keys.length).toBeGreaterThan(10);
     expect(ghost).toContain("`g-fxw fx-${name}`");
-    const UNANIMATED = ["amber", "point", "qsign"]; // amber: no mood uses it; point/qsign: M1b hands placed by ghost.ts, not animated; the image still shows and hides
+    const UNANIMATED = ["amber", "point", "qsign", "fist", "reach", "hi"]; // amber: no mood uses it; the free-hand poses (M1b/M1c) have no CSS animation, ghost.ts swaps their frames
     expect(keys.filter((k) => !UNANIMATED.includes(k) && !defined.has(`fx-${k}`))).toEqual([]);
   });
 

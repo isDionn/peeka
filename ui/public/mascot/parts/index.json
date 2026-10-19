@@ -821,24 +821,16 @@
   }
  },
  "unused": {
-  "note": "Parts the engine does not load (M1b audit, 2026-10-19). Everything else is wired in ui/src/mascot (ghost.ts FX/TUFTS, moods.ts).",
-  "fx-zzz": "same art as fx-zzz-token (recolored); the token file is used",
-  "fx-wave-mint": "same art as fx-wave-mint-token; the token file is used",
-  "fx-wave-red": "same art as fx-wave-red-token; the token file is used",
-  "fx-sparkle-2": "same art as fx-sparkle-2-token; the token file is used",
-  "eye-single-line": "a single off-center line, half of a pair: no face reads right with it",
-  "skirt-1": "the body art bakes its own tail; masking it and drawing a skirt leaves a hem line that reads as clothing",
-  "skirt-2": "see skirt-1",
-  "skirt-3": "see skirt-1",
-  "hand-fist": "every free-hand pose already has a better part; a third hand on a two-handed body reads wrong",
-  "hand-paw": "see hand-fist",
-  "hand-paw-2": "see hand-fist",
-  "hand-paw-3": "see hand-fist",
-  "hand-point-2": "variant of hand-point (used)",
-  "hand-question-sign-2": "variant of hand-question-sign (used)",
-  "hand-question-sign-3": "variant of hand-question-sign (used)",
-  "hand-reach": "see hand-fist",
-  "hand-round-2": "see hand-fist",
-  "hand-round-3": "see hand-fist"
+  "note": "Parts the engine does not load (M1b audit, re-checked in M1c 2026-10-19). Everything else is wired in ui/src/mascot (ghost.ts FX/FRAMES/TUFTS, moods.ts).",
+  "fx-dots": "base-set part, not one of the 30 extras: same alpha mask as fx-dots-token, original color; the token file is used",
+  "fx-sparkle": "base-set part, not one of the 30 extras: same alpha mask as fx-sparkle-token, original color; the token file is used",
+  "fx-zzz": "same alpha mask as fx-zzz-token, different color (saturated mint vs the neutral recolor); the token file is used so effects match the theme tokens, the plain file is not loaded",
+  "fx-wave-mint": "same alpha mask as fx-wave-mint-token, more saturated cyan; the token file is used",
+  "fx-wave-red": "same alpha mask as fx-wave-red-token, orange-red instead of the crimson token; the token file is used",
+  "fx-sparkle-2": "same alpha mask as fx-sparkle-2-token, brighter green; the token file is used",
+  "eye-single-line": "one closed eye only; the engine draws both eyes as one pair image (eye-*), so it cannot close one side; eye-wink already is the pair-drawn wink",
+  "skirt-1": "a wide ruffled hem that reads as clothing (owner rule: no outfits); the body art bakes its own tail, and masking it to swap a hem leaves a visible cut line",
+  "skirt-2": "see skirt-1 (a hem with a single pointed tail, same problem)",
+  "skirt-3": "see skirt-1 (the widest, most skirt-like hem)"
  }
 }
