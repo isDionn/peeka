@@ -14,7 +14,7 @@ use crate::presence::Presence;
 pub struct InputTick {
     pub last_input_ago_ms: u64,
     pub cursor: Option<Point>,
-    /// `QUNS_PRESENTATION_MODE`.
+    /// `QUNS_PRESENTATION_MODE`, or the screen is being shared / recorded (`PrivacyState::screen`).
     pub presentation: bool,
     /// `QUNS_BUSY` / an exclusive D3D app / a Store app in fullscreen.
     pub busy: bool,
@@ -65,9 +65,11 @@ impl InputFeed {
         ago_ms: u64,
         cursor: Option<Point>,
         presence: Presence,
+        sharing: bool,
         now: u64,
     ) -> Option<InputTick> {
-        let presentation = presence == Presence::Presentation;
+        // Screen shared or recorded (B1): the page treats it as presentation mode (generic labels, no peeks).
+        let presentation = presence == Presence::Presentation || sharing;
         let busy = matches!(presence, Presence::Busy | Presence::D3dFullscreen | Presence::App);
         let key = (input_tick, cursor, presentation, busy);
         if self.last == Some(key) || self.sent_at.is_some_and(|t| now.saturating_sub(t) < MIN_GAP_MS) {
@@ -87,15 +89,25 @@ mod tests {
     fn sends_only_changes_at_most_once_a_second() {
         let mut f = InputFeed::default();
         let p = Some(Point { x: 1.0, y: 2.0 });
-        assert!(f.feed(10, 0, p, Presence::Normal, 0).is_some(), "the first tick");
-        assert!(f.feed(10, 900, p, Presence::Normal, 1_000).is_none(), "nothing changed");
-        assert!(f.feed(10, 9_000, p, Presence::Normal, 9_000).is_none(), "idle: still nothing");
-        assert!(f.feed(11, 0, p, Presence::Normal, 9_500).is_some(), "new input");
-        assert!(f.feed(12, 0, None, Presence::Normal, 9_900).is_none(), "under a second: wait");
-        let t = f.feed(12, 100, None, Presence::Presentation, 10_500).unwrap();
+        assert!(f.feed(10, 0, p, Presence::Normal, false, 0).is_some(), "the first tick");
+        assert!(f.feed(10, 900, p, Presence::Normal, false, 1_000).is_none(), "nothing changed");
+        assert!(f.feed(10, 9_000, p, Presence::Normal, false, 9_000).is_none(), "idle: still nothing");
+        assert!(f.feed(11, 0, p, Presence::Normal, false, 9_500).is_some(), "new input");
+        assert!(f.feed(12, 0, None, Presence::Normal, false, 9_900).is_none(), "under a second: wait");
+        let t = f.feed(12, 100, None, Presence::Presentation, false, 10_500).unwrap();
         assert!(t.presentation && !t.busy && t.cursor.is_none());
-        assert!(f.feed(12, 0, None, Presence::D3dFullscreen, 11_600).unwrap().busy);
+        assert!(f.feed(12, 0, None, Presence::D3dFullscreen, false, 11_600).unwrap().busy);
         assert_eq!((poll_ms(0), poll_ms(IDLE_MS)), (1000, 3000));
+    }
+
+    #[test]
+    fn a_screen_share_reads_as_presentation_and_its_end_resends() {
+        let mut f = InputFeed::default();
+        assert!(!f.feed(1, 0, None, Presence::Normal, false, 0).unwrap().presentation);
+        let t = f.feed(1, 0, None, Presence::Normal, true, 1_000).unwrap();
+        assert!(t.presentation && !t.busy, "sharing alone, same input: still sent");
+        assert!(f.feed(1, 0, None, Presence::Busy, true, 2_000).unwrap().presentation, "fullscreen while sharing");
+        assert!(!f.feed(1, 0, None, Presence::Normal, false, 3_000).unwrap().presentation, "the share ended");
     }
 
     #[test]

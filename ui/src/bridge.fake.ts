@@ -1,5 +1,5 @@
 // Fake back end used outside Tauri: realistic data, in-memory state, the same event path. Used by the preview and tests.
-import type { AgentBridge, Attached, TrayIconX, CalendarNext, Alert, AssistantCounts, BridgeState, PermissionEvent, RecentItem, AlertsView, AllCommands, AllEvents, CallArgs, CommandName, Commands, ClipChange, ClipItem, ClipPlain, ComposerEvent, ConsentAnswer, LockState, MirrorState, MirrorView, Notice, TrayIcon, ShelfItem, TimerState, PrivacyState, RecapWeek, ConsentRequest, ModuleEntry, PluginCommands, PluginInfo, SurfacesView, Media, MonitorInfo, PinnedApp, SearchResult, Settings, Status, SysmonTick, VolumeOsd, WindowInfo } from "./bridge";
+import type { AgentBridge, Attached, TrayIconX, CalendarNext, Alert, AssistantCounts, BridgeState, PermissionEvent, RecentItem, AlertsView, AllCommands, AllEvents, CallArgs, CommandName, Commands, ClipChange, ClipItem, ClipPlain, ComposerEvent, ConsentAnswer, LockState, MirrorState, MirrorView, Notice, TrayIcon, ShelfItem, TimerState, PrivacyState, RecapWeek, ConsentRequest, ModuleEntry, PluginCommands, PluginInfo, SurfacesView, Media, MonitorInfo, PinnedApp, SearchResult, Settings, Status, Audio, SysmonTick, VolumeOsd, WindowInfo } from "./bridge";
 import { APP_NAMES, iconOf } from "./fakeIcons";
 import { EMPTY_SURFACES, MODULES, PLUGINS } from "./plugin.fixtures";
 
@@ -36,7 +36,7 @@ type W4Names = "search_index_state" | "search_open" | "search_ask" | "clip_list"
 type W5Names = "window_preview" | "share_open" | "shelf_list" | "shelf_ask" | "timer_get" | "timer_start" | "timer_control" | "privacy_get" | "tray_open" | "mirror_state" | "mirror_enable" | "mirror_disable" | "mirror_list" | "mirror_dismiss" | "mirror_open_app" | "mirror_ask";
 type W7Names = "recent_files" | "open_recent" | "start_pins" | "open_start_menu" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "agent_bridges" | "agent_bridge_install" | "agent_bridge_remove" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "window_pick" | "cc_focus_terminal" | "cc_diff" | "cc_diff_open" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus";
 /** Peeka Phase C: clipboard, download and copy-code commands; Settings > About demo restart. */
-type W8Names = "demo_restart" | "notif_copy_code" | "clip_open" | "clip_to_shelf" | "clip_preview" | "download_open" | "download_show_in_folder";
+type W8Names = "demo_restart" | "notif_copy_code" | "clip_open" | "clip_to_shelf" | "clip_preview" | "clip_ocr" | "download_open" | "download_show_in_folder";
 const svg = (inner: string) => "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${inner}</g></svg>`);
 const GLYPH = {
   bluetooth: svg('<path d="m7 7 10 10-5 5V2l5 5L7 17"/>'),
@@ -67,6 +67,8 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   let pins: string[] = [];
   let windows: WindowInfo[] = [];
   let status: Status;
+  let audio: Audio;
+  let audioRefuse = false;
   let settings: Settings;
   const listeners = new Map<string, Set<(p: never) => void>>();
   let track = 0;
@@ -105,6 +107,11 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       dndUntil: null, network: "internet",
       battery: hasBattery ? { percent: 78, charging: false, plugged: false, remaining: "3h 10m" } : null,
     };
+    audio = { micMuted: false, outputs: [
+      { id: "spk", name: "Speakers (Realtek Audio)", default: true },
+      { id: "bt", name: "Buds Pro", default: false },
+      { id: "hdmi", name: "LG Monitor (HDMI)", default: false },
+    ] };
     track = 0;
     media = { app: "Spotify", ...TRACKS[0], playing: true, positionMs: 84_000, positionAt: Date.now(), canPrevious: true, canNext: true, canSeek: true };
     const old = (id: string, title: string, subtitle: string, icon: string, ago: number, extra: Partial<Alert> = {}): Alert =>
@@ -177,6 +184,14 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     open_result: ({ id }) => { if (id.startsWith("win:")) handlers.activate_window({ hwnd: +id.slice(4) }); else handlers.launch_app({ appId: id.slice(4) }); },
     get_status: () => ({ ...status }),
     set_volume: ({ value }) => { status = { ...status, volume: value, muted: value === 0 }; emit("status_changed", status); },
+    audio_get: () => structuredClone(audio),
+    set_audio_output: ({ id }) => {
+      log.push({ cmd: "set_audio_output", args: { id } });
+      if (!audio.outputs.some((o) => o.id === id)) throw "unknown";
+      if (audioRefuse) throw "refused"; // stand-in for IPolicyConfig refusing
+      audio = { ...audio, outputs: audio.outputs.map((o) => ({ ...o, default: o.id === id })) };
+    },
+    set_mic_muted: ({ muted }) => { log.push({ cmd: "set_mic_muted", args: { muted } }); audio = { ...audio, micMuted: muted }; },
     set_brightness: ({ value }) => { status = { ...status, brightness: value }; emit("status_changed", status); },
     set_radio: ({ kind, on }) => {
       status = kind === "wifi" ? { ...status, wifi: { on, name: on ? "Home-5G" : null } } : { ...status, bluetooth: { on, name: on ? "Buds Pro" : null } };
@@ -290,7 +305,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   /* ---- Wave 5: window preview, share, shelf, timer, privacy (bridge.ts) ---- */
   let shelf: ShelfItem[] = [];
   let timer: TimerState | null = null;
-  let privacy: PrivacyState = { mic: [], camera: [] };
+  let privacy: PrivacyState = { mic: [], camera: [], screen: false };
   let mirror: MirrorState = { devMode: true, registered: true, access: "allowed", enabled: false, on: false, blocker: null };
   let notices: Notice[] = [];
   let scanDenied = false;
@@ -323,7 +338,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       timer = action === "stop" ? null : { ...timer, remainingS: action === "add5" ? left + 300 : left, running: action === "resume" ? true : action === "pause" ? false : timer.running, at: Date.now() };
       emit("timer_changed", timer ? { ...timer } : null);
     },
-    privacy_get: () => ({ mic: [...privacy.mic], camera: [...privacy.camera] }),
+    privacy_get: () => ({ ...privacy, mic: [...privacy.mic], camera: [...privacy.camera] }),
     timer_start: ({ label, seconds }) => {
       log.push({ cmd: "timer_start", args: { label, seconds } });
       if (!(seconds >= 1 && seconds <= 86400)) throw "invalid";
@@ -360,6 +375,8 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     clip_open: (a) => { const c = find(a.id); if (!c || lock.locked || c.kind === "password") throw "denied"; if (c.kind === "text") throw "invalid"; log.push({ cmd: "clip_open", args: a }); },
     clip_to_shelf: (a) => { const c = find(a.id); if (!c || lock.locked || c.kind === "password") throw "denied"; if (c.kind === "text") throw "invalid"; log.push({ cmd: "clip_to_shelf", args: a }); emit("shelf_changed", null); },
     clip_preview: (a) => { const c = find(a.id); if (!c || lock.locked || c.kind === "password") throw "denied"; if (c.kind !== "image") throw "invalid"; log.push({ cmd: "clip_preview", args: a }); return c.thumb ?? ""; },
+    // Fake OCR: an image whose source name contains "blank" has no text; the rest copies a sample line.
+    clip_ocr: (a) => { const c = find(a.id); if (!c || lock.locked || c.kind === "password") throw "denied"; if (c.kind !== "image") throw "invalid"; log.push({ cmd: "clip_ocr", args: a }); return !/blank/i.test(c.source ?? ""); },
     download_open: (a) => { if (lock.locked) throw "denied"; if (/\.(exe|bat|cmd|ps1|lnk|msi)$/i.test(downloads.get(a.id) ?? "")) throw "denied"; if (!downloads.has(a.id)) throw "missing"; log.push({ cmd: "download_open", args: a }); },
     download_show_in_folder: (a) => { if (lock.locked) throw "denied"; if (!downloads.has(a.id)) throw "missing"; log.push({ cmd: "download_show_in_folder", args: a }); },
   };
@@ -421,7 +438,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       return () => { set.delete(cb as never); };
     },
     now: () => fixed ?? new Date(),
-    reset: () => { reset(); filesIndex = true; scanDenied = false; picked = null; surfaces = EMPTY_SURFACES; consent = null; shelf = []; timer = null; privacy = { mic: [], camera: [] }; previewDelay = 0; mirror = { devMode: true, registered: true, access: "allowed", enabled: false, on: false, blocker: null }; notices = []; quiet = false; agents = structuredClone(AGENTS0); plugins = structuredClone(PLUGINS); modules = structuredClone(MODULES); log.length = 0; turn = 0; },
+    reset: () => { reset(); audioRefuse = false; filesIndex = true; scanDenied = false; picked = null; surfaces = EMPTY_SURFACES; consent = null; shelf = []; timer = null; privacy = { mic: [], camera: [], screen: false }; previewDelay = 0; mirror = { devMode: true, registered: true, access: "allowed", enabled: false, on: false, blocker: null }; notices = []; quiet = false; agents = structuredClone(AGENTS0); plugins = structuredClone(PLUGINS); modules = structuredClone(MODULES); log.length = 0; turn = 0; },
     /** Test and preview hooks: trigger by hand what Rust would do. */
     emit,
     /** Fidelity 3: the main assistant's bridge state and the "first connection" card. */
@@ -459,10 +476,12 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     /** Wave 5 hooks: trigger Rust's timer, shelf and privacy events by hand; `previewDelay` mimics preview load time. */
     /** Fidelity hook: change status fields (quiet, end time) by hand. */
     setStatus: (p: Partial<Status>) => { status = { ...status, ...p }; emit("status_changed", { ...status }); },
+    /** The next `set_audio_output` calls fail with `refused` (IPolicyConfig refusing on a real PC). */
+    setAudioRefuse: (on: boolean) => { audioRefuse = on; },
     setBattery: (b: Status["battery"]) => { status = { ...status, battery: b }; emit("status_changed", { ...status }); },
     setTimer: (t: Omit<TimerState, "at"> | null) => { timer = t && { ...t, at: Date.now() }; emit("timer_changed", timer ? { ...timer } : null); },
     setShelf: (list: ShelfItem[]) => { shelf = structuredClone(list); emit("shelf_changed", null); },
-    setPrivacy: (p: PrivacyState) => { privacy = p; emit("privacy_changed", { mic: [...p.mic], camera: [...p.camera] }); },
+    setPrivacy: (p: Omit<PrivacyState, "screen"> & { screen?: boolean }) => { privacy = { ...p, screen: !!p.screen }; emit("privacy_changed", { ...privacy, mic: [...p.mic], camera: [...p.camera] }); },
     /** Wave 6 hooks: notification mirror state (blockers derive from `devMode`/`registered`/`access`), cards and quiet mode. */
     setMirror: (p: Partial<MirrorState>) => { mirrorSet(p); },
     pushNotice: (n: Partial<Notice> & { id: string; app: string; title: string }) => { notices = [...notices.filter((x) => x.id !== n.id), { body: null, tile: "", tileMono: true, ripple: false, openLabel: "Open app", canOpen: true, at: nowMs(), hasCode: false, ...n }]; mirrorEmit(); },

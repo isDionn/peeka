@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { ArrowUpRight, Battery, BatteryCharging, Bluetooth, Brain, Camera, LoaderCircle, Mic, Moon, Power, ShieldAlert, Sun, Volume2, VolumeX, Wifi, WifiOff } from "lucide-react";
-import { bridge, type AssistantCounts, type MonitorInfo, type Radio, type Status } from "../bridge";
+import { ArrowUpRight, Battery, BatteryCharging, Bluetooth, Brain, Camera, Check, ChevronDown, LoaderCircle, Mic, MicOff, Monitor, Moon, Power, ShieldAlert, Speaker, Sun, Volume2, VolumeX, Wifi, WifiOff } from "lucide-react";
+import { bridge, type Audio, type AssistantCounts, type MonitorInfo, type Radio, type Status } from "../bridge";
 import { useMainAssistant, usePrivacy, useSurfaces } from "../hooks";
 import { pluginName } from "../lib/plugin";
 import { Mascot } from "../mascot";
@@ -25,6 +25,30 @@ function Tile({ icon, title, sub, on, label, onClick, first }: { icon: ReactNode
     <button className={"boxBtn" + (on ? " on" : "")} aria-pressed={on} aria-label={label} data-autofocus={first ? "" : undefined} onClick={onClick}>
       {icon}<span className="t12 b6">{title}</span><span className="t11 l2">{sub}</span>
     </button>
+  );
+}
+
+/** Audio switcher under the volume slider: one fixed 40 px row naming the default output; it opens in place, the device
+ * rows go below it in Windows's order (nothing above moves, and a row never jumps after a switch). A refused switch
+ * (the undocumented IPolicyConfig) says so in the header's right slot, no extra row. */
+function OutputSwitcher({ audio, reload }: { audio: Audio; reload: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const current = audio.outputs.find((o) => o.default);
+  const pick = (id: string) => { setFailed(false); bridge.call("set_audio_output", { id }).then(reload, () => setFailed(true)); };
+  return (
+    <div className="list glass audioOut" style={{ "--indent": "28px" } as CSSProperties}>
+      <button className="row" aria-expanded={open} aria-label={`Audio output, ${current?.name ?? "none"}`} onClick={() => { setOpen(!open); setFailed(false); if (!open) reload(); }}>
+        <Speaker /><span className="text">{current?.name ?? "Output"}</span>
+        {failed && <span className="t12 l3" role="alert">Couldn't switch</span>}
+        <ChevronDown className="chev" aria-hidden="true" />
+      </button>
+      {open && audio.outputs.map((o) => (
+        <button key={o.id} className="row" aria-pressed={o.default} onClick={() => !o.default && pick(o.id)}>
+          {o.default ? <Check /> : <span className="tickSlot" />}<span className="text">{o.name}</span>
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -61,11 +85,16 @@ export function StatusCard({ monitor, status, setStatus, onQuit }: { monitor: Mo
   const state = (on: boolean) => (on ? "on" : "off");
   const privacy = usePrivacy();
   const firstTile = wifi ? "wifi" : bluetooth ? "bt" : "dnd"; // focus starts on the first tile (mockup o)
+  const [audio, setAudio] = useState<Audio | null>(null);
+  const loadAudio = () => { bridge.call("audio_get").then(setAudio).catch(() => undefined); };
+  useEffect(loadAudio, []); // shortcut: read on open and on the switcher's clicks, not live; poll if the owner notices staleness
+  const micMuted = audio?.micMuted ?? null;
   return (
     <div className="body">
       {status.volume !== null && (
         <Slider icon={status.muted ? <VolumeX /> : <Volume2 />} value={status.volume} label="Volume" onChange={(v) => { setStatus({ ...status, volume: v, muted: v === 0 }); bridge.call("set_volume", { value: v }); }} />
       )}
+      {audio && audio.outputs.length > 1 && <OutputSwitcher audio={audio} reload={loadAudio} />}
       {status.brightness !== null && ( // live value: null when brightness can't be read
         <Slider icon={<Sun />} value={status.brightness} label="Brightness" onChange={(v) => { setStatus({ ...status, brightness: v }); bridge.call("set_brightness", { value: v }); }} />
       )}
@@ -88,8 +117,17 @@ export function StatusCard({ monitor, status, setStatus, onQuit }: { monitor: Mo
             <span className="t12 l3">{battery.charging ? "Charging" : battery.remaining ?? ""}</span>
           </div>
         )}
-        <div className="row"><Mic /><span className="text">Microphone</span><span className="t12 l3">{privacy.mic.length ? "In use" : "Not in use"}</span></div>
+        <div className="row">
+          {micMuted ? <MicOff /> : <Mic />}<span className="text">Microphone</span><span className="t12 l3">{privacy.mic.length ? "In use" : "Not in use"}</span>
+          {micMuted !== null && (
+            <button className="btn kk glass micMute" aria-label="Mute microphone" aria-pressed={micMuted}
+              onClick={() => { setAudio({ ...audio!, micMuted: !micMuted }); bridge.call("set_mic_muted", { muted: !micMuted }).catch(loadAudio); }}>
+              {micMuted ? <MicOff /> : <Mic />}
+            </button>
+          )}
+        </div>
         <div className="row"><Camera /><span className="text">Camera</span><span className="t12 l3">{privacy.camera.length ? "In use" : "Not in use"}</span></div>
+        <div className="row"><Monitor /><span className="text">Screen sharing</span><span className="t12 l3">{privacy.screen ? "On" : "Off"}</span></div>
       </div>
       <AssistantSection />
       <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "4px 12px" }}>

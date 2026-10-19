@@ -130,14 +130,30 @@ fn privacy_refresh(app: &AppHandle) {
             .map(|i| i.name.clone())
             .or_else(|| start.iter().find(|a| a.exe.is_some() && a.exe == exe).map(|a| a.name.clone()))
     };
+    let mic = notch_win::privacy::read(notch_win::privacy::MIC);
+    // Focus Guard (B2): a call holds non-urgent alerts, like a fullscreen app.
+    let call = notch_core::privacy::call_active(&mic);
+    let was = std::mem::replace(&mut n.attention.lock().call, call); // the lock ends here; the emits take it again
+    if was != call {
+        crate::live::emit_alerts(app);
+        crate::plugins::emit_surfaces(app);
+    }
     let next = PrivacyState {
-        mic: notch_core::privacy::in_use(&notch_win::privacy::read(notch_win::privacy::MIC), name),
+        mic: notch_core::privacy::in_use(&mic, name),
         camera: notch_core::privacy::in_use(&notch_win::privacy::read(notch_win::privacy::CAMERA), name),
+        screen: notch_win::privacy::SCREEN
+            .iter()
+            .any(|c| notch_core::privacy::any_in_use(&notch_win::privacy::read(c))),
     };
     let changed = std::mem::replace(&mut *x.privacy.lock(), next.clone()) != next;
     if changed {
         let _ = app.emit("privacy_changed", next);
     }
+}
+
+/// The screen is being shared or recorded (`PrivacyState::screen`): Peeka shows generic labels, as in presentation.
+pub fn sharing(app: &AppHandle) -> bool {
+    extras(app).is_some_and(|x| x.privacy.lock().screen)
 }
 
 /// `input_tick`: polled once a second (every 3 s after a minute without input), sent only on a change.
@@ -152,7 +168,8 @@ fn input_feed(app: AppHandle) {
                     .zip(place)
                     .and_then(|(c, (rect, scale))| notch_core::input::island_cursor(c, rect, scale));
                 let presence = n.attention.lock().presence;
-                if let Some(t) = feed.feed(tick, ago, cursor, presence, t0.elapsed().as_millis() as u64) {
+                if let Some(t) = feed.feed(tick, ago, cursor, presence, sharing(&app), t0.elapsed().as_millis() as u64)
+                {
                     let _ = app.emit("input_tick", t);
                 }
             }

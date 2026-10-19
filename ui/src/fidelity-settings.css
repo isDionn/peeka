@@ -58,3 +58,12 @@ html .pg .action .ask, html .mini.ask { color: #fff; }
 /* S6/S7: bridge row and bottom buttons under Plugins */
 .settingsFoot { display: flex; gap: 8px; flex-wrap: wrap; }
 .permissionHistory .row { min-height: 36px; }
+
+/* B3: audio switcher (Status panel) - fixed 40 px rows; the chevron turns, nothing else moves */
+.audioOut .row { width: 100%; height: 40px; text-align: left; }
+.audioOut .row .chev { width: 16px; height: 16px; color: var(--l3); flex: none; transition: transform .16s var(--ease); }
+.audioOut .row[aria-expanded="true"] .chev { transform: rotate(180deg); }
+.audioOut .row[aria-pressed="true"] > svg.lucide { color: var(--cyan); }
+.audioOut .row .tickSlot { width: 16px; height: 16px; flex: none; }
+.row .micMute { width: 26px; padding: 0; flex: none; }
+.row .micMute[aria-pressed="true"] { color: var(--red); }

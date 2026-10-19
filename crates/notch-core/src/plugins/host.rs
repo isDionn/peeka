@@ -1523,7 +1523,7 @@ impl Host {
     /// `plugin_surfaces`. `alert_top` / `drop_strip_ms` come from Notch's alert list (`AlertsView`): the attention
     /// budget there decides which approval may open the island and whether the hidden strip comes down.
     pub fn surfaces_view(&self, ctx: &Attention, alert_top: Option<&str>, drop_strip_ms: Option<u64>) -> SurfacesView {
-        let quiet = ctx.dnd || ctx.meeting || ctx.fullscreen || presence::quiet(ctx.presence);
+        let quiet = ctx.dnd || ctx.meeting || ctx.call || ctx.fullscreen || presence::quiet(ctx.presence);
         let main = self.reg.main.as_deref();
         let pick = self.protrusions.values().max_by_key(|p| (Some(p.plugin.id.as_str()) == main, p.updated_at));
         let shown = pick.filter(|_| !quiet).map(|p| Protrusion { plugin: self.plugin_ref(&p.plugin.id), ..p.clone() });

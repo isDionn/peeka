@@ -93,6 +93,8 @@ if (state === "kay") fakeBridge.setSurfaces({ protrusion: { ...RECORDING, timer:
 if (state === "f0" || state === "f") fakeBridge.setSurfaces({ protrusion: PROTRUSION });
 if (state === "g0" || state === "g") fakeBridge.setShelf([{ id: "f1", name: "presentation-draft.pdf", sub: "2.4 MB, just now", kind: "pdf" }, { id: "f2", name: "screen-recording.mp4", sub: "38 MB, 2m ago", kind: "video" }]);
 if (param("mic", "") !== "") fakeBridge.setPrivacy({ mic: ["Chrome"], camera: [] });
+// ?share: B1 screen share shield (the dot says "Screen is being shared"; Rust's input_tick turns presentation on, generic labels)
+if (param("share", "") !== "") { fakeBridge.setPrivacy({ mic: [], camera: [], screen: true }); setTimeout(() => fakeBridge.emit("input_tick", { lastInputAgoMs: 0, cursor: null, presentation: true }), 0); }
 if (param("previewDelay", "") !== "") fakeBridge.setPreviewDelay(+param("previewDelay", "0"));
 if (state === "u") fakeBridge.pushAlert({ id: "cpu", title: "Chrome is maxing out the CPU", subtitle: "100% for 30 s", icon: "attention", action: "task_manager", priority: 70 });
 if (state === "q1") fakeBridge.pushAlert({ id: "q1", title: "Daily budget at 80%", subtitle: "Automatic jobs paused, your requests still run", icon: "tired", progress: 0.8, priority: 70 });

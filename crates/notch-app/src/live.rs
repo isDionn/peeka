@@ -26,7 +26,9 @@ pub struct Http {
 
 pub fn alerts_view(n: &Notch) -> AlertsView {
     let ctx = Attention { dnd: n.settings.lock().dnd, ..*n.attention.lock() };
-    n.alerts.lock().view(&ctx)
+    let mut list = n.alerts.lock();
+    list.focus(&ctx, now_ms()); // Focus Guard (B2): every emit passes here, so holding and the release follow it
+    list.view(&ctx)
 }
 
 pub fn emit_alerts(app: &AppHandle) {

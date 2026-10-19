@@ -442,6 +442,30 @@ pub async fn set_volume(app: AppHandle, n: State<'_, Notch>, value: u8) -> Res<(
     Ok(())
 }
 
+/// The Status panel's audio switcher: output devices and the microphone's mute.
+#[tauri::command]
+pub async fn audio_get() -> Res<notch_core::status::Audio> {
+    Ok(notch_core::status::Audio { outputs: notch_win::audio::outputs(), mic_muted: notch_win::audio::mic_muted() })
+}
+
+/// Only an id `audio_get` lists right now reaches the undocumented `IPolicyConfig`.
+#[tauri::command]
+pub async fn set_audio_output(app: AppHandle, n: State<'_, Notch>, id: String) -> Res<()> {
+    not_in_demo()?; // demo never changes the real default device
+    if !notch_win::audio::outputs().iter().any(|o| o.id == id) {
+        return Err(CmdError::Unknown);
+    }
+    notch_win::audio::set_default_output(&id).map_err(|_| CmdError::Refused)?;
+    emit_status(&app, &n); // the volume slider now shows the new device's level
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_mic_muted(muted: bool) -> Res<()> {
+    not_in_demo()?;
+    notch_win::audio::set_mic_muted(muted).then_some(()).ok_or(CmdError::Refused)
+}
+
 #[tauri::command]
 pub async fn set_brightness(app: AppHandle, n: State<'_, Notch>, value: u8) -> Res<()> {
     if value > 100 {
@@ -1109,6 +1133,24 @@ pub async fn clip_preview(app: AppHandle, id: String) -> Res<String> {
     let png = std::fs::read(path).map_err(|_| CmdError::Io)?;
     let preview = notch_win::clip_image::preview_png(&png, 1024).ok_or(CmdError::Io)?;
     Ok(notch_core::clip::data_url(&preview))
+}
+
+/// "Copy text" on an image clip: Windows OCR on this PC (no network), the text copied back like `clip_copy` (the
+/// listener ignores Notch's own write). `false` = no text found; `unsupported` = no OCR language installed.
+#[tauri::command]
+pub async fn clip_ocr(app: AppHandle, id: String) -> Res<bool> {
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    let path = clip_history(&app)?.clip_history.lock().image_path(&id)?; // a password is refused here
+    let png = std::fs::read(path).map_err(|_| CmdError::Io)?;
+    let text = tauri::async_runtime::spawn_blocking(move || notch_win::ocr::text(&png))
+        .await
+        .map_err(|_| CmdError::Io)?
+        .map_err(|_| CmdError::Unsupported)?;
+    if text.is_empty() {
+        return Ok(false);
+    }
+    let payload = notch_core::clip::Payload::Text(notch_core::clip::vault::Secret::new(text.into_bytes()));
+    notch_win::clipboard::write(&payload).then_some(true).ok_or(CmdError::Refused)
 }
 
 /// Drag out (image and file items). Sync: Windows's drag loop runs on the UI thread that got the mouse press and

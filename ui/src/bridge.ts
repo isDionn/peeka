@@ -42,6 +42,10 @@ export interface Status {
   network: NetworkLevel;
   battery: { percent: number | null; charging: boolean; /** Plugged in (at 100% charging turns false). */ plugged: boolean; remaining: string | null } | null; // null on machines without a battery
 }
+/** One active output device (Rust `AudioOutput`); `id` is Windows's endpoint id, sent back unchanged. */
+export interface AudioOutput { id: string; name: string; default: boolean }
+/** `audio_get` (Rust `Audio`): outputs in Windows's order; `micMuted` null = no microphone. */
+export interface Audio { outputs: AudioOutput[]; micMuted: boolean | null }
 /** Shortcut names (Rust `ShortcutId`). */
 export type ShortcutId = "search" | "ask" | "focus_island" | "hide_island" | "emergency";
 /** Command error (Rust `CmdError`): in Tauri, `call` rejects with this string. */
@@ -144,7 +148,8 @@ export interface MusicStopped { name: string; app: string | null }
 export interface BluetoothEvent { name: string; /** 0..100; null if the device doesn't report it (just "connected"). */ battery: number | null }
 
 /* ---------- mic and camera privacy dot ---------- */
-export interface PrivacyState { mic: string[]; camera: string[] }
+/** `screen`: the screen is being shared or recorded (a flag, never an app name); Rust also reports it as `input_tick.presentation`. */
+export interface PrivacyState { mic: string[]; camera: string[]; screen: boolean }
 
 /* ---------- input (mascot pranks and eye tracking) ---------- */
 export interface InputTick {
@@ -205,6 +210,10 @@ export interface Commands {
   get_status: { args: void; ret: Status };
   set_volume: { args: { value: number }; ret: void };
   set_brightness: { args: { value: number }; ret: void };
+  audio_get: { args: void; ret: Audio };
+  /** `unknown`: not an active output any more; `refused`: Windows (the undocumented IPolicyConfig) said no. */
+  set_audio_output: { args: { id: string }; ret: void };
+  set_mic_muted: { args: { muted: boolean }; ret: void };
   /** Access refusal returns a `denied` error: the UI then opens the ms-settings page. */
   set_radio: { args: { kind: "wifi" | "bluetooth"; on: boolean }; ret: void };
   set_dnd: { args: { on: boolean }; ret: void };
@@ -263,6 +272,8 @@ export interface Commands {
   clip_to_shelf: { args: { id: string }; ret: void };
   /** Large preview of an image item: PNG data URL, long edge at most 1024 px (as is if smaller). `denied` while locked, `invalid` if not an image. */
   clip_preview: { args: { id: string }; ret: string };
+  /** "Copy text" on an image item: Windows OCR on this PC, the text copied back. `false` = no text found. `denied` while locked and for passwords, `invalid` if not an image, `unsupported` without an OCR language. */
+  clip_ocr: { args: { id: string }; ret: boolean };
   /** Open a finished download with its default app. `denied` while locked and for executables (exe, bat, ps1, lnk...); `missing` for an id Rust never reported or a deleted file. */
   download_open: { args: { id: string }; ret: void };
   /** Show a finished download selected in Explorer. `denied` while locked, `missing` if the id/file is gone. */

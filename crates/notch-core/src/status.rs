@@ -130,6 +130,22 @@ impl Default for Status {
     }
 }
 
+/// One active output device (Status panel's audio switcher). `id` is Windows's endpoint id, sent back as is.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AudioOutput {
+    pub id: String,
+    pub name: String,
+    pub default: bool,
+}
+
+/// `audio_get`: the outputs and the default microphone's mute (None = no microphone).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Audio {
+    pub outputs: Vec<AudioOutput>,
+    #[serde(rename = "micMuted")]
+    pub mic_muted: Option<bool>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

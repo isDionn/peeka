@@ -44,6 +44,27 @@ impl Usage {
 pub struct PrivacyState {
     pub mic: Vec<String>,
     pub camera: Vec<String>,
+    /// The screen is being shared or recorded (B1): an app holds Windows.Graphics.Capture's programmatic or
+    /// borderless capture right now. A flag only: which app never leaves Rust.
+    pub screen: bool,
+}
+
+/// Any app key in use now (the capture capabilities: no names are built at all).
+pub fn any_in_use(list: &[Usage]) -> bool {
+    list.iter().any(Usage::in_use)
+}
+
+/// Desktop call apps (exe, lowercase) and packaged ones (family-name prefix). Matched in Rust only; no name leaves.
+/// shortcut: a call in a browser tab is not seen (any browser mic use would count), add browsers if owners ask.
+const CALL_EXES: &[&str] = &["teams.exe", "ms-teams.exe", "zoom.exe", "discord.exe", "slack.exe", "webex.exe", "ciscocollabhost.exe"];
+const CALL_PACKAGES: &[&str] = &["MSTeams_", "Microsoft.SkypeApp_", "5319275A.WhatsAppDesktop_"];
+
+/// Focus Guard (B2): a known call app holds the microphone right now.
+pub fn call_active(mic: &[Usage]) -> bool {
+    mic.iter().filter(|u| u.in_use()).any(|u| match u.exe() {
+        Some(exe) => CALL_EXES.contains(&exe.as_str()),
+        None => CALL_PACKAGES.iter().any(|p| u.key.starts_with(p)),
+    })
 }
 
 /// The friendly names of the apps using the device now, sorted, no duplicates. `name(usage)` = a better name (the
@@ -78,5 +99,39 @@ mod tests {
         assert_eq!(in_use(&list, |_| None), ["WindowsCamera", "Zoom", "zoom"]);
         let named = in_use(&list, |u| (u.exe().as_deref() == Some("zoom.exe")).then(|| "Zoom Workplace".into()));
         assert_eq!(named, ["WindowsCamera", "Zoom Workplace"], "two Zoom keys, one name");
+    }
+
+    #[test]
+    fn a_call_is_a_known_call_app_on_the_mic_now() {
+        let zoom = u(r"C:#Program Files#Zoom#bin#Zoom.exe", false, 200, 0);
+        let teams = u("MSTeams_8wekyb3d8bbwe", true, 9, 1);
+        let recorder = u(r"C:#Tools#audacity.exe", false, 9, 0);
+        assert!(call_active(&[recorder.clone(), zoom.clone()]) && call_active(&[teams]));
+        assert!(!call_active(&[recorder]), "a mic alone is not a call");
+        assert!(!call_active(&[u(r"C:#Program Files#Zoom#bin#Zoom.exe", false, 5, 9)]), "the call ended");
+        assert!(!call_active(&[]));
+    }
+
+    #[test]
+    fn screen_capture_is_any_key_with_start_after_stop() {
+        // Shapes seen under ConsentStore\graphicsCaptureWithoutBorder on a real PC (all stopped), plus one live share.
+        let stopped = [
+            u(
+                r"C:#Users#me#AppData#Local#Discord#app-1.0.9262#Discord.exe",
+                false,
+                134368269398088590,
+                134368274145706034,
+            ),
+            u(r"C:#Program Files#obs-studio#bin#64bit#obs64.exe", false, 134366376079327514, 134366377081135004),
+            u("MicrosoftWindows.Client.Core_cw5n1h2txyewy", true, 134300976937200456, 134300976937446276),
+            u("OpenAI.Codex_2p2nqsd0c76g0", true, 0, 0),
+        ];
+        assert!(!any_in_use(&stopped));
+        assert!(!any_in_use(&[]));
+        let mut live = stopped.to_vec();
+        live.push(u(r"C:#Users#me#AppData#Local#Programs#Opera GX#opera.exe", false, 134366166969205726, 0));
+        assert!(any_in_use(&live), "a browser tab being shared");
+        let v = serde_json::to_value(PrivacyState { screen: true, ..Default::default() }).unwrap();
+        assert_eq!(v, serde_json::json!({"mic": [], "camera": [], "screen": true}), "a flag, no app names");
     }
 }

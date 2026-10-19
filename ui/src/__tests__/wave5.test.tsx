@@ -421,6 +421,18 @@ describe("small peeks (decision 12)", () => {
     await settle();
     expect(document.querySelector(".privacyDot")).toBeNull();
   });
+  it("screen share (B1): the dot says so with no app name, and the strip goes generic (Rust sends presentation)", async () => {
+    render(<Shell monitor="m1" />);
+    await settle();
+    act(() => fakeBridge.setPrivacy({ mic: [], camera: [], screen: true }));
+    act(() => fakeBridge.emit("input_tick", { lastInputAgoMs: 0, cursor: null, presentation: true }));
+    await settle();
+    const dot = screen.getByRole("img", { name: "Screen is being shared" });
+    expect(dot.getAttribute("data-only")).toBeNull();
+    act(() => fakeBridge.setPrivacy({ mic: [], camera: [] }));
+    await settle();
+    expect(document.querySelector(".privacyDot")).toBeNull();
+  });
 });
 
 describe("window preview", () => {

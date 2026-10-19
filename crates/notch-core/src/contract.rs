@@ -19,6 +19,9 @@ pub const COMMANDS: &[&str] = &[
     "get_status",
     "set_volume",
     "set_brightness",
+    "audio_get",
+    "set_audio_output",
+    "set_mic_muted",
     "set_radio",
     "set_dnd",
     "open_windows_settings",
@@ -72,6 +75,7 @@ pub const COMMANDS: &[&str] = &[
     "clip_open",
     "clip_to_shelf",
     "clip_preview",
+    "clip_ocr",
     // Peeka Phase C: "Download finished" (Downloads folder, names and sizes only)
     "download_open",
     "download_show_in_folder",

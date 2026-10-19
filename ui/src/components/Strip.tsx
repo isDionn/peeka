@@ -208,7 +208,7 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
   }, [from]);
   const live = pv ? [...pinned, ...tabs].find((i) => i.appId === pv.item.appId) : null; // the preview refreshes when a window closes or updates
   const privacy = usePrivacy();
-  const priv = [privacy.mic.length ? "Microphone in use" : "", privacy.camera.length ? "Camera in use" : ""].filter(Boolean).join(". "); // owner: no app names on the strip or in Status
+  const priv = [privacy.screen ? "Screen is being shared" : "", privacy.mic.length ? "Microphone in use" : "", privacy.camera.length ? "Camera in use" : ""].filter(Boolean).join(". "); // owner: no app names on the strip or in Status
   // full screen: the strip slides up (t1), returns when the pointer touches the top edge (4 px), leaves ~500 ms after it drops below 140 px (t2); stays visible while an approval drops in (t3)
   const surf = useSurfaces();
   const [fs, setFs] = useState(false);
@@ -264,7 +264,7 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
       {!monitor.primary && badge > 0 && <span className="approvalBadge" role="status" aria-label={`${badge} awaiting approval`}>{badge > 9 ? "9+" : badge} {badge === 1 ? "approval" : "approvals"}</span>}
       <div className="side" ref={left}>
         <SelectionPill host={left} watch={activeKey} />
-        {monitor.primary && priv && <span className="privacyDot" role="img" aria-label={priv} title={priv} data-only={privacy.mic.length ? undefined : "camera"} />}
+        {monitor.primary && priv && <span className="privacyDot" role="img" aria-label={priv} title={priv} data-only={privacy.mic.length || privacy.screen ? undefined : "camera"} />}
         <button className={"key keyIcon" + (openPanel === "start" ? " shown" : "")} title="Start" aria-label="Start" aria-haspopup="dialog" {...trigger("start")}><WinLogo /></button>
         <button className={"key keyIcon" + (openPanel === "search" ? " shown" : "")} title="Search (Ctrl+K)" aria-label="Search" aria-haspopup="dialog" {...trigger("search")}><Search /></button>
         {monitor.primary && <Pins items={pinned} pins={pins} onReorder={onReorder} onHover={hover} onPick={pickByKey} onMenu={(appId, x) => onMenu({ kind: "app", appId, x })} />}

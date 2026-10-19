@@ -32,7 +32,8 @@ pub fn start(app: &AppHandle, data_dir: std::path::PathBuf) {
     let _ = std::fs::remove_dir_all(std::env::temp_dir().join("notch-raf")); // the old (Turkish) name of temp_shelf
     let cfg = app.try_state::<Notch>().map(|n| n.settings.lock().clip_config()).unwrap_or_default();
     // Demo: an empty in-memory clipboard (the owner's pinned items are not even read).
-    let clip_history = if crate::app::demo() { ClipHistory::demo(data_dir, cfg) } else { ClipHistory::load(data_dir, cfg, now_ms()) };
+    let clip_history =
+        if crate::app::demo() { ClipHistory::demo(data_dir, cfg) } else { ClipHistory::load(data_dir, cfg, now_ms()) };
     app.manage(ClipState { clip_history: Mutex::new(clip_history) });
     refresh_plugins(app);
     let handle = app.clone();
@@ -49,10 +50,12 @@ pub fn start(app: &AppHandle, data_dir: std::path::PathBuf) {
 }
 
 /// Password rows stay out of the list and the events while Notch is locked, and (a heuristic) while
-/// Windows is in presentation or busy mode.
+/// Windows is in presentation or busy mode, or the screen is being shared or recorded.
 pub fn hide_passwords(app: &AppHandle) -> bool {
     let presence = app.try_state::<Notch>().map(|n| n.attention.lock().presence).unwrap_or_default();
-    crate::plugins::locked(app) || matches!(presence, Presence::Presentation | Presence::Busy)
+    crate::plugins::locked(app)
+        || matches!(presence, Presence::Presentation | Presence::Busy)
+        || crate::extras::sharing(app)
 }
 
 /// `clipboard.read`'s source (never a password item: `ClipHistory::plugin_items`).

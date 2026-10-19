@@ -331,9 +331,9 @@ export function useShelfDrag(): boolean {
   return on;
 }
 
-/** Apps using the mic and camera (from the Windows ConsentStore, via Rust). */
+/** Apps using the mic and camera, and whether the screen is shared (from the Windows ConsentStore, via Rust). */
 export function usePrivacy(): PrivacyState {
-  const [p, setP] = useState<PrivacyState>({ mic: [], camera: [] });
+  const [p, setP] = useState<PrivacyState>({ mic: [], camera: [], screen: false });
   useEffect(() => {
     bridge.call("privacy_get").then(setP).catch(() => undefined);
     const off = bridge.on("privacy_changed", setP);

@@ -4,6 +4,7 @@
 
 pub mod appbar;
 pub mod apps;
+pub mod audio;
 pub mod autostart;
 pub mod bluetooth;
 pub mod brightness;
@@ -21,6 +22,7 @@ pub mod keyboard;
 pub mod media;
 pub mod monitors;
 pub mod notifications;
+pub mod ocr;
 pub mod outline;
 pub mod picker;
 pub mod power;

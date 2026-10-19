@@ -58,6 +58,8 @@ pub const PLUGIN_MAX_PRIORITY: u8 = 69;
 const DEFAULT_PRIORITY: u8 = 50;
 /// How long an approval may drop the hidden strip in fullscreen (owner decision 16).
 pub const DROP_STRIP_MS: u64 = 4_000;
+/// How long the Focus Guard summary ("N held while you were busy") stays.
+const HELD_MS: u64 = 8_000;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -259,7 +261,14 @@ pub struct Attention {
     /// The main assistant's `meeting.set` (false again when it disconnects).
     pub meeting: bool,
     pub fullscreen: bool,
+    /// A known call app holds the microphone (`privacy::call_active`); never carries a name.
+    pub call: bool,
     pub presence: Presence,
+}
+
+/// Focus Guard (B2): a fullscreen app is in front or a call is on.
+pub fn busy(ctx: &Attention) -> bool {
+    ctx.fullscreen || ctx.call
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -282,7 +291,7 @@ pub fn gate(a: &Alert, ctx: &Attention) -> Gate {
         return Gate::Show;
     }
     // An activity without an expiry never opens the island by itself: it would hold it open for good.
-    let quiet = ctx.dnd || ctx.meeting || presence::quiet(ctx.presence);
+    let quiet = ctx.dnd || ctx.meeting || ctx.call || presence::quiet(ctx.presence);
     if a.expand && a.expires_at.is_some() && !quiet {
         Gate::Show
     } else {
@@ -304,6 +313,8 @@ pub struct AlertsView {
 pub struct AlertList {
     items: HashMap<String, Alert>,
     next: u64,
+    /// Focus Guard: alerts that would have opened the island while busy -> their duration, restored afterwards.
+    held: HashMap<String, u64>,
 }
 
 impl AlertList {
@@ -370,6 +381,38 @@ impl AlertList {
                 .then(a.id.cmp(&b.id))
         });
         list
+    }
+
+    /// Focus Guard, run before every view. While busy, an alert that would open the island stops running out (it is
+    /// held); afterwards each gets its full time back, opens nothing itself, and one summary says how many were held.
+    /// Approvals are never held. True = the list changed.
+    pub fn focus(&mut self, ctx: &Attention, now: u64) -> bool {
+        if busy(ctx) {
+            let free = Attention { fullscreen: false, call: false, presence: Presence::Normal, ..*ctx };
+            let mut changed = false;
+            for a in self.items.values_mut().filter(|a| a.kind == Kind::Alert && gate(a, &free) == Gate::Show) {
+                let ms = a.expires_at.take().unwrap_or(now).saturating_sub(a.updated_at);
+                self.held.insert(a.id.clone(), ms);
+                changed = true;
+            }
+            return changed;
+        }
+        if self.held.is_empty() {
+            return false;
+        }
+        let mut n = 0;
+        for (id, ms) in std::mem::take(&mut self.held) {
+            if let Some(a) = self.items.get_mut(&id) {
+                (a.expires_at, a.expand) = (Some(now + ms), false);
+                n += 1;
+            }
+        }
+        if n > 0 {
+            let title = format!("{n} held while you were busy");
+            let summary = Alert::system("system.focus", "focus", title, 70, now, HELD_MS);
+            self.put_system(Alert { expand: true, icon: Some("bell".into()), ..summary }, now);
+        }
+        true
     }
 
     pub fn view(&self, ctx: &Attention) -> AlertsView {
@@ -538,6 +581,50 @@ mod tests {
         assert_eq!(l.view(&full).drop_strip_ms, Some(4000));
         let d3d = Attention { presence: Presence::D3dFullscreen, ..full };
         assert_eq!((l.view(&d3d).top, l.view(&d3d).drop_strip_ms), (None, None), "waits in the count");
+    }
+
+    #[test]
+    fn focus_guard_holds_while_busy_and_releases_one_summary() {
+        let mut l = AlertList::default();
+        l.put_system(sys("low", 80, true), 0);
+        l.put(alert(json!({"id": "build", "title": "B"}), true), 1000); // notify: 5 s, expands
+        l.put(alert(json!({"id": "quiet", "title": "Q", "expand": false}), true), 0);
+        l.put(Alert { expires_at: None, ..alert(json!({"id": "act", "title": "A", "expand": true}), false) }, 0);
+        l.put_system(Alert { kind: Kind::Approval, ..sys("ok?", 70, false) }, 0);
+        for busy in [
+            Attention { fullscreen: true, presence: Presence::Busy, ..Attention::default() },
+            Attention { call: true, ..Attention::default() },
+        ] {
+            let mut l2 = AlertList { items: l.items.clone(), ..Default::default() };
+            assert!(l2.focus(&busy, 1000) && !l2.focus(&busy, 1500), "held once");
+            assert_eq!(l2.held.len(), 2, "low and build; not the quiet one, the activity or the approval");
+            if busy.call {
+                assert_eq!(l2.view(&busy).top.as_deref(), Some("ok?"), "an approval still comes through a call");
+            }
+            l2.prune(60_000);
+            assert!(l2.get("build").is_some() && l2.get("low").is_some(), "held alerts do not run out");
+            assert!(l2.get("quiet").is_none(), "the rest runs out as usual");
+            assert!(l2.focus(&Attention::default(), 70_000), "released");
+            let s = l2.get("system.focus").unwrap();
+            assert_eq!(s.title, "2 held while you were busy");
+            assert_eq!(l2.get("build").unwrap().expires_at, Some(75_000), "its full 5 s again");
+            assert_eq!(l2.view(&Attention::default()).top.as_deref(), Some("system.focus"), "the only one that opens");
+            assert!(!l2.focus(&Attention::default(), 71_000), "one summary only");
+        }
+    }
+
+    #[test]
+    fn focus_guard_says_nothing_when_nothing_was_held() {
+        let mut l = AlertList::default();
+        let call = Attention { call: true, ..Attention::default() };
+        assert!(!l.focus(&call, 0) && !l.focus(&Attention::default(), 1));
+        l.put(alert(json!({"id": "b", "title": "B"}), true), 2);
+        assert!(l.focus(&call, 3));
+        l.remove("b");
+        assert!(l.focus(&Attention::default(), 4) && l.get("system.focus").is_none(), "gone meanwhile: no summary");
+        let dnd = Attention { dnd: true, call: true, ..Attention::default() };
+        l.put(alert(json!({"id": "c", "title": "C"}), true), 5);
+        assert!(!l.focus(&dnd, 6), "DND already hides it; it runs out as usual");
     }
 
     #[test]

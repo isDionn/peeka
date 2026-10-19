@@ -73,6 +73,43 @@ describe("status card (o)", () => {
     await card();
     expect(screen.getByText("2 awaiting approval")).toBeTruthy();
   });
+  it("audio switcher: one row naming the default output, opens in place, a click sets the default and rows keep their order", async () => {
+    await card();
+    const head = screen.getByRole("button", { expanded: false });
+    expect(head.textContent).toContain("Speakers (Realtek Audio)");
+    expect(screen.queryByRole("button", { name: "Buds Pro" })).toBeNull(); // collapsed: only the header row
+    fireEvent.click(head);
+    await settle();
+    const names = () => [...document.querySelectorAll(".audioOut [aria-pressed]")].map((b) => b.textContent);
+    expect(names()).toEqual(["Speakers (Realtek Audio)", "Buds Pro", "LG Monitor (HDMI)"]);
+    fireEvent.click(screen.getByRole("button", { name: "Buds Pro" }));
+    await settle();
+    expect(flog("set_audio_output")[0].args).toEqual({ id: "bt" });
+    expect(screen.getByRole("button", { name: "Buds Pro" }).getAttribute("aria-pressed")).toBe("true");
+    expect(names()).toEqual(["Speakers (Realtek Audio)", "Buds Pro", "LG Monitor (HDMI)"]); // nothing jumped
+    expect(head.textContent).toContain("Buds Pro");
+  });
+  it("audio switcher: a refused switch shows a short notice in the header, no new row, no crash", async () => {
+    fakeBridge.setAudioRefuse(true);
+    await card();
+    fireEvent.click(screen.getByRole("button", { expanded: false }));
+    await settle();
+    const rows = document.querySelectorAll(".audioOut .row").length;
+    fireEvent.click(screen.getByRole("button", { name: "LG Monitor (HDMI)" }));
+    await settle();
+    expect(screen.getByRole("alert").textContent).toBe("Couldn't switch");
+    expect(document.querySelectorAll(".audioOut .row").length).toBe(rows);
+    expect(screen.getByRole("button", { name: "Speakers (Realtek Audio)" }).getAttribute("aria-pressed")).toBe("true");
+  });
+  it("microphone mute toggle on the Microphone row", async () => {
+    await card();
+    const mute = screen.getByRole("button", { name: "Mute microphone" });
+    expect(mute.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(mute);
+    await settle();
+    expect(flog("set_mic_muted")[0].args).toEqual({ muted: true });
+    expect(screen.getByRole("button", { name: "Mute microphone" }).getAttribute("aria-pressed")).toBe("true");
+  });
   it("no Compass section if the main assistant is not connected", async () => {
     fakeBridge.setPlugins([]);
     await card();

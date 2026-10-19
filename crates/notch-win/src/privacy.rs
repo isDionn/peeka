@@ -7,6 +7,10 @@ const ROOT: &str = r"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessM
 /// The two capabilities, as their `ConsentStore` key names.
 pub const MIC: &str = "microphone";
 pub const CAMERA: &str = "webcam";
+/// Windows.Graphics.Capture without the picker / without the yellow border (Microsoft's "App capability
+/// declarations": `graphicsCaptureProgrammatic`, `graphicsCaptureWithoutBorder`). Windows keeps the same Start/Stop
+/// keys for them (seen on Windows 11, not documented): Discord Go Live, OBS, Chromium browsers' tab/screen share.
+pub const SCREEN: [&str; 2] = ["graphicsCaptureProgrammatic", "graphicsCaptureWithoutBorder"];
 
 #[cfg(windows)]
 pub(crate) mod reg {

@@ -35,6 +35,8 @@ windows = { workspace = true, features = [
   "Foundation",
   "Foundation_Collections",
   "Media_Control",
+  "Media_Ocr",
+  "Graphics_Imaging",
   "Storage_Streams",
   "Win32_Devices_Display",
   "Win32_UI_Shell_Common",
