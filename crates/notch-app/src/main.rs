@@ -30,6 +30,11 @@ fn main() {
         if let Some(code) = notch_win::taskbar::guard_main(&args) {
             std::process::exit(code);
         }
+        // The uninstaller (`windows/hooks.nsh`) after it stopped Peeka and its guard: put the taskbar back, then exit.
+        if args.get(1).map(String::as_str) == Some("--restore-taskbar") {
+            notch_win::taskbar::restore_left_behind();
+            std::process::exit(0);
+        }
         // A coding agent's hook (`peeka.exe --cc-hook [agent [event]]`): forwards one sanitized event and exits, before Tauri starts.
         if args.get(1).map(String::as_str) == Some("--cc-hook") {
             plugins::cc_hook_main();

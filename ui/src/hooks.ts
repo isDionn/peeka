@@ -90,8 +90,11 @@ export function useHitRects(page: "strip" | "island", monitor: string) {
     const ro = new ResizeObserver(schedule);
     ro.observe(document.body);
     window.addEventListener("resize", schedule);
+    // CSS open animations (the context menu's scale .94) change the box without a mutation: measure again when they end
+    document.addEventListener("animationend", schedule, true);
+    document.addEventListener("transitionend", schedule, true);
     schedule();
-    return () => { mo.disconnect(); ro.disconnect(); window.removeEventListener("resize", schedule); cancelAnimationFrame(raf); };
+    return () => { mo.disconnect(); ro.disconnect(); window.removeEventListener("resize", schedule); document.removeEventListener("animationend", schedule, true); document.removeEventListener("transitionend", schedule, true); cancelAnimationFrame(raf); };
   }, [send]);
 }
 

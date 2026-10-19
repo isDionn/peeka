@@ -36,18 +36,23 @@ pub enum MediaAction {
     Seek,
 }
 
+/// Demo cover: an orange-to-violet gradient with a sun (percent-encoded SVG, no file).
+const DEMO_COVER: &str = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='%23ffb347'/><stop offset='1' stop-color='%23ff5e62'/></linearGradient></defs><rect width='120' height='120' fill='url(%23g)'/><circle cx='60' cy='52' r='20' fill='%23fff1d6'/><path d='M0 92 Q30 74 60 88 T120 84 V120 H0Z' fill='rgba(80,20,110,.7)'/></svg>";
+
 /// Demo mode's "now playing" (no player is asked; the controls change nothing).
 pub fn demo(now_ms: u64) -> Media {
     Media {
-        title: "Night Walk".into(),
+        // long enough to scroll in the island, with a cover so the card shows its cover-colour light
+        title: "Night Walk Through the Quiet City (Extended Mix)".into(),
         artist: "Demo Artist".into(),
         album: "Peeka Demo".into(),
         app: "Spotify".into(),
-        art: None,
+        art: Some(DEMO_COVER.into()),
         playing: true,
         position_ms: 42_000,
         position_at: now_ms,
-        duration_ms: 214_000,
+        // shortcut: set once at launch, so the track stops at its end after ~9 min; loop it if demos run longer
+        duration_ms: 581_000,
         can_next: true,
         can_previous: true,
         can_seek: true,

@@ -465,6 +465,8 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
 
   /* ---- mascot: the 20 px one in the resting center, idle pranks (polled every second) ---- */
   const mascotRef = useRef<MascotHandle>(null);
+  // the center's leaving copy holds the same <Mascot> and unmounts after the new one mounted: its null must not wipe the live ghost (seen in the VM: the hanging body fell out of the window region and was cut at the strip edge)
+  const keepMascot = useCallback((m: MascotHandle | null) => { if (m) mascotRef.current = m; }, []);
   useEffect(() => { installKbModality(); }, []);
   useEffect(() => { if (!init?.prank) return; const t = setTimeout(() => mascotRef.current?.prank(), 800); return () => clearTimeout(t); }, [init?.prank]);
   const prankEnv = useRef({ on: false, dnd: false, presentation: false, meeting: false, music: false, cardOpen: false, fullscreen: false });
@@ -718,7 +720,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       const card = kind === "modules" || plainPanel; // while a card is open, counts and mascot live in the card (say it once)
       return (
         <>
-          <span className="ms">{lockIcon}<Mascot ref={mascotRef} size={40} mood={moodShown} isMainAssistant cursor={input.cursor} onFileDrop={feed} onPoke={pick} hide={card || mkAside} /><span className="l2" title={composerLabel ?? `${pluginName(mainP)} ready`}>{composerLabel ?? `${pluginName(mainP)} ready`}</span></span>
+          <span className="ms">{lockIcon}<Mascot ref={keepMascot} size={40} mood={moodShown} isMainAssistant cursor={input.cursor} onFileDrop={feed} onPoke={pick} hide={card || mkAside} /><span className="l2" title={composerLabel ?? `${pluginName(mainP)} ready`}>{composerLabel ?? `${pluginName(mainP)} ready`}</span></span>
           {!card && approvalsN > 0 && <span className="t12 b6 approvalCount num">{cap99(approvalsN)} {approvalsN === 1 ? "approval" : "approvals"}</span>}
           {alerts.length > 0 && <span className="t12 l3 num">{cap99(alerts.length)} {alerts.length === 1 ? "notification" : "notifications"}</span>}
         </>
@@ -726,7 +728,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     }
     return (
       <>
-        <span className="ms keep">{lockIcon}<Mascot ref={mascotRef} size={40} mood={moodShown} isMainAssistant cursor={input.cursor} hide={!restShown || mkAside} /><span className="b6 num">{time}</span></span>
+        <span className="ms keep">{lockIcon}<Mascot ref={keepMascot} size={40} mood={moodShown} isMainAssistant cursor={input.cursor} hide={!restShown || mkAside} /><span className="b6 num">{time}</span></span>
         {approvalsN > 0 && <span className="t12 b6 approvalCount num">{cap99(approvalsN)} {approvalsN === 1 ? "approval" : "approvals"}</span>}{/* pending approvals are counted on the strip even when the connection is lost */}
         {media && (priv
           ? <span className="ms"><span className="l2">{LOCK_MUSIC}</span>{media.playing && <Bars />}</span>
@@ -873,7 +875,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       {mkHover && assistantUp && mainP && restShown && <div className="mkBubble" data-paint role="status">{[jobsN > 0 && `${jobsN} running`, waitN > 0 && `${waitN} awaiting approval`].filter(Boolean).join(" · ") || `${pluginName(mainP)} ready`}</div>}
       <SideBubble items={sideItems} edge={Math.max(W, mw + 24) / 2 + 8} open={more} setOpen={setMore} onPick={setPinned} onHover={setBubbleHover} />
       {nSess >= 2 && !calm && mode !== "card" && !(hidden && restShown) && <SessionChip n={nSess} list={sessList} edge={Math.max(W, mw + 24) / 2 + 8} last={lastCc} locked={priv} limited={limited} />}
-      {settings?.demo && <span className="demoBadge" data-paint style={{ left: `calc(50% + ${(mw + 24) / 2 + 8}px)` }}>Demo</span>}
+      {settings?.demo && <span className="demoBadge" data-paint style={{ left: `calc(50% + ${sideItems.length ? Math.max(W, mw + 24) / 2 + 8 + 30 + 8 : (mw + 24) / 2 + 8}px)` }}>Demo</span>}{/* past the side bubble (30 px) when one is shown */}
       {demoNot && <div className="mkBubble demoNote" data-paint role="status">Not available in demo mode</div>}
       {mode !== "none" || H > 0.4 ? <div className="islandHit" data-hit style={{ width: box.current.w, height: box.current.h }} /> : null}
       {mode !== "none" || H > 0.4 ? <div className="islandHit islandShadow" data-paint style={{ width: box.current.w + 2 * SHADOW_SIDE, height: box.current.h + SHADOW_BOTTOM }} /> : null}

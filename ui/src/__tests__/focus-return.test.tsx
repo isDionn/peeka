@@ -34,6 +34,26 @@ describe("strip when focus is handed back", () => {
     expect(open()).toBe(false);
   });
 
+  it("a blur while the press is still held (Start's search box hands focus back on pointerdown) keeps the panel; the click then toggles it", async () => {
+    render(<Shell monitor="m1" />);
+    await settle();
+    const btn = document.querySelector('[data-panel-trigger="status"]')!;
+    fireEvent.pointerUp(btn);
+    fireEvent.click(btn);
+    await settle();
+    const t0 = Date.now();
+    const now = vi.spyOn(Date, "now").mockReturnValue(t0 + 5000); // the opening click is old
+    fireEvent.pointerDown(btn);
+    act(() => { window.dispatchEvent(new Event("blur")); });
+    await settle();
+    expect(open()).toBe(true);
+    fireEvent.pointerUp(btn);
+    fireEvent.click(btn);
+    await settle();
+    expect(open()).toBe(false);
+    now.mockRestore();
+  });
+
   it("a text field in an open panel holds focus and releases it on exit; a slider does not count", async () => {
     render(<Shell monitor="m1" />);
     await settle();

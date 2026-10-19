@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeBridge } from "../bridge.fake";
 import { Island } from "../components/Island";
 import { Shell } from "../components/Shell";
+import { useHitRects } from "../hooks";
 
 // jsdom gives no measurements: getBoundingClientRect that sizes [data-hit] elements from the inline style (else 100x30)
 const rectOf = (el: HTMLElement) => ({ left: 10, top: 5, width: parseFloat(el.style.width) || (el.dataset.hit !== undefined ? 100 : 0), height: parseFloat(el.style.height) || 30 }) as DOMRect;
@@ -37,6 +38,17 @@ describe("island: clickable rects", () => {
     expect(last.page).toBe("island");
     expect(last.rects.length).toBeGreaterThanOrEqual(2); // the middle button + the shape box
     expect(last.rects.some((r) => (r as { paint?: boolean }).paint)).toBe(true); // shadow margin: the window region does not clip the card's shadow
+  });
+  it("measures again when a CSS animation ends (a menu opening from scale .94 must not keep its smaller region)", async () => {
+    const spy = vi.spyOn(fakeBridge, "call");
+    function Page() { useHitRects("strip", "m1"); return <div data-hit style={{ width: 100, height: 30 }} />; }
+    render(<Page />);
+    await settle();
+    const n = spy.mock.calls.filter((c) => c[0] === "report_hit_rects").length;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) { return { ...rectOf(this), width: rectOf(this).width + 7 } as DOMRect; });
+    fireEvent.animationEnd(document.body);
+    await settle();
+    expect(spy.mock.calls.filter((c) => c[0] === "report_hit_rects").length).toBe(n + 1);
   });
   it("no shadow rect is reported without a card, the button stays clickable", async () => {
     const spy = vi.spyOn(fakeBridge, "call");

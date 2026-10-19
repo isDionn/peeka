@@ -42,7 +42,7 @@ impl Host {
             "summary": [{"title": "2 Claude Code sessions", "value": "running", "icon": "terminal"}]});
         let approval = json!({"id": "demo-approval", "source": "Claude Code", "title": "Wants to run a command",
             "risk": "low", "kind": "command", "command": "npm test", "cwd": "C:\\demo\\notch",
-            "options": ["allow", "deny"], "expires_s": 3600});
+            "options": ["allow", "always", "deny"], "always_label": "npm test in this folder", "expires_s": 3600});
         for (i, (method, params)) in [
             ("card.module.set", card),
             ("approvals.prompt", approval),

@@ -1121,3 +1121,12 @@ fn the_main_assistants_launch_path_is_kept_from_pairing_and_shown() {
     h.set_main(None).unwrap();
     assert_eq!(h.main_launch(), None, "only the main assistant's");
 }
+
+#[test]
+fn demo_approval_offers_always_allow_with_its_label() {
+    let tmp = Tmp::new();
+    let (h, _) = Host::demo(tmp.path().to_path_buf(), 1000);
+    let a = &h.surfaces_view(&Attention::default(), None, None).approvals[0];
+    assert_eq!(a.options.as_slice(), [Opt::Allow, Opt::Always, Opt::Deny].as_slice());
+    assert_eq!(a.always_label.as_deref(), Some("npm test in this folder"));
+}

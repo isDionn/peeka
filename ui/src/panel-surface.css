@@ -40,5 +40,5 @@
 .toggle[aria-disabled="true"]{opacity:.4;pointer-events:none}
 /* R2: Hidden icons heading; on the same line as the corner × (28, top 8 / right 8) */
 .trayHead{height:28px;margin-top:2px;padding:0 4px;display:flex;align-items:center}
-/* R1-8: setup steps share one height, Back / Next never move on any step (longest step is 156) */
-.setup .setupStep{min-height:156px}
+/* R1-8: setup steps share one height, Back / Next never move on any step (longest step is 172: step 1, intro + 3 rows; measured in the VM) */
+.setup .setupStep{min-height:172px}
