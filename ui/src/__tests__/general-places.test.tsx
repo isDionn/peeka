@@ -159,6 +159,8 @@ describe("General home inside the island", () => {
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     await settle();
     expect(container.querySelector(".genSessions")).toBeNull();
+    // the card's state, not its DOM: a closing card stays in the DOM while it animates out, so `.genHome` alone passed on a fast PC
+    expect(container.querySelector(".islandCenter")?.getAttribute("aria-expanded")).toBe("true");
     expect(container.querySelector(".genHome")).toBeTruthy();
   });
 });

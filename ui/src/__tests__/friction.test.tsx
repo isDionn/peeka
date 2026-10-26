@@ -17,13 +17,14 @@ beforeEach(() => {
   Object.defineProperty(proto, "offsetHeight", { configurable: true, get: () => 100 });
   Object.defineProperty(proto, "offsetWidth", { configurable: true, get: () => 100 });
   fakeBridge.reset(); resetMascotRegistry(); resetComposerDraft(); localStorage.clear();
+  vi.useFakeTimers(); // no real waiting: under CPU load real 80 ms waits stretched and the springs committed every real frame (5 s timeouts on CI)
 });
 afterEach(() => {
   cleanup(); vi.useRealTimers(); vi.restoreAllMocks();
   if (saved.h) Object.defineProperty(proto, "offsetHeight", saved.h); else Reflect.deleteProperty(proto, "offsetHeight");
   if (saved.w) Object.defineProperty(proto, "offsetWidth", saved.w); else Reflect.deleteProperty(proto, "offsetWidth");
 });
-const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 80)); });
+const settle = (ms = 80) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 const pill = () => screen.getAllByRole("button").find((b) => b.className.includes("islandCenter"))!;
 const TIMER = { label: "Tea", totalS: 300, remainingS: 200, running: true };
 
@@ -40,7 +41,6 @@ describe("Y1: with a peek showing, the island opens to Modules", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
   it("while the pointer is over it, an 'Open Modules' hint shows", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
     fakeBridge.setSurfaces({ approvals: [APPROVAL_LOW], approvalTop: APPROVAL_LOW.id });
     render(<Island monitor="m1" init={{ view: null }} />);
     await act(async () => { vi.advanceTimersByTime(100); });
@@ -71,13 +71,13 @@ describe("Y2: every card has a visible way out", () => {
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
     sendX({ t: "outside" });
-    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    await settle(30);
     expect(screen.queryByRole("dialog")).toBeNull();
     cleanup();
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
     sendX({ t: "panel-open", panel: "search" });
-    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    await settle(30);
     expect(screen.queryByRole("dialog")).toBeNull();
   });
   it("a click on another app (notch://outside_press) closes the card; a click on the island's own window does not", async () => {
@@ -104,7 +104,7 @@ describe("Y5: the island and a strip panel close each other", () => {
     render(<Island monitor="m1" init={{ view: null }} />);
     await settle();
     fireEvent.pointerDown(pill());
-    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    await settle(30);
     off();
     expect(got).toContain("island-click");
   });
@@ -156,7 +156,6 @@ describe("Y4: the tab bar never shifts and is the same on every tab", () => {
 
 describe("O2: a peek does not close while the pointer is over it", () => {
   it("the screenshot peek does not close while the pointer is over it and closes after it leaves", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
     render(<Island monitor="m1" init={{ view: null, shot: true }} />);
     await act(async () => { vi.advanceTimersByTime(100); });
     fireEvent.pointerEnter(pill());
@@ -172,7 +171,6 @@ describe("O2: a peek does not close while the pointer is over it", () => {
 
 describe("stuck hover: Rust's notch://island_leave clears hover (the click-through window never gets pointerleave)", () => {
   it("hover set by pointerenter is cleared by the event alone", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
     fakeBridge.setSurfaces({ approvals: [APPROVAL_LOW], approvalTop: APPROVAL_LOW.id });
     render(<Island monitor="m1" init={{ view: null }} />);
     await act(async () => { vi.advanceTimersByTime(100); });
@@ -184,7 +182,6 @@ describe("stuck hover: Rust's notch://island_leave clears hover (the click-throu
     expect(pill().getAttribute("title")).toBeNull();
   });
   it("a CPU peek held open by hover auto-closes after the event, with no pointerleave", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
     render(<Island monitor="m1" init={{ view: null }} />);
     await act(async () => { vi.advanceTimersByTime(100); });
     await act(async () => { fakeBridge.emit("cpu_high", { app: "chrome" }); });
@@ -215,7 +212,7 @@ describe("O3: timer", () => {
   it("Start gives visible feedback", async () => {
     render(<TimerStart />);
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
-    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    await settle(30);
     expect(screen.getByRole("button", { name: "Started" })).toBeTruthy();
   });
 });
@@ -267,7 +264,7 @@ describe("System history", () => {
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
     fireEvent.click(screen.getByRole("tab", { name: "System" }));
-    await act(async () => { await new Promise((r) => setTimeout(r, 1200)); });
+    await settle(1200);
     expect(document.querySelectorAll(".spark i").length).toBe(16);
     expect(document.querySelectorAll(".spark i.empty").length).toBeLessThan(16);
   });

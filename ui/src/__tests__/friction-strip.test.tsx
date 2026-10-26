@@ -1,6 +1,6 @@
 // Friction audit, strip and panels (O1, O6, O9, O10, O12, O16, Y2, Y5).
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeBridge } from "../bridge.fake";
 import { panelMaxH } from "../components/common";
 import { SearchPanel } from "../components/SearchPanel";
@@ -13,9 +13,10 @@ beforeEach(() => {
   Object.defineProperty(proto, "offsetHeight", { configurable: true, get: () => 100 });
   Object.defineProperty(proto, "offsetWidth", { configurable: true, get: () => 100 });
   fakeBridge.reset();
+  vi.useFakeTimers(); // no real waiting: under CPU load real 300 ms waits stretched and the panel springs committed every real frame (5 s timeouts on CI)
 });
-afterEach(() => { cleanup(); Reflect.deleteProperty(proto, "offsetHeight"); Reflect.deleteProperty(proto, "offsetWidth"); });
-const settle = (ms = 60) => act(async () => { await new Promise((r) => setTimeout(r, ms)); });
+afterEach(() => { cleanup(); vi.useRealTimers(); Reflect.deleteProperty(proto, "offsetHeight"); Reflect.deleteProperty(proto, "offsetWidth"); });
+const settle = (ms = 60) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 const logged = (cmd: string) => fakeBridge.log.filter((l) => l.cmd === cmd);
 const panel = (k: string) => document.querySelector(`[data-panel=${k}]`)!;
 // Notifications has no strip button (the clock opens Windows's calendar): the island asks for it

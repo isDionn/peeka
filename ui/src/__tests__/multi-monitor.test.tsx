@@ -6,8 +6,9 @@ import { Shell } from "../components/Shell";
 // Multiple monitors (39/40): `fullscreen_screens {island, strips[]}` hides only that strip; `approval_badge` shows a badge on the second strip.
 beforeEach(() => { fakeBridge.reset(); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
-// With fake timers on (vi.useFakeTimers at the start of the test) there is no real waiting: same result under load; 16 ms step = one frame, React work (effects, timers) is flushed after each step
-const fakeSettle = async (ms: number) => { for (let t = 0; t < ms; t += 16) await act(async () => { await vi.advanceTimersByTimeAsync(Math.min(16, ms - t)); }); };
+// With fake timers on (vi.useFakeTimers at the start of the test) there is no real waiting: same result under load. One act per wait, not one per
+// 16 ms frame: the spring's rAF loop chains itself, and a full Shell commit per frame (~110 of them) blew the 5 s test timeout on a slow CI runner
+const fakeSettle = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 const settle = (ms = 60) => vi.isFakeTimers() ? fakeSettle(ms) : act(async () => { await new Promise((r) => setTimeout(r, ms)); });
 const bar = (c: HTMLElement) => c.querySelector<HTMLElement>(".bar")!;
 

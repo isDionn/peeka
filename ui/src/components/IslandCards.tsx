@@ -252,7 +252,7 @@ function GeneralTiles({ ids, go, media, meeting, timer, sys, approvals, onApprov
         {pct === null && <Cpu aria-hidden="true" />}<span className="t12 l3 num">CPU {cpu}</span>
       </button>
       {sessOpen && (
-        <div className="genSessions" onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeSess(); } /* Esc closes the list, not the card (Island skips defaultPrevented) */ }}>
+        <div className="genSessions" onKeyDownCapture={(e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeSess(); } /* Esc closes the list, not the card: capture, because the card's focus trap listens natively on the card and would close it first */ }}>
           <SessionList n={cc.n} list={cc.list} last={cc.last} locked={generic} limited={cc.limited} />
           <button ref={closeRef} type="button" className="mini genClose" title="Close" aria-label="Close sessions list" onClick={closeSess}><X /></button>
         </div>
