@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, Brain, ChevronLeft, ChevronRight, Lock, Moon, PanelBottom, Power, RotateCcw, Search, Settings, SlidersHorizontal } from "lucide-react";
-import { bridge, type AppRef, type MonitorInfo, type PinnedApp, type RecentItem, type SearchResult } from "../bridge";
+import { bridge, type AppRef, type MonitorInfo, type PinnedApp, type RecentItem, type SearchResult, type StartItem } from "../bridge";
+import { derive } from "../lib/startItems";
+import { StartGrid } from "./StartGrid";
 import { fileKind } from "../lib/clip";
 import { initial } from "../lib/plugin";
 import { AppIcon, HoldButton, Kbd } from "./common";
@@ -9,16 +11,22 @@ import { useSettings } from "../hooks";
 import "../fidelity-settings.css";
 
 const PIN_COUNT = 12;
+/** The last lists, so a reopened Start paints its grid at once instead of growing in after the calls. */
+let lastApps: AppRef[] = [], lastRecent: RecentItem[] = [];
 
-/** Start's 12 pins: Rust `start_pins` if it returns any (always empty on Windows 11); otherwise the strip's pins + the next apps (Peeka's own list, not Windows'). */
-function useStartPins(pins: PinnedApp[], apps: AppRef[]): AppRef[] {
-  const [own, setOwn] = useState<AppRef[] | null>(null);
-  useEffect(() => { bridge.call("start_pins").then(setOwn).catch(() => setOwn(null)); }, []);
-  return useMemo(() => {
-    if (own?.length) return own.slice(0, PIN_COUNT);
+/** Start's pinned grid: the saved one with folders (`settings.startItems`), or, until the owner first arranges it, the strip's pins +
+ *  the next apps (Peeka's own list; Windows's Start pins are not readable). Also every app's ref by id, for the cells. */
+function useStartItems(pins: PinnedApp[], apps: AppRef[], saved: StartItem[] | null | undefined) {
+  const [mine, setMine] = useState<StartItem[] | null>(null); // shown at once while Rust saves
+  const refs = useMemo(() => new Map([...apps, ...pins].map((a) => [a.appId, a as AppRef])), [pins, apps]);
+  const items = useMemo(() => {
+    if (mine ?? saved) return (mine ?? saved)!;
     const seen = new Set<string>();
-    return [...pins, ...apps].filter((a) => !seen.has(a.appId) && !!seen.add(a.appId)).slice(0, PIN_COUNT);
-  }, [own, pins, apps]);
+    return derive([...pins, ...apps].filter((a) => !seen.has(a.appId) && !!seen.add(a.appId)).slice(0, PIN_COUNT).map((a) => a.appId));
+  }, [mine, saved, pins, apps]);
+  const save = (next: StartItem[]) => { setMine(next); bridge.call("set_start_items", { items: next }).catch(() => undefined); };
+  useEffect(() => { setMine(null); }, [saved]); // Rust's cleaned copy (settings_changed) wins
+  return { items, refs, save };
 }
 
 /** Left icon of a Recommended row: a colored tile by type for files, a monochrome icon for apps. */
@@ -34,15 +42,19 @@ function ResultIcon({ r }: { r: SearchResult }) {
 }
 
 export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: MonitorInfo; pins: PinnedApp[]; onClose: () => void; onSettings?: () => void }) {
-  const taskbarShown = useSettings()?.taskbarHide === "off";
-  const [apps, setApps] = useState<AppRef[]>([]);
-  const [recent, setRecent] = useState<RecentItem[]>([]);
+  const settings = useSettings();
+  const taskbarShown = settings?.taskbarHide === "off";
+  const [apps, setApps] = useState<AppRef[]>(lastApps);
+  const [recent, setRecent] = useState<RecentItem[]>(lastRecent);
   const [q, setQ] = useState("");
   const [more, setMore] = useState(false); // "Show more": reveal recommendations beyond the first four
   const [all, setAll] = useState(false); // "All apps": full list instead of the pinned grid
   const [found, setFound] = useState<SearchResult[]>([]);
   const [sel, setSel] = useState(0); // selected search row: show which row Enter will open (O7)
-  useEffect(() => { bridge.call("list_apps").then(setApps); bridge.call("recent_files").then((r) => setRecent(r.slice(0, 12))).catch(() => undefined); }, []);
+  useEffect(() => {
+    bridge.call("list_apps").then((a) => { lastApps = a; setApps(a); });
+    bridge.call("recent_files").then((r) => { lastRecent = r.slice(0, 12); setRecent(lastRecent); }).catch(() => undefined);
+  }, []);
   const t = q.trim();
   // search covers apps, windows, files and settings (same command as Ctrl+K); the grid shows when empty
   useEffect(() => {
@@ -51,7 +63,7 @@ export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: Mo
     bridge.call("search", { query: t }).then((r) => { if (live) { setFound(r); setSel(0); } }).catch(() => undefined);
     return () => { live = false; };
   }, [t]);
-  const startPins = useStartPins(pins, apps);
+  const start = useStartItems(pins, apps, settings?.startItems);
   const launch = (appId: string) => { bridge.call("launch_app", { appId }); onClose(); };
   const openFound = (r: SearchResult) => { bridge.call("search_open", { id: r.id }).catch(() => undefined); onClose(); };
   const openRecent = (r: RecentItem) => { bridge.call("open_recent", { id: r.id }).catch(() => undefined); onClose(); };
@@ -93,13 +105,7 @@ export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: Mo
             </div>
           ) : (
             <>
-              <div className="appGrid">
-                {startPins.map((a) => (
-                  <button key={a.appId} className="appCell" onClick={() => launch(a.appId)}>
-                    <span className="lt"><AppIcon src={a.icon} color={a.colorIcon} /></span><span className="appName" title={a.name}>{a.name}</span>
-                  </button>
-                ))}
-              </div>
+              <StartGrid items={start.items} apps={start.refs} onChange={start.save} onLaunch={launch} />
               {recent.length > 0 && (
                 <>
                   <div className="sectionHead"><span>Recommended</span>{recent.length > 4 && <button className="btn kk glass" aria-expanded={more} onClick={() => setMore(!more)}>{more ? "Show less" : "Show more"}<ChevronRight /></button>}</div>

@@ -32,4 +32,13 @@ describe("Drift glow", () => {
     expect(copies().map((c) => c.style.opacity)).toEqual(["1", "0"]);
     expect(copies()[0].style.getPropertyValue("--c1")).toBe(""); // --glow-color
   });
+
+  it("the island follows its own tint copy (Rust sends the primary monitor's tint again as monitor \"island\")", async () => {
+    const { Island, ISLAND_TINT } = await import("../components/Island");
+    const { container } = render(<Island monitor="m1" init={{ view: null }} />);
+    act(() => fakeBridge.emit("screen_tint", { monitor: ISLAND_TINT, colors: ["#ff0000", "#00ff00", "#0000ff"] }));
+    const on = [...container.querySelectorAll<HTMLElement>("#island .glowCopy")].filter((c) => c.style.opacity === "1");
+    expect(on.length).toBeGreaterThan(0);
+    for (const c of on) expect(c.style.getPropertyValue("--c1")).toBe("#ff0000");
+  });
 });

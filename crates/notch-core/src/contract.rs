@@ -113,7 +113,7 @@ pub const COMMANDS: &[&str] = &[
     "tray_icons",
     "recent_files",
     "open_recent",
-    "start_pins",
+    "set_start_items",
     // Fidelity 3: from the main assistant (notch_core::plugins::host::assistant)
     "assistant_counts",
     "assistant_open",

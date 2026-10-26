@@ -46,21 +46,20 @@ struct IslandPlace {
     hz: u32,
 }
 
-/// A strip window (label `strip-<index>`): taller than its 30 px AppBar so the panels draw under the bar, clipped to
-/// the bar + what the page reported (`clickthrough::strip_region_boxes`).
+/// A strip window (label `strip-<index>`): taller than its 30 px AppBar so the panels draw under the bar. No window
+/// region (like the island): the cursor poll (`click_through`) lets clicks through outside the bar + reported rects.
 #[derive(Clone, Default)]
 pub struct StripPlace {
     hwnd: isize,
     scale: f64,
-    /// Window size and bar height, physical px.
+    /// Window top-left, size and bar height, physical px.
+    origin: (i32, i32),
     size: (i32, i32),
     bar: i32,
     pub rects: Vec<CssRect>,
     /// The page's devicePixelRatio and open panel with its last report (`notch_core::diagnostics`).
     pub dpr: Option<f64>,
     pub view: String,
-    /// The region last applied: an unchanged report sets nothing.
-    applied: Vec<(i32, i32, i32, i32)>,
 }
 
 /// Rust owns all state; windows only draw.
@@ -305,7 +304,7 @@ pub fn run() {
             crate::commands::tray_icons,
             crate::commands::recent_files,
             crate::commands::open_recent,
-            crate::commands::start_pins,
+            crate::commands::set_start_items,
             crate::commands::assistant_counts,
             crate::commands::assistant_open,
             crate::commands::calendar_next,
@@ -424,6 +423,7 @@ fn setup(app: &AppHandle) -> Result<(), String> {
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         notch_win::volume::unhook();
+        notch_win::winkey::unhook();
         previous(info);
     }));
     layout(app);
@@ -431,6 +431,16 @@ fn setup(app: &AppHandle) -> Result<(), String> {
     if !is_demo {
         crate::taskbar::init(app, &data_dir, emergency_key);
         crate::taskbar::apply(mode, false);
+        // A lone Win tap opens Peeka's Start while Peeka hides the taskbar (`taskbar::apply` turns it on and off).
+        let handle = app.clone();
+        notch_win::winkey::start(move |at| {
+            let Some(n) = handle.try_state::<Notch>() else { return };
+            let monitor = cursor_monitor(&n).map(|i| i.to_string()).unwrap_or_default();
+            let _ = handle.emit("shortcut", serde_json::json!({ "name": "start", "monitor": monitor }));
+            if cfg!(debug_assertions) {
+                eprintln!("[winkey] hook -> emit {} us", at.elapsed().as_micros());
+            }
+        });
     }
     let handle = app.clone();
     notch_win::foreground::watch(move |exe| on_foreground(&handle, &exe));
@@ -498,6 +508,7 @@ fn shutdown(app: &AppHandle) {
     // The Windows bar first, then the strips' AppBars go.
     crate::taskbar::restore_now();
     crate::live::keys_stop();
+    notch_win::winkey::unhook();
     crate::live::http_stop(app);
     crate::mirror::clear_now(app);
     crate::plugins::stop(app);
@@ -592,9 +603,8 @@ pub fn layout(app: &AppHandle) {
         {
             let mut strips = n.strips.lock();
             let s = strips.entry(label.clone()).or_default();
-            *s = StripPlace { hwnd, scale: m.scale, size: (rect.width(), rect.height()), bar: bar.height(), applied: vec![], ..std::mem::take(s) };
+            *s = StripPlace { hwnd, scale: m.scale, origin: (rect.left, rect.top), size: (rect.width(), rect.height()), bar: bar.height(), ..std::mem::take(s) };
         }
-        apply_strip_region(app, &label); // the bar only until the page reports
         let _ = w.show();
     }
     for (label, w) in app.webview_windows() {
@@ -625,20 +635,6 @@ pub fn layout(app: &AppHandle) {
         }
     }
     crate::taskbar::set_appbars(n.appbar.handles());
-}
-
-/// Clips a strip window to its bar + the rectangles its page reported. Main thread (the window's own). The island has
-/// no region: it is a fixed transparent rectangle and the cursor poll (`click_through`) lets clicks through outside its
-/// rectangles (the real-PC 1 px lines and stale boxes are suspected to come from region changes, tanitim/bug-034).
-pub fn apply_strip_region(app: &AppHandle, label: &str) {
-    let Some(n) = app.try_state::<Notch>() else { return };
-    let mut strips = n.strips.lock();
-    let Some(s) = strips.get_mut(label) else { return };
-    let boxes = notch_core::clickthrough::strip_region_boxes(&s.rects, s.scale, s.size, s.bar);
-    if boxes != s.applied {
-        notch_win::style::set_region(s.hwnd, &boxes);
-        s.applied = boxes;
-    }
 }
 
 pub fn shortcut_of(keys: &str) -> Option<Shortcut> {
@@ -910,12 +906,24 @@ fn ticks(app: AppHandle) {
 fn click_through(app: AppHandle) {
     static IGNORING: AtomicBool = AtomicBool::new(true);
     let mut was_down = false;
+    let mut strip_ignoring: HashMap<isize, bool> = HashMap::new(); // per strip window: what was last set
     thread::spawn(move || loop {
         let place = app.try_state::<Notch>().and_then(|n| *n.island.lock());
         thread::sleep(notch_core::clickthrough::poll_interval(place.map_or(60, |p| p.hz)));
         let Some(n) = app.try_state::<Notch>() else { continue };
-        let Some(place) = place else { continue };
         let Some(cursor) = notch_win::style::cursor() else { continue };
+        // strips first (they work without an island): the bar and the page's rects take the mouse, the rest passes through
+        let wanted: Vec<(String, isize, bool)> = n.strips.lock().iter()
+            .map(|(l, s)| (l.clone(), s.hwnd, !notch_core::clickthrough::strip_captures(cursor, s.origin, s.size, s.bar, s.scale, &s.rects)))
+            .collect();
+        for (label, hwnd, ignore) in wanted {
+            if strip_ignoring.insert(hwnd, ignore) != Some(ignore) {
+                if let Some(w) = app.get_webview_window(&label) {
+                    let _ = w.set_ignore_cursor_events(ignore);
+                }
+            }
+        }
+        let Some(place) = place else { continue };
         let down = notch_win::style::mouse_down();
         if down && !was_down {
             let root = notch_win::style::root_at(cursor.0, cursor.1);

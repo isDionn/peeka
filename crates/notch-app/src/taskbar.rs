@@ -100,6 +100,9 @@ pub fn apply(mode: HideMode, by_hand: bool) {
         SUSPENDED.store(false, Ordering::SeqCst);
     }
     let want = if SUSPENDED.load(Ordering::SeqCst) { OFF } else { logic::want_of(mode) };
+    // Peeka's Start takes the Win key only while Windows's taskbar is hidden (restored = Windows's Start again).
+    #[cfg(windows)]
+    notch_win::winkey::set_on(want != OFF);
     if WANT.swap(want, Ordering::SeqCst) != want {
         wake();
     }
@@ -114,6 +117,8 @@ pub fn restore_now() {
 /// Put the bar back now, on the calling thread. Bounded wait for the lock: a panic inside a change must not hang.
 fn put_back() {
     WANT.store(OFF, Ordering::SeqCst);
+    #[cfg(windows)]
+    notch_win::winkey::set_on(false);
     let Some(marker) = MARKER.get() else { return };
     if let Some(_guard) = OPS.try_lock_for(Duration::from_millis(500)) {
         logic::restore(&Win32Shell, marker);

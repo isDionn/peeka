@@ -1,7 +1,5 @@
-import { useEffect, useState } from "react";
-
-// If the island page shows the clock in the middle, the strip page's right-hand clock shows only the date (each fact once).
-// Two separate windows: a same-origin BroadcastChannel. Without a channel, or if the island never speaks, the right clock stays complete.
+// The island page says whether it shows the clock in the middle (a same-origin BroadcastChannel). Since RC4 the strip's
+// right-hand clock shows date and time always (owner), so nothing listens in the app; tests still read the channel.
 const NAME = "notch-center-clock";
 let chan: BroadcastChannel | null = null;
 let current = false;
@@ -15,16 +13,3 @@ const open = () => {
 };
 
 export function announceCenterClock(on: boolean) { current = on; try { open()?.postMessage(on); } catch { /* no channel */ } }
-
-export function useCenterClock(): boolean {
-  const [on, setOn] = useState(false);
-  useEffect(() => {
-    let c: BroadcastChannel | null = null;
-    try { c = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(NAME); } catch { return; }
-    if (!c) return;
-    c.onmessage = (e) => { if (typeof e.data === "boolean") setOn(e.data); };
-    c.postMessage("?");
-    return () => c.close();
-  }, []);
-  return on;
-}

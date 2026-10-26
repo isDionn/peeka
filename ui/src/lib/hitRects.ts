@@ -29,16 +29,3 @@ export function collectHitRects(root: ParentNode = document): Rect[] {
 }
 
 export const sameRects = (a: Rect[], b: Rect[]) => a.length === b.length && a.every((r, i) => r.x === b[i].x && r.y === b[i].y && r.w === b[i].w && r.h === b[i].h && !r.paint === !b[i].paint);
-
-/** Does `next` cover anything `prev` didn't (some rectangle not inside one of the old ones)? Then the window region grows. */
-export const grows = (prev: Rect[], next: Rect[]) => next.some((r) => !prev.some((p) => r.x >= p.x && r.y >= p.y && r.x + r.w <= p.x + p.w && r.y + r.h <= p.y + p.h));
-
-/** Makes the WebView draw the whole page again. Areas newly added to the window region otherwise keep what was on screen
- *  there before (a closed card's piece, a white line, a card cut at the old size; 0.3.4 owner's PC, VM v035-03): Chromium
- *  only redraws what changed, and its updates there landed while the region still clipped them. A root opacity change
- *  repaints everything; .999 for two frames is invisible. */
-export function repaintAll(doc: Document = document) {
-  const s = doc.documentElement.style;
-  s.opacity = "0.999";
-  requestAnimationFrame(() => requestAnimationFrame(() => { s.opacity = ""; }));
-}

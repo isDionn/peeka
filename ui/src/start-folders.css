@@ -1,0 +1,29 @@
+/* Start pinned folders (StartGrid.tsx; approved preview ui/concepts/start-folders.*). Tokens from notch.css. */
+.startGrid .appGrid { position: relative; }
+.startGrid .appCell { touch-action: none; user-select: none; }
+.startGrid .appCell.dragging { opacity: .35; }
+/* merge target: the drop makes (or joins) a folder */
+.startGrid .appCell .lt { transition: transform var(--d-fast) var(--ease-move), box-shadow var(--d-fast) var(--ease-move); }
+.startGrid .appCell.mergeTarget .lt { transform: scale(1.12); box-shadow: 0 0 0 2px var(--l3); }
+/* reorder: a 2 px caret where the cell will land */
+.startCaret { position: absolute; width: 2px; height: 40px; border-radius: 1px; background: var(--l2); pointer-events: none; opacity: 0; transition: opacity var(--d-fast) var(--ease-move); }
+.startCaret.on { opacity: 1; }
+.startGhost { position: fixed; z-index: 50; pointer-events: none; width: 40px; height: 40px; border-radius: 12px; corner-shape: squircle; display: grid; place-items: center;
+  background: var(--e2); color: var(--l1); box-shadow: 0 10px 28px rgba(0,0,0,.5); transform: translate(-50%, -50%) scale(1.06); }
+.startGhost .appIcon { width: 18px; height: 18px; }
+/* folder tile: the same 40 px tile, a 2x2 mini grid of its first four apps */
+.lt.folderLt { background: var(--e3); display: grid; grid-template-columns: repeat(2, 14px); grid-auto-rows: 14px; gap: 3px; place-content: center; }
+.lt.folderLt .appIcon { width: 14px !important; height: 14px !important; }
+/* the open folder: a glass card over the grid, grown from its tile */
+.startFolder { position: absolute; z-index: 5; width: 360px; padding: 12px; border-radius: var(--rPlat); corner-shape: squircle;
+  background: rgba(40,40,44,.92); box-shadow: var(--panelEdge), 0 18px 48px rgba(0,0,0,.55);
+  transform-origin: var(--ox, 50%) var(--oy, 0); animation: startFolderIn var(--d-move) var(--ease) both; }
+@keyframes startFolderIn { from { opacity: 0; transform: scale(.82); } }
+.startFolderName { width: 100%; height: 32px; margin-bottom: 8px; padding: 0 10px; border: 0; border-radius: var(--rInner); background: transparent; color: var(--l1);
+  font: 600 14px var(--font); text-align: center; outline: none; transition: background-color var(--d-fast) var(--ease-move); }
+.startFolderName:hover, .startFolderName:focus { background: rgba(255,255,255,.08); }
+.startFolderName:focus-visible { box-shadow: inset 0 0 0 1px var(--l3); }
+.startFolder .appGrid { grid-template-columns: repeat(4, 1fr); }
+.startScrim { position: absolute; inset: 0; z-index: 4; background: rgba(5,5,6,.35); animation: startScrimIn var(--d-move) var(--ease) both; }
+@keyframes startScrimIn { from { opacity: 0; } }
+.startGrid .appCell:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }

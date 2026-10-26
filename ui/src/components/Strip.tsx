@@ -9,10 +9,9 @@ import { onX, sendX, stripSides, tabLeaves, focusViaKeys } from "../lib/xwin";
 import { installKbModality } from "../lib/kbModality";
 import { listenLine } from "../lib/lineChan";
 import { WindowPreview } from "./WindowPreview";
-import { useCenterClock } from "../lib/centerClock";
 import { SPRINGS } from "../motion/spring";
 import { useSpring } from "../motion/useSpring";
-import { AppIcon, WinLogo } from "./common";
+import { AppIcon, AppLetter, WinLogo } from "./common";
 import "./strip-items.css";
 import { GlowField } from "./Glow";
 import { PromotedTray } from "./TrayList";
@@ -44,13 +43,11 @@ function activate(item: StripItem) {
 function ItemLabel({ item }: { item: StripItem }) {
   return (
     <span className="ikK">
-      {item.icon || item.colorIcon ? <AppIcon src={item.icon} color={item.colorIcon} /> : <span className="appLetter" style={{ "--hue": hueOf(item.name) } as CSSProperties} aria-hidden="true">{[...item.name.trim()][0]?.toUpperCase() ?? "?"}</span>}
+      {item.icon || item.colorIcon ? <AppIcon src={item.icon} color={item.colorIcon} /> : <AppLetter name={item.name} />}
       {item.windows.length > 1 && <span className="count num">{cap99(item.windows.length)}</span>}
     </span>
   );
 }
-/** A steady hue per name, so the same app keeps its letter colour. */
-export const hueOf = (name: string) => [...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
 /** Item classes shared by pins and tabs: the dot under the logo says running / foreground / asking for attention. */
 const stateOf = (item: StripItem) => (item.active ? " active" : "") + (item.windows.some((w) => w.attention) ? " attn" : "");
 
@@ -173,7 +170,6 @@ const ISLAND_HALF = 176;
 
 export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMenu, onReorder, center }: StripProps) {
   const now = useNow();
-  const centerClock = useCenterClock() && monitor.primary; // if the island shows the clock in the center, the right-hand clock shows only the date
   const { date, time, label } = clockParts(now);
   // no pins on secondary displays (reference frame k): windows there are tabs only
   const { pinned, tabs } = useMemo(() => mergePins(monitor.primary ? pins : [], windows), [pins, windows, monitor.primary]);
@@ -310,7 +306,7 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
           </>
         )}
         <button className={"key" + (openPanel === "calendar" ? " shown" : "")} title="Calendar" aria-label={`${label}, Calendar`} aria-haspopup="dialog" {...trigger("calendar")}>
-          <span className="l2">{date}</span>{!centerClock && <span className="b6 num">{time}</span>}
+          <span className="l2">{date}</span><span className="b6 num">{time}</span>
         </button>
       </div>
       {monitor.primary && <Waves />}

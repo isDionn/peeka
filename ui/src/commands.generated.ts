@@ -101,7 +101,7 @@ export const COMMAND_NAMES = [
   "tray_icons",
   "recent_files",
   "open_recent",
-  "start_pins",
+  "set_start_items",
   "assistant_counts",
   "assistant_open",
   "calendar_next",

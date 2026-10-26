@@ -74,7 +74,7 @@ describe("createShape", () => {
     expect(boxes.at(-1)).toEqual([200, 0, false]);
   });
 
-  it("growing: the box jumps to the target at once (one layout), every frame only moves the clip; at the end the clip goes and the corner var is set", () => {
+  it("growing: the box jumps to the target at once (one layout), every frame only moves the clip; at the end the clip stays the same path (no corner snap) and the corner var is set", () => {
     const { host, body, sh, boxes, states } = setup();
     sh.to(200, 0);
     sh.to(520, 120);
@@ -88,7 +88,7 @@ describe("createShape", () => {
     run(sh);
     expect(boxes.length - n0).toBe(1); // only the "stopped" notice, not one per frame
     expect(boxes.at(-1)).toEqual([520, 120, false]);
-    expect(body.style.clipPath).toBe("");
+    expect(body.style.clipPath).toBe(bodyPath(0, 520, 120, 34));
     // centered: every frame's body sits in the middle of the box
     for (const st of states) if (st.w) expect(Math.abs(st.offsetX + st.w / 2 - st.bw / 2)).toBeLessThan(0.01);
     expect(states.at(-1)).toMatchObject({ w: 520, h: 120, moving: false });

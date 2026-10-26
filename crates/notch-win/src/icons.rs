@@ -60,9 +60,13 @@ pub fn analyze(bgra: &[u8], width: u32, height: u32) -> Option<Icon> {
         }
     }
     let blob = filled * 100 >= inside * 95;
-    if dark && blob {
-        return None;
-    }
+    // A dark tile: blank unless a light glyph sits on it (a black square with a white power sign, RC4 owner's tray).
+    // That one reads in colour, so it is no longer `dark`; only a tile with no glyph is no icon.
+    let dark = match (dark, blob) {
+        (true, true) if light * 50 >= drawn => false,
+        (true, true) => return None,
+        _ => dark,
+    };
     // Trim to a square around what is drawn, so every icon fills its box the same.
     let side = (x1 - x0).max(y1 - y0);
     let (ox, oy) = ((i64::from(x0 + x1) - i64::from(side)) / 2, (i64::from(y0 + y1) - i64::from(side)) / 2);
@@ -258,6 +262,12 @@ mod tests {
         let i = analyze(&canvas(48, 48, (4, 4, 40, 40), [20, 20, 20, 255], true), 48, 48).unwrap();
         assert!(i.dark && !i.blob, "a black glyph: shown as its silhouette");
         assert_eq!(analyze(&canvas(48, 48, (4, 4, 40, 40), [20, 20, 20, 255], false), 48, 48), None, "black square");
+        let mut tile = canvas(48, 48, (4, 4, 40, 40), [20, 20, 20, 255], false);
+        for y in 16..32 {
+            tile[(y * 48 + 22) * 4..(y * 48 + 26) * 4].copy_from_slice(&[255; 16]); // a white stroke on it
+        }
+        let i = analyze(&tile, 48, 48).expect("a black tile with a light glyph is an icon");
+        assert!(i.blob && !i.dark, "shown in colour, like other filled logos");
         assert_eq!(analyze(&[0; 48 * 48 * 4], 48, 48), None, "an empty bitmap is no icon, not a black block");
         assert_eq!(analyze(&canvas(4, 4, (0, 0, 4, 4), [255, 255, 255, 40], false), 4, 4), None, "only a faint shadow");
     }

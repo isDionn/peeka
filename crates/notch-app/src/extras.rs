@@ -183,6 +183,10 @@ fn tint_feed(app: AppHandle) {
                 let pause = Pause { covered: cover == Some(m.index), ..base };
                 let sample = || notch_win::tint::sample(band(&m));
                 if let Some(t) = state.entry(m.index).or_default().step(&m.index.to_string(), on, &pause, sample) {
+                    // the island sits on the primary monitor and doesn't know its index: it takes this copy (Glow.tsx, monitor "island")
+                    if m.primary {
+                        let _ = app.emit("screen_tint", notch_core::tint::ScreenTint { monitor: "island".into(), ..t.clone() });
+                    }
                     let _ = app.emit("screen_tint", t);
                 }
             }

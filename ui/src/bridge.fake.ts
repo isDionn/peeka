@@ -34,7 +34,7 @@ const TRACKS = [
 
 type W4Names = "search_index_state" | "search_open" | "search_ask" | "clip_list" | "clip_copy" | "clip_pin" | "clip_delete" | "clip_clear" | "clip_reveal" | "clip_share" | "clip_edit" | "clip_drag" | "clip_visible" | "lock_state" | "lock_now" | "lock_release";
 type W5Names = "window_preview" | "share_open" | "shelf_list" | "shelf_ask" | "timer_get" | "timer_start" | "timer_control" | "privacy_get" | "tray_open" | "mirror_state" | "mirror_enable" | "mirror_disable" | "mirror_list" | "mirror_dismiss" | "mirror_open_app" | "mirror_ask";
-type W7Names = "recent_files" | "open_recent" | "start_pins" | "open_start_menu" | "open_calendar" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "agent_bridges" | "agent_bridge_install" | "agent_bridge_remove" | "agent_bridge_preview" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "window_pick" | "cc_focus_terminal" | "cc_diff" | "cc_diff_open" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus";
+type W7Names = "recent_files" | "open_recent" | "set_start_items" | "open_start_menu" | "open_calendar" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "agent_bridges" | "agent_bridge_install" | "agent_bridge_remove" | "agent_bridge_preview" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "window_pick" | "cc_focus_terminal" | "cc_diff" | "cc_diff_open" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus";
 /** Peeka Phase C: clipboard, download and copy-code commands; Settings > About demo restart. */
 /** The Modules card's Claude chat. */
 type W9Names = "claude_chat_state" | "claude_chat_send" | "claude_chat_stop" | "claude_chat_new";
@@ -465,8 +465,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   const w7: { [K in W7Names]: (a: Commands[K]["args"]) => Commands[K]["ret"] } = {
     recent_files: () => structuredClone(RECENT),
     open_recent: (a) => { log.push({ cmd: "open_recent", args: a }); },
-    // Windows 11 doesn't expose Start pins: Rust always returns empty and the page falls back to its own list.
-    start_pins: () => [],
+    set_start_items: ({ items }) => { log.push({ cmd: "set_start_items", args: { items } }); settings = { ...settings, startItems: structuredClone(items) }; emit("settings_changed", structuredClone(settings)); return structuredClone(settings); },
     open_start_menu: () => { log.push({ cmd: "open_start_menu", args: null }); },
     open_calendar: () => { log.push({ cmd: "open_calendar", args: null }); },
     quit_app: (a) => { log.push({ cmd: "quit_app", args: a }); },

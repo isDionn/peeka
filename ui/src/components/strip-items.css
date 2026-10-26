@@ -7,8 +7,8 @@
 .bar .pin:not(.openPinned):not(.active) { color: var(--l3); }
 .bar .pin.openPinned:not(.active) { color: var(--l2); }
 
-/* no logo from Windows: the first letter in a coloured circle (hue from the name, Strip.tsx hueOf) */
-.bar .appLetter { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font: 650 11px/1 var(--font); color: #fff; background: oklch(.52 .13 var(--hue)); }
+/* no logo from Windows: the first letter in a coloured circle (hue from the name, common.tsx hueOf); also the hidden-icons fallback */
+.appLetter { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font: 650 11px/1 var(--font); color: #fff; background: oklch(.52 .13 var(--hue)); }
 
 /* several windows: a count badge on the logo's top-right corner, ringed in the strip colour so it reads over any logo */
 .bar .ikK .count { top: -5px; right: -7px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 7px; display: grid; place-items: center;

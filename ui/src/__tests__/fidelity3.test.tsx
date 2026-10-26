@@ -212,6 +212,7 @@ describe("tray (y1, y2)", () => {
       ? Promise.resolve([
         { id: "exe:c:/a.exe", name: "Dark", exe: "C:/a.exe", promoted: false, icon: png },
         { id: "exe:c:/b.exe", name: "Bright", exe: "C:/b.exe", promoted: false, icon: png, colorIcon: png },
+        { id: "exe:c:/c.exe", name: "kite", exe: "C:/c.exe", promoted: false, icon: "" },
       ])
       : real(cmd, ...rest)) as typeof fakeBridge.call);
     render(<TrayList monitor="m1" onClose={() => undefined} />);
@@ -219,6 +220,10 @@ describe("tray (y1, y2)", () => {
     const icon = (name: string) => screen.getByRole("button", { name }).querySelector<HTMLElement>(".appIcon")!;
     expect(icon("Dark").style.getPropertyValue("--icon-color")).toBe("");
     expect(icon("Bright").style.getPropertyValue("--icon-color")).toContain(png);
+    expect(icon("Dark").getAttribute("style")).toContain("mask-image");
+    // RC4: an inline mask on a colour icon beat the stylesheet's `mask: none` and cut it to its top-left corner
+    expect(icon("Bright").getAttribute("style")).not.toContain("mask");
+    expect(screen.getByRole("button", { name: "kite" }).querySelector(".appLetter")!.textContent).toBe("K");
     spy.mockRestore();
   });
   it("frequent icons on the strip are only the 'always visible' ones, with badges", async () => {

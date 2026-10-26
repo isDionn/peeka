@@ -77,6 +77,60 @@ pub struct Settings {
     /// file gets it on.
     #[serde(default = "yes")]
     pub screen_tint: bool,
+    /// Start's pinned grid with folders. None (an old file, or no folder made yet) = the page derives the grid from the
+    /// strip pins and the app list, as before folders; set the first time the owner arranges it (`set_start_items`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_items: Option<Vec<StartItem>>,
+}
+
+/// One cell of Start's pinned grid: an app, or a folder of at least two apps (owner 2026-10-26).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum StartItem {
+    App {
+        #[serde(rename = "appId")]
+        app_id: String,
+    },
+    Folder {
+        name: String,
+        #[serde(rename = "appIds")]
+        app_ids: Vec<String>,
+    },
+}
+
+/// Most cells and apps per folder kept; longest folder name; longest app id (a Start Menu shortcut path).
+pub const MAX_START_ITEMS: usize = 200;
+const MAX_FOLDER_NAME: usize = 40;
+const MAX_APP_ID: usize = 2048;
+
+/// What the page sent, made safe to keep: each app once (first place wins), sane ids, a folder of one app becomes that
+/// app, an empty one goes, a blank or overlong name becomes "Folder" / is cut, control characters dropped.
+pub fn clean_start_items(items: Vec<StartItem>) -> Vec<StartItem> {
+    let mut seen = std::collections::HashSet::new();
+    let mut keep = |id: &String| !id.is_empty() && id.len() <= MAX_APP_ID && seen.insert(id.clone());
+    let mut out = vec![];
+    for item in items {
+        if out.len() == MAX_START_ITEMS {
+            break;
+        }
+        match item {
+            StartItem::App { app_id } if keep(&app_id) => out.push(StartItem::App { app_id }),
+            StartItem::App { .. } => {}
+            StartItem::Folder { name, app_ids } => {
+                let mut ids: Vec<String> = app_ids.into_iter().filter(|a| keep(a)).take(MAX_START_ITEMS).collect();
+                match ids.len() {
+                    0 => {}
+                    1 => out.push(StartItem::App { app_id: ids.remove(0) }),
+                    _ => {
+                        let name: String = name.chars().filter(|c| !c.is_control()).take(MAX_FOLDER_NAME).collect();
+                        let name = if name.trim().is_empty() { "Folder".into() } else { name.trim().to_string() };
+                        out.push(StartItem::Folder { name, app_ids: ids });
+                    }
+                }
+            }
+        }
+    }
+    out
 }
 
 /// 1: colour icons became the default; a version-0 `"color_icons": false` was the old default, not a choice.
@@ -121,6 +175,7 @@ impl Default for Settings {
             celebrate: true,
             watch_downloads: true,
             screen_tint: true,
+            start_items: None,
         }
     }
 }
@@ -148,6 +203,8 @@ pub struct UiSettings {
     pub screen_tint: bool,
     /// Read-only here; the page changes it with `taskbar_set_mode` ("full" | "auto" | "off").
     pub taskbar_hide: HideMode,
+    /// Start's grid with folders; null = derived by the page. Written with `set_start_items`.
+    pub start_items: Option<Vec<StartItem>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -222,6 +279,7 @@ pub fn to_ui(s: &Settings, name_icon: impl Fn(&str) -> Option<(String, String)>)
         watch_downloads: s.watch_downloads,
         screen_tint: s.screen_tint,
         taskbar_hide: s.taskbar_hide,
+        start_items: s.start_items.clone(),
     }
 }
 
@@ -353,6 +411,55 @@ pub fn save(path: &Path, settings: &Settings) -> std::io::Result<()> {
 mod tests {
     use super::*;
     use crate::test_util::Tmp;
+
+    fn app(id: &str) -> StartItem {
+        StartItem::App { app_id: id.into() }
+    }
+    fn folder(name: &str, ids: &[&str]) -> StartItem {
+        StartItem::Folder { name: name.into(), app_ids: ids.iter().map(|s| s.to_string()).collect() }
+    }
+
+    #[test]
+    fn start_items_old_file_derives_and_a_saved_grid_round_trips() {
+        // a file from before folders: no field = None (the page derives the grid; nothing migrates)
+        let old: Settings = serde_json::from_str(r#"{"version":1,"pins":[]}"#).unwrap();
+        assert_eq!(old.start_items, None);
+        assert!(!serde_json::to_string(&old).unwrap().contains("start_items"), "None is not written");
+        let tmp = Tmp::new();
+        let path = settings_path(tmp.path());
+        let s = Settings { start_items: Some(vec![folder("Work", &["a", "b"]), app("c")]), ..Settings::default() };
+        save(&path, &s).unwrap();
+        assert_eq!(load(&path).start_items, s.start_items);
+        // the page's shape
+        assert_eq!(
+            serde_json::to_string(&s.start_items).unwrap(),
+            r#"[{"kind":"folder","name":"Work","appIds":["a","b"]},{"kind":"app","appId":"c"}]"#
+        );
+    }
+
+    #[test]
+    fn start_items_are_cleaned() {
+        let long = "x".repeat(60);
+        let got = clean_start_items(vec![
+            folder("  ", &["a", "b"]),
+            app("a"),                     // already in the folder
+            folder("Solo", &["c", "a"]), // one app left -> that app
+            folder("Empty", &[]),
+            folder(&long, &["d", "e\u{7}", "e\u{7}"]),
+            app(""),
+            folder("Tab\tname", &["f", "g"]),
+        ]);
+        assert_eq!(
+            got,
+            vec![
+                folder("Folder", &["a", "b"]),
+                app("c"),
+                folder(&"x".repeat(40), &["d", "e\u{7}"]),
+                folder("Tabname", &["f", "g"]),
+            ]
+        );
+        assert_eq!(clean_start_items((0..300).map(|i| app(&i.to_string())).collect()).len(), MAX_START_ITEMS);
+    }
 
     #[test]
     fn missing_is_default_and_a_round_trip_keeps_everything() {

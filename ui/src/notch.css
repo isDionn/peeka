@@ -328,7 +328,8 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(3);background:#ff
 /* ---------- search (Ctrl+K) ---------- */
 .results{position:relative;display:flex;flex-direction:column;min-height:230px}   /* panel height must not jump while typing (O12) */
 .groupHead{font:600 12px/16px var(--font);color:var(--l3);padding:8px 10px 4px}
-.result{position:relative;z-index:1;display:flex;align-items:center;gap:10px;height:40px;padding:0 10px;cursor:pointer}
+.result{position:relative;display:flex;align-items:center;gap:10px;height:40px;padding:0 10px;cursor:pointer;border-radius:var(--rInner);corner-shape:squircle;transition:background-color var(--d-fast) var(--ease-move)}
+.result.selected{background:rgba(255,255,255,.1);box-shadow:inset 0 .5px 0 rgba(255,255,255,.12)}   /* one selection fill for hover and keys (hover selects); full row inside the list's 6 px padding, radius 18 - 6 = 12 */
 .result .tile{width:26px;height:26px;border-radius:8px;corner-shape:squircle;display:grid;place-items:center;flex:none;background:rgba(255,255,255,.08);color:var(--l2)}
 .result .tile svg.lucide{width:14px;height:14px}
 .result .tile .appIcon{width:22px;height:22px}
@@ -342,7 +343,6 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(3);background:#ff
 .result.selected .kind{display:none}.result.selected .enter{display:inline-flex}
 .result.selected .enter{color:var(--l2)}   /* dim text on the selection capsule was dropping below 4.5:1 */
 .result.assistantAsk .tile{background:color-mix(in srgb,var(--mint) 16%,transparent);color:var(--mint)}
-.selPill{position:absolute;left:6px;right:6px;top:0;height:40px;border-radius:12px;corner-shape:squircle;background:rgba(255,255,255,.1);box-shadow:inset 0 .5px 0 rgba(255,255,255,.12);will-change:transform}
 .noResults{padding:14px 10px 6px;text-align:center;color:var(--l3);font-weight:400}
 .searchFoot{display:flex;gap:16px;justify-content:flex-end}
 /* ---------- Start panel ---------- */

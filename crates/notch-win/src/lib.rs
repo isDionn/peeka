@@ -46,6 +46,7 @@ pub mod tint;
 pub mod tray;
 pub mod volume;
 pub mod wifi;
+pub mod winkey;
 pub mod winsearch;
 
 /// UTF-16 buffer up to its first NUL, lossy.

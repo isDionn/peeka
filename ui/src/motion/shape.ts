@@ -38,8 +38,10 @@ export const shoulderOf = (r: number) => Math.min(12, r * 0.6);
 
 /** Clip for the body while it moves: straight top, bottom corners matching `corner-shape: squircle` (a cubic with 1.1 r handles: measured against
  *  Chromium's own squircle at DPR 1 and 1.5, at most 1 colour level apart), so the corner doesn't change when the clip goes at rest. */
+/** Handle factor: 1.1 for `corner-shape: squircle`; a WebView without it draws a circular corner (0.5523 = circle as a cubic), so the path follows that. */
+const K = typeof CSS !== "undefined" && CSS.supports?.("corner-shape", "squircle") ? 1.1 : 0.5523;
 export function bodyPath(x: number, w: number, h: number, r: number): string {
-  const k = r * 1.1, R = x + w, n = (v: number) => Math.round(v * 100) / 100;
+  const k = r * K, R = x + w, n = (v: number) => Math.round(v * 100) / 100;
   return `path("M${n(x)} 0H${n(R)}V${n(h - r)}C${n(R)} ${n(h - r + k)} ${n(R - r + k)} ${n(h)} ${n(R - r)} ${n(h)}H${n(x + r)}C${n(x + r - k)} ${n(h)} ${n(x)} ${n(h - r + k)} ${n(x)} ${n(h - r)}Z")`;
 }
 
@@ -57,7 +59,7 @@ export interface Shape {
 /**
  * Grows and shrinks the `body` inside `host` (polish audit #1). The host box is resized only when the target changes and once when the motion ends;
  * every frame writes only the body's clip-path and the layers' transform / opacity: no layout, no React render.
- * At rest the clip is removed, so the body's own squircle corners (`--r` on the host) show.
+ * The clip stays at rest (same path as the last frame); `--r` on the host still sizes the shadow's corners.
  */
 export function createShape(host: HTMLElement, body: HTMLElement, o: ShapeOptions = {}): Shape {
   const { anchor = "center", radius = notchRadius, layers = [] } = o;
@@ -81,7 +83,8 @@ export function createShape(host: HTMLElement, body: HTMLElement, o: ShapeOption
   const apply = () => {
     const s = state();
     host.style.visibility = s.hidden ? "hidden" : "visible";
-    body.style.clipPath = s.moving ? bodyPath(s.offsetX, s.w, s.h, s.r) : "";
+    // the same clip at rest: the last moving frame and the resting frame are one path, so the corner never snaps when the motion ends
+    body.style.clipPath = s.hidden ? "" : bodyPath(s.offsetX, s.w, s.h, s.r);
     if (o.tone) o.tone.style.opacity = String(1 - s.kt);
     for (const l of layers) l(s);
   };

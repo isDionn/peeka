@@ -782,11 +782,10 @@ pub async fn set_settings(app: AppHandle, n: State<'_, Notch>, patch: UiPatch) -
     Ok(SaveResult { ok: true, error: None })
 }
 
-/// The page's rectangles: the island's click-through poll's rectangles (no region), a strip's window region (the bar
-/// is always in, `clickthrough::strip_region_boxes`).
+/// The page's rectangles for the click-through cursor poll (`app::click_through`; no window regions: a strip's bar is
+/// always clickable, `clickthrough::strip_captures`).
 #[tauri::command]
 pub fn report_hit_rects(
-    app: AppHandle,
     n: State<'_, Notch>,
     page: String,
     monitor: String,
@@ -807,10 +806,7 @@ pub fn report_hit_rects(
             let label = format!("strip-{monitor}");
             let mut strips = n.strips.lock();
             let s = strips.get_mut(&label).ok_or(CmdError::Unknown)?;
-            (s.rects, s.dpr, s.view) = (rects, dpr, view);
-            drop(strips);
-            let handle = app.clone();
-            let _ = app.run_on_main_thread(move || crate::app::apply_strip_region(&handle, &label));
+            (s.rects, s.dpr, s.view) = (rects, dpr, view); // the cursor poll (`app::click_through`) reads them
         }
         _ => return Err(CmdError::Invalid),
     }
@@ -1662,12 +1658,20 @@ pub fn open_recent(n: State<'_, Notch>, id: String) -> Res<()> {
     Win32Control.launch(&path.to_string_lossy()).then_some(()).ok_or(CmdError::Refused)
 }
 
-/// Start's 12 pins. shortcut: Windows 11 keeps its Start pins in an undocumented binary (`start2.bin`) Notch
-/// cannot read, so the list is always empty and the page falls back to its own (strip pins + apps); read it here
-/// if Windows ever offers an API.
+/// Start's pinned grid with folders (`settings::StartItem`), cleaned and saved; every strip hears `settings_changed`
+/// (the grid is read from the settings). Windows's own Start pins (`start2.bin`) stay unread: undocumented.
 #[tauri::command]
-pub fn start_pins() -> Vec<AppRef> {
-    vec![]
+pub fn set_start_items(app: AppHandle, n: State<'_, Notch>, items: Vec<settings::StartItem>) -> Res<UiSettings> {
+    {
+        let mut s = n.settings.lock();
+        let mut next = s.clone();
+        next.start_items = Some(settings::clean_start_items(items));
+        n.save(&next).map_err(|_| CmdError::Io)?;
+        *s = next;
+    }
+    let ui = ui_settings(&n);
+    let _ = app.emit("settings_changed", &ui);
+    Ok(ui)
 }
 
 /* ---------- Fidelity 3: what the main assistant provides (rules: notch_core::plugins::host::assistant) ---------- */

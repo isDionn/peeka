@@ -172,7 +172,38 @@ describe("menus", () => {
   });
 });
 
+describe("Win key", () => {
+  it("a lone Win tap (Rust `shortcut` start) toggles Start on the cursor's screen only, with no data wait", async () => {
+    render(<Shell monitor="m1" />);
+    await settle();
+    const start = () => document.querySelector('[data-panel="start"]')!.getAttribute("aria-hidden");
+    act(() => fakeBridge.emit("shortcut", { name: "start", monitor: "m2" }));
+    expect(start()).toBe("true");
+    act(() => fakeBridge.emit("shortcut", { name: "start", monitor: "m1" }));
+    expect(start()).toBe("false"); // open in the same commit as the event, before list_apps answers
+    act(() => fakeBridge.emit("shortcut", { name: "start", monitor: "m1" }));
+    expect(start()).toBe("true");
+  });
+});
+
 describe("Search", () => {
+  it("one selection style: keys and hover move the same single highlighted row", async () => {
+    render(<SearchPanel onClose={() => undefined} />);
+    await settle();
+    const input = screen.getByLabelText("Search");
+    fireEvent.change(input, { target: { value: "s" } });
+    await settle();
+    const selected = () => screen.getAllByRole("option").filter((o) => o.classList.contains("selected") || o.getAttribute("aria-selected") === "true");
+    const rows = screen.getAllByRole("option");
+    expect(rows.length).toBeGreaterThan(2);
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    expect(selected()).toEqual([rows[1]]);
+    fireEvent.mouseMove(rows[2]);
+    expect(selected()).toEqual([rows[2]]);
+    expect(rows[2].classList.contains("selected") && rows[2].getAttribute("aria-selected")).toBe("true");
+    expect(document.querySelector(".selPill")).toBeNull(); // the fill is the row's own: no second highlight layer
+  });
+
   it("O12: with no results Enter does not ask Compass; pressing the arrow does", async () => {
     render(<SearchPanel onClose={() => undefined} />);
     await settle();

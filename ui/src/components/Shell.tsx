@@ -140,7 +140,7 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.defaultPrevented) closeAll(); }; // one Esc closes the top panel even if focus has left it
     window.addEventListener("blur", onWinBlur);
     document.addEventListener("keydown", esc);
-    const off = bridge.on("shortcut", (e) => { if (e.name === "search" && e.monitor === monitorId) toggle("search"); });
+    const off = bridge.on("shortcut", (e) => { if ((e.name === "search" || e.name === "start") && e.monitor === monitorId) toggle(e.name); });
     // in the real window, clicks outside (another app, the island, the other strip) never reach this page and the strip doesn't get focus: Rust reports them and they close like a blur
     const offPress = bridge.on("notch://outside_press", (m) => { if (m !== monitorId) onBlur(); });
     return () => { document.removeEventListener("pointerdown", down); window.removeEventListener("blur", onWinBlur); document.removeEventListener("keydown", esc); document.removeEventListener("keydown", strip); off.then((f) => f()); offPress.then((f) => f()); };
@@ -184,7 +184,7 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
       <Panel side="center" width={780} label="Peeka settings" dataKind="settings" open={SETTINGS_PAGES.includes(panel)} onClose={close}>
         {settings && <SettingsPanel page={panel === "shortcuts" || panel === "plugins" || panel === "modules" || panel === "clipboard" || panel === "mascot" ? panel : "appearance"} onPage={(p: SettingsPage) => setPanel(p)} settings={settings} onQuit={() => setPanel("quit")} />}
       </Panel>
-      <Panel side="center" width={400} label="Quit Peeka" dataKind="quit" open={panel === "quit"} onClose={close}>
+      <Panel side="center" width={400} label="Quit Peeka" dataKind="quit" open={panel === "quit"} onClose={close} glow={monitor.id}>
         <QuitConfirm onCancel={close} />
       </Panel>
       <SetupPanel open={panel === "setup"} onClose={close} startStep={init?.setupStep} />

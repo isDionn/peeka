@@ -166,10 +166,109 @@ impl ShortcutGate {
     }
 }
 
+/// The Windows keys (left, right).
+pub const VK_WINS: [u32; 2] = [0x5B, 0x5C];
+
+/// A lone Windows-key tap opens Peeka's Start (`notch_win::winkey`). Win+anything (Win+E, Shift+Win+S, Ctrl+Win+D)
+/// stays Windows's: any other key between Win down and Win up, or a modifier already held, makes it a combination.
+#[derive(Default)]
+pub struct WinTap {
+    held: bool,
+    combo: bool,
+    /// The Esc of a Ctrl+Esc went to Peeka: its repeats and its up are swallowed too.
+    esc_eaten: bool,
+}
+
+/// What the hook does with an Esc event (`WinTap::ctrl_esc`).
+#[derive(Debug, PartialEq, Eq)]
+pub enum EscKey {
+    Pass,
+    /// Ctrl+Esc: open Peeka's Start and swallow the key.
+    Open,
+    Swallow,
+}
+
+impl WinTap {
+    /// One real (not injected) key event; `mods_held` = Ctrl, Shift or Alt is down. True = this Win up is a lone tap.
+    pub fn key(&mut self, vk: u32, down: bool, mods_held: bool) -> bool {
+        let win = VK_WINS.contains(&vk);
+        match (win, down) {
+            (true, true) if !self.held => (self.held, self.combo) = (true, mods_held),
+            (true, true) => {} // auto-repeat
+            (true, false) => {
+                let tap = self.held && !self.combo;
+                self.held = false;
+                return tap;
+            }
+            (false, true) if self.held => self.combo = true,
+            _ => {}
+        }
+        false
+    }
+
+    /// Ctrl+Esc, Windows's other Start key. `ctrl_only` = Ctrl held and Shift (Ctrl+Shift+Esc is Task Manager), Alt
+    /// and Win not; `on` = Peeka takes Start now.
+    pub fn ctrl_esc(&mut self, vk: u32, down: bool, ctrl_only: bool, on: bool) -> EscKey {
+        const VK_ESCAPE: u32 = 0x1B;
+        match (vk == VK_ESCAPE, down, self.esc_eaten) {
+            (false, ..) => EscKey::Pass,
+            (true, true, true) => EscKey::Swallow, // auto-repeat
+            (true, true, false) if ctrl_only && on => {
+                self.esc_eaten = true;
+                EscKey::Open
+            }
+            (true, false, true) => {
+                self.esc_eaten = false;
+                EscKey::Swallow
+            }
+            _ => EscKey::Pass,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use GateAction::*;
+
+    #[test]
+    fn only_a_lone_win_tap_opens_start() {
+        let mut t = WinTap::default();
+        assert!(!t.key(0x5B, true, false));
+        assert!(!t.key(0x5B, true, false), "auto-repeat");
+        assert!(t.key(0x5B, false, false), "lone tap");
+        // Win+E
+        t.key(0x5C, true, false);
+        assert!(!t.key(0x45, true, false));
+        t.key(0x45, false, false);
+        assert!(!t.key(0x5C, false, false), "Win+E stays Windows's");
+        // Shift+Win (Shift already down)
+        t.key(0x5B, true, true);
+        assert!(!t.key(0x5B, false, true));
+        // a Win up without its down (the hook started mid-press) is no tap
+        assert!(!t.key(0x5B, false, false));
+        // next lone tap after a combination works again
+        t.key(0x5B, true, false);
+        assert!(t.key(0x5B, false, false));
+        // Win+L: the ups happen on the secure desktop, unseen; the hook starts a fresh Win press clean (winkey.rs)
+        t.key(0x5B, true, false);
+        t.key(0x4C, true, false);
+        let mut t = WinTap::default();
+        t.key(0x5B, true, false);
+        assert!(t.key(0x5B, false, false), "first tap after unlock opens Start");
+    }
+
+    #[test]
+    fn ctrl_esc_opens_start_and_eats_only_its_own_esc() {
+        let mut t = WinTap::default();
+        assert_eq!(t.ctrl_esc(0x1B, true, true, true), EscKey::Open);
+        assert_eq!(t.ctrl_esc(0x1B, true, true, true), EscKey::Swallow, "auto-repeat");
+        assert_eq!(t.ctrl_esc(0x1B, false, false, true), EscKey::Swallow, "its up, even with Ctrl already released");
+        assert_eq!(t.ctrl_esc(0x1B, true, false, true), EscKey::Pass, "plain Esc / Ctrl+Shift+Esc (Task Manager)");
+        assert_eq!(t.ctrl_esc(0x1B, false, false, true), EscKey::Pass);
+        assert_eq!(t.ctrl_esc(0x1B, true, true, false), EscKey::Pass, "off: Windows's Start");
+        assert_eq!(t.ctrl_esc(0x41, true, true, true), EscKey::Pass);
+    }
 
     #[test]
     fn ctrl_k_comes_prefilled_and_the_rest_empty() {

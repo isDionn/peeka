@@ -69,8 +69,8 @@ pub fn strip_rect(m: &Monitor) -> Rect {
 }
 
 /// The strip window: from the reserved bar's top down to 1 px above the monitor's bottom, so the panels hanging under
-/// the bar (Start, Status, Search, settings...) draw at full height in the same page (the region clips it to the bar +
-/// the open panel, `clickthrough::strip_region_boxes`). The AppBar keeps only `bar` reserved. 1 px short of the
+/// the bar (Start, Status, Search, settings...) draw at full height in the same page (no region: the cursor poll lets
+/// clicks through outside the bar + the open panel, `clickthrough::strip_captures`). The AppBar keeps only `bar` reserved. 1 px short of the
 /// bottom: a foreground window covering its monitor counts as fullscreen (`foreground_covers`, Explorer's own check)
 /// and would hide the strips.
 pub fn strip_window_rect(bar: Rect, m: &Monitor) -> Rect {

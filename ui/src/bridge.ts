@@ -52,6 +52,9 @@ export type ShortcutId = "search" | "ask" | "focus_island" | "hide_island" | "em
 /** `ignored`: a click caught by the ~300 ms guard (the prompt stays open); `not_connected`: no main assistant connected. */
 export type CmdError = "unknown" | "refused" | "invalid" | "io" | "unsupported" | "denied" | "missing" | "not_yet" | "ignored" | "not_connected";
 export interface ShortcutException { appId: string; name: string; icon: string; keys: string }
+/** One cell of Start's pinned grid: an app, or a folder of two or more apps (Rust `settings::StartItem`). */
+export type StartItem = { kind: "app"; appId: string } | { kind: "folder"; name: string; appIds: string[] };
+
 export interface Settings extends ClipSettings {
   /** Idle mascot pranks (once every 45-90 min, at most 6 a day). On by default. */
   mascotPranks: boolean;
@@ -67,6 +70,8 @@ export interface Settings extends ClipSettings {
   autostart: boolean;
   /** Windows taskbar state (read-only here; changed with `taskbar_set_mode`): fully hidden / auto-hide / keep Windows' own. */
   taskbarHide: "full" | "auto" | "off";
+  /** Start's pinned grid with folders; absent / null = derived from the strip pins and the app list (as before folders). Written with `set_start_items`. */
+  startItems?: StartItem[] | null;
   secondaryStrips: boolean;
   shortcuts: Record<ShortcutId, string>;
   shortcutExceptions: ShortcutException[];
@@ -335,8 +340,8 @@ export interface Commands {
   /** Start "Recommended" (at most 8; the page shows 4). */
   recent_files: { args: void; ret: RecentItem[] };
   open_recent: { args: { id: string }; ret: void };
-  /** Start pins. Windows 11 doesn't expose the list: Rust always returns EMPTY, and empty = the page falls back to its own list (strip pins + apps). */
-  start_pins: { args: void; ret: AppRef[] };
+  /** Save Start's pinned grid with folders (Rust cleans it: each app once, a one-app folder becomes the app); returns the settings, also sent as `settings_changed`. */
+  set_start_items: { args: { items: StartItem[] }; ret: Settings };
   /** Open the Windows Start menu (Win key). */
   open_start_menu: { args: void; ret: void };
   /** The strip clock: Windows's notification center and calendar (Win+N; it opens even with the taskbar hidden). */
@@ -442,7 +447,7 @@ export interface Events {
   status_changed: Status;
   settings_changed: Settings;
   /** Global shortcut pressed; `monitor` is the screen with the cursor, only that screen's strip reacts. */
-  shortcut: { name: Exclude<ShortcutId, "emergency">; monitor: string };
+  shortcut: { name: Exclude<ShortcutId, "emergency"> | "start"; monitor: string }; // "start": a lone Win tap (Rust winkey hook)
   media_changed: Media | null;
   alerts_changed: AlertsView;
   sysmon_tick: SysmonTick;

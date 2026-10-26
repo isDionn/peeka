@@ -32,6 +32,8 @@ import { BurstBump, BurstCenter, CpuBump, CpuCenter, DiffCard, DownloadBump, Dow
 
 /** Keep the card shadow (notch-extra.css: 0 28px 72px) from being clipped by the window region: this much room at the sides and bottom (CSS px). */
 const SHADOW_SIDE = 72, SHADOW_BOTTOM = 110;
+/** The island's copy of the primary monitor's `screen_tint` (extras.rs): the island page doesn't know its monitor index, so it would never match a strip's id and stayed on the purple fallback (RC4 owner: blue card beside a near-black strip). */
+export const ISLAND_TINT = "island";
 import { ApprovalBump, ApprovalCard, ApprovalCenter, ApprovalShort, ComposerCard, Lead, ProtrusionBump, ProtrusionCenter } from "./Plugin";
 import { LockCard, LockCenter, ClipboardCenter, ClipboardView, ShotBump, ShotCenter, STRIP_TXT, stripKind } from "./Pano";
 import { Bars, FirstRunCard, ModulesCard, modulesKw, MusicBump, MusicCard, OsdBump } from "./IslandCards";
@@ -920,16 +922,17 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
         // at rest the hover peek's footprint (same size as its "hov" spec: mw + 40 by 14) is already in the window region, as paint only: a pointer near the
         // ghost or clock grows nothing, so the peek is never drawn half (RC1 owner's PC: a grey band beside the ghost, the rest of the peek missing)
         : restShown ? <div className="islandHit islandShadow" data-paint style={{ width: mw + 40 + 2 * SHADOW_SIDE, height: 14 + SHADOW_BOTTOM }} /> : null}
-      <div id="island" ref={islandEl} className="dangling shaped" data-hover={hover ? "" : undefined} onPointerEnter={() => hoverIntent(true)} onPointerLeave={() => hoverIntent(false)}>
+      <div id="island" ref={islandEl} className="dangling shaped" data-hover={hover ? "" : undefined}
+        onClick={kind === "hov" ? () => setUser("modules") : undefined /* the whole hover peek opens the card, not only its 44 px handle (RC4 owner: "can't be clicked") */} onPointerEnter={() => hoverIntent(true)} onPointerLeave={() => hoverIntent(false)}>
         <div className="nm-layers" ref={layersEl} />
         <div className="cut" ref={cutEl}>
           <div className="tone" ref={toneEl} />
-          <div className="glowHost"><GlowField monitor={monitor} /></div>
+          <div className="glowHost"><GlowField monitor={ISLAND_TINT} /></div>
           {shapeOld !== null && <div className="islandInner leaving" data-leaving aria-hidden="true" style={{ width: shapeOld.width ?? "max-content" }} ref={(el) => { if (el) el.inert = true; }}>{shapeOld.node}</div>}
           {spec && <Layer key={spec.key} spec={spec} onClose={back} onModules={toModules} measure={setShapeEl} />}
           <IslandLine s={ls} hidden={box.h < 0.4} />
         </div>
-        {slices.map((el, i) => createPortal(<GlowField monitor={monitor} />, el, "s" + i))}
+        {slices.map((el, i) => createPortal(<GlowField monitor={ISLAND_TINT} />, el, "s" + i))}
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { GUARD_MS } from "../lib/plugin";
 import { useHold } from "../lib/useHold";
 import { createShape, type Shape } from "../motion/shape";
 import { mountShoulders } from "../motion/shoulder";
+import { GlowField } from "./Glow";
 import { useLayoutEffect, useState } from "react";
 
 /** Icons from Rust may only be PNG/SVG data URLs (they go inside CSS url("...")). */
@@ -13,9 +14,19 @@ export const SAFE_ICON = /^data:image\/(png|svg\+xml)[;,]/;
 
 /** Monochrome app icon: the data URL is used as an alpha mask painted in the text color (§0i item 7). */
 export function AppIcon({ src, color, size }: { src: string; /** Color icon (data URL), drawn instead of the mask whenever given: Rust sends it while Settings › Appearance › Color app icons is on, or when the mask would be a blank shape. */ color?: string | null; size?: number }) {
-  const style = { WebkitMaskImage: `url("${src}")`, maskImage: `url("${src}")`, ...(color && /^data:image\/(png|svg\+xml)[;,]/.test(color) ? { "--icon-color": `url("${color}")` } : null), ...(size ? { width: size, height: size } : null) } as CSSProperties;
+  // colour: no inline mask at all. An inline mask-image beats the stylesheet's `mask: none`, and with its size reset to
+  // auto it cut the colour icon to its top-left 16 px (RC4 owner's PC: empty cells, slivers, faint glyphs).
+  const paint = color && SAFE_ICON.test(color) ? { "--icon-color": `url("${color}")` } : { WebkitMaskImage: `url("${src}")`, maskImage: `url("${src}")` };
+  const style = { ...paint, ...(size ? { width: size, height: size } : null) } as CSSProperties;
   return <span className="appIcon mono" style={style} aria-hidden="true" />;
 }
+
+/** No logo from Windows: the name's first letter in a coloured circle (strip-items.css), the same hue for the same name. */
+export function AppLetter({ name }: { name: string }) {
+  return <span className="appLetter" style={{ "--hue": hueOf(name) } as CSSProperties} aria-hidden="true">{[...name.trim()][0]?.toUpperCase() ?? "?"}</span>;
+}
+/** A steady hue per name, so the same app keeps its letter colour. */
+export const hueOf = (name: string) => [...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
 
 export function WinLogo() {
   return (
@@ -75,11 +86,12 @@ const PANEL_SHADOW_SIDE = 72, PANEL_SHADOW_BOTTOM = 110;
 /** Panel's max height: visible height - strip - gap (O6). */
 export const panelMaxH = (vh: number) => Math.max(160, vh - 30 - 16);
 
-export function Panel({ side, width, label, open, onClose, dataKind, children, offset, amb, ownHint }: {
+export function Panel({ side, width, label, open, onClose, dataKind, children, offset, amb, ownHint, glow }: {
   side: "left" | "right" | "center"; width: number; label: string; open: boolean; onClose: () => void; dataKind: string; children: ReactNode;
   /** Distance from the edge (px, default 8): the tray panel sits under the arrow at this distance. */ offset?: number;
   /** Ambient color (a soft glow behind the card; mockup mt amber). */ amb?: string;
   /** No corner close button when the content shows its own "Esc" hint. */ ownHint?: boolean; /* small popovers like the tray use this too: Esc and clicking outside close it, a corner button would cover the icons */
+  /** Monitor id: a centre panel that reads as an island card draws the Drift glow (its centre is the screen's centre line, glow.css). */ glow?: string;
 }) {
   const [vh, setVh] = useState(() => window.innerHeight);
   useEffect(() => { const f = () => setVh(window.innerHeight); addEventListener("resize", f); return () => removeEventListener("resize", f); }, []);
@@ -118,6 +130,7 @@ export function Panel({ side, width, label, open, onClose, dataKind, children, o
       <div className="cut" ref={cut}>
         <div className="tone" ref={tone} />
         {amb && <div className="amb" />}
+        {glow && side === "center" && <div className="glowHost"><GlowField monitor={glow} /></div>}
         {open && !ownHint && <button className="panelClose mini" title="Close (Esc)" aria-label="Close panel" onClick={onClose}><X /></button>}
         {(open || mounted.current) && (
           <div ref={inner} className={"inner " + (side === "right" ? "onRight" : side === "left" ? "onLeft" : "middle")} style={{ width, maxHeight: panelMaxH(vh), overflowY: "auto" }}>

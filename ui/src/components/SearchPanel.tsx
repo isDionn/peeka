@@ -1,12 +1,10 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Bell, Brain, Timer, Monitor, MonitorOff, Search, SlidersHorizontal, Volume2 } from "lucide-react";
 import { bridge, type SearchIndexState, type SearchResult } from "../bridge";
 import { askLabel, useMainAssistant, useSettings } from "../hooks";
 import { fileKind } from "../lib/clip";
 import { Mascot } from "../mascot";
 import { flatten, groupResults, parseTimer, splitMatch } from "../lib/search";
-import { SPRINGS } from "../motion/spring";
-import { useSpring } from "../motion/useSpring";
 import { AppIcon, Kbd } from "./common";
 import { FileIcon } from "./Pano";
 import "../fidelity-settings.css";
@@ -66,10 +64,6 @@ export function SearchPanel({ onClose, initialQuery = "", initialSel = 0 }: { on
     if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); setTouched(true); setSel((s) => Math.max(0, Math.min(total - 1, s + (e.key === "ArrowDown" ? 1 : -1)))); }
     else if (e.key === "Enter") { e.preventDefault(); if (cur >= 0) act(cur); }
   };
-  // the selection pill springs to the selected row (search result selection 0.34 / 0.82)
-  const [top, setTop] = useState(0);
-  useLayoutEffect(() => { const el = document.getElementById(`${id}-${sel}`); if (el) setTop(el.offsetTop); }, [sel, results, id, groups]);
-  const pillY = useSpring(top, SPRINGS.pill);
   useEffect(() => { list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView?.({ block: "nearest" }); }, [sel]);
 
   let n = ti; // navigation row index
@@ -84,7 +78,6 @@ export function SearchPanel({ onClose, initialQuery = "", initialSel = 0 }: { on
         <Kbd keys="Esc" />
       </div>
       <div className="results plat glass" id={id} role="listbox" aria-label="Results" ref={list}>
-        {total > 0 && cur >= 0 && <span className="selPill" aria-hidden="true" style={{ transform: `translateY(${pillY}px)` }} />}
         {timer && (
           <div role="group" aria-label="Actions">
             <div className="groupHead">Actions</div>

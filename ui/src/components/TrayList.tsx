@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { bridge, type TrayIconX } from "../bridge";
-import { AppWindow } from "lucide-react";
-import { AppIcon, SAFE_ICON } from "./common";
+import { AppIcon, AppLetter, SAFE_ICON } from "./common";
 import "../fidelity-settings.css";
 
 /** Rust `tray_icons`: `open_tray` + color icon. No badge count arrives; without `badge` no badge is drawn. */
@@ -12,11 +11,11 @@ const label = (t: TrayIconX) => t.name + (t.badge ? `, ${t.badge} new` : "");
 /** The last list, so a reopened panel paints its cells at once instead of growing in after the call. */
 let last: TrayIconX[] | null = null;
 
-/** Strip icon 17, hidden-icons grid (list role) 18: the notch.css app icon scale. No icon: one neutral glyph, same box. */
+/** Strip icon 17, hidden-icons grid (list role) 18: the notch.css app icon scale. No icon: the name's letter in a circle, as on the strip. */
 function TrayIconView({ t, size, color }: { t: TrayIconX; size: number; color?: string | null }) {
   return (
     <>
-      {SAFE_ICON.test(t.icon) ? <AppIcon src={t.icon} color={color} size={size} /> : <AppWindow aria-hidden="true" style={{ width: size, height: size }} />}
+      {SAFE_ICON.test(t.icon) ? <AppIcon src={t.icon} color={color} size={size} /> : <AppLetter name={t.name} />}
       {!!t.badge && <span className="badge" aria-hidden="true">{t.badge > 99 ? "99+" : t.badge}</span>}
     </>
   );
@@ -57,7 +56,7 @@ export function PromotedTray({ monitor }: { monitor: string }) {
   const [list, setList] = useState<TrayIconX[]>([]);
   useEffect(() => {
     let live = true;
-    const load = () => loadTray(monitor).then((l) => { if (live) setList(l.filter((t) => t.promoted)); }).catch(() => undefined);
+    const load = () => loadTray(monitor).then((l) => { last = l; if (live) setList(l.filter((t) => t.promoted)); }).catch(() => undefined); // also warms the Hidden icons panel: its first open paints full size
     load();
     window.addEventListener("focus", load); // badges get no events from Rust: refresh when the window gains focus
     return () => { live = false; window.removeEventListener("focus", load); };

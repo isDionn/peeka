@@ -19,6 +19,7 @@
 /* no staggered entry on a card carrying a flying item: the flight measurement mustn't start from a shifted spot */
 .body:has([data-share]) { animation: none; }
 .islandHit { position: absolute; left: 50%; top: var(--BAR); transform: translateX(-50%); opacity: 0; pointer-events: none; }
+#island:has(button.peek) { cursor: pointer; }
 button.peek { color: inherit; cursor: pointer; width: 44px; height: 14px; display: grid; place-items: center; padding: 0 0 2px; position: relative; }
 .islandInner.mpeek { width: 100%; text-align: center; display: grid; justify-items: center; }
 

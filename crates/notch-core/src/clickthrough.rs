@@ -54,7 +54,15 @@ pub fn captures(cursor: (i32, i32), origin: (i32, i32), scale: f64, rects: &[Css
     rects.iter().any(|r| !r.paint && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h)
 }
 
-/// A strip's window region (with its bar, `strip_region_boxes`; the island has none) and the island's diagnostics:
+/// Should a strip window take the mouse? Like the island (`captures`), plus its bar (`bar` physical px tall), which is
+/// clickable before the page's first report. `size` is the window's (physical px); outside it, never. The strips have
+/// no window region any more: the real-PC 1 px white lines sat on the region's edges (tanitim/bug-rc4 6, the Status box).
+pub fn strip_captures(cursor: (i32, i32), origin: (i32, i32), size: (i32, i32), bar: i32, scale: f64, rects: &[CssRect]) -> bool {
+    let (x, y) = (cursor.0 - origin.0, cursor.1 - origin.1);
+    x >= 0 && y >= 0 && x < size.0 && y < size.1 && (y < bar || captures(cursor, origin, scale, rects))
+}
+
+/// What a strip's window region would be (with its bar, `strip_region_boxes`; for diagnostics only now) and the island's diagnostics:
 /// every reported rectangle, clickable or painted, as `(left, top, right, bottom)` physical px inside a `win` (w, h)
 /// window. The page already holds a rectangle at its target size while a panel grows and until the close animation
 /// ends, so following the report never cuts an animation. Empty rectangles are dropped; nothing = an empty region (the window covers nothing).
@@ -131,6 +139,17 @@ mod tests {
         assert_eq!(region_boxes(&[big], 1.0, (760, 590)), vec![(0, 0, 760, 590)], "clamped to the window");
         assert!(region_boxes(&[], 1.0, (760, 590)).is_empty(), "no rects = covers nothing");
         assert!(region_boxes(&[CssRect { w: 0.0, ..PILL }], 1.0, (760, 590)).is_empty());
+    }
+
+    #[test]
+    fn a_strip_takes_the_bar_always_and_below_it_only_its_rects() {
+        let (o, size) = ((1920, 0), (1920, 1079));
+        assert!(strip_captures((1920 + 5, 37), o, size, 38, 1.25, &[]), "the bar, before any report");
+        assert!(!strip_captures((1920 + 5, 38), o, size, 38, 1.25, &[]), "just under the bar: the desktop");
+        let status = CssRect { x: 1552.0, y: 30.0, w: 360.0, h: 400.0, paint: false };
+        assert!(strip_captures((1920 + 1600, 100), o, size, 30, 1.0, &[status]), "the open panel");
+        assert!(!strip_captures((1920 + 1500, 31), o, size, 30, 1.0, &[status]), "left of the panel, under the bar");
+        assert!(!strip_captures((1919, 10), o, size, 30, 1.0, &[]), "another monitor");
     }
 
     #[test]

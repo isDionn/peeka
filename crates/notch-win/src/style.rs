@@ -246,7 +246,6 @@ pub fn after_press(before: isize, fg: isize, hwnd: isize, typing: bool, before_a
 pub fn strip_no_activate(hwnd: isize) {
     use std::sync::atomic::Ordering::SeqCst;
     use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
-    use windows::Win32::Graphics::Gdi::{RedrawWindow, RDW_ALLCHILDREN, RDW_INVALIDATE};
     use windows::Win32::UI::Shell::{DefSubclassProc, SetWindowSubclass};
     use windows::Win32::UI::WindowsAndMessaging::{
         GetForegroundWindow, GetShellWindow, IsWindow, KillTimer, SetForegroundWindow, SetTimer, SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE,
@@ -269,11 +268,6 @@ pub fn strip_no_activate(hwnd: isize) {
             }
             if msg == WM_ACTIVATE && wparam.0 & 0xFFFF != 0 && !typing {
                 SetTimer(Some(h), GIVE_BACK_TIMER, 200, None);
-            }
-            if msg == WM_TIMER && wparam.0 == REDRAW_TIMER {
-                let _ = KillTimer(Some(h), REDRAW_TIMER);
-                let _ = RedrawWindow(Some(h), None, None, RDW_INVALIDATE | RDW_ALLCHILDREN);
-                return LRESULT(0);
             }
             if msg == WM_TIMER && wparam.0 == GIVE_BACK_TIMER {
                 if crate::style::mouse_down() {
@@ -316,37 +310,6 @@ pub fn typing_focus_out(hwnd: isize) {
     let back = typing_end(hwnd, crate::apps::foreground(), |p| unsafe { IsWindow(Some(HWND(p as _))).as_bool() });
     if let Some(p) = back {
         unsafe { let _ = SetForegroundWindow(HWND(p as _)); }
-    }
-}
-
-/// `set_region`'s delayed repaint; the strip/island subclass (`strip_no_activate`) handles it.
-#[cfg(windows)]
-const REDRAW_TIMER: usize = 0x4E52;
-
-/// Clips the window to the union of `boxes` (`(left, top, right, bottom)` physical px, window-relative); an empty
-/// list clips everything. What lies outside neither paints nor takes the mouse, whatever the page does.
-#[cfg(windows)]
-pub fn set_region(hwnd: isize, boxes: &[(i32, i32, i32, i32)]) {
-    use windows::Win32::Foundation::HWND;
-    use windows::Win32::Graphics::Gdi::{
-        CombineRgn, CreateRectRgn, DeleteObject, RedrawWindow, SetWindowRgn, HGDIOBJ, RDW_ALLCHILDREN, RDW_INVALIDATE, RGN_OR,
-    };
-    // SAFETY: GDI regions we create and either hand to the window (which then owns `whole`) or delete.
-    unsafe {
-        let whole = CreateRectRgn(0, 0, 0, 0);
-        for &(l, t, r, b) in boxes {
-            let one = CreateRectRgn(l, t, r, b);
-            CombineRgn(Some(whole), Some(whole), Some(one), RGN_OR);
-            let _ = DeleteObject(HGDIOBJ(one.0));
-        }
-        if SetWindowRgn(HWND(hwnd as _), Some(whole), true) == 0 {
-            let _ = DeleteObject(HGDIOBJ(whole.0));
-        }
-        // VM pass 2: after a card opens, closes or changes height, the WebView could leave a pale box behind the
-        // island text (the page's own capture is clean) until the window was invalidated. Invalidate now, and once
-        // more when the reports stop (`REDRAW_TIMER` in `strip_no_activate`'s subclass; re-armed on every call).
-        let _ = RedrawWindow(Some(HWND(hwnd as _)), None, None, RDW_INVALIDATE | RDW_ALLCHILDREN);
-        let _ = windows::Win32::UI::WindowsAndMessaging::SetTimer(Some(HWND(hwnd as _)), REDRAW_TIMER, 300, None);
     }
 }
 
