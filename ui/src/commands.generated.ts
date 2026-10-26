@@ -33,6 +33,7 @@ export const COMMAND_NAMES = [
   "get_settings",
   "set_settings",
   "report_hit_rects",
+  "window_tall",
   "taskbar_set_mode",
   "get_media",
   "media_control",

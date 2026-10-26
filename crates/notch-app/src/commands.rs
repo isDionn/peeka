@@ -370,8 +370,12 @@ pub async fn show_desktop() -> Res<()> {
 }
 
 #[tauri::command]
-pub fn activate_window(n: State<'_, Notch>, hwnd: isize) -> Res<()> {
+pub fn activate_window(n: State<'_, Notch>, hwnd: isize, toggle: Option<bool>) -> Res<()> {
     apps::find_window(&n.items.lock(), hwnd).ok_or(CmdError::Unknown)?;
+    // toggle: a strip click on the window already in front minimises it (Windows taskbar behaviour).
+    if toggle == Some(true) && notch_win::apps::foreground() == hwnd {
+        return notch_win::apps::minimise(hwnd).then_some(()).ok_or(CmdError::Refused);
+    }
     Win32Control.focus(hwnd).then_some(()).ok_or(CmdError::Refused)
 }
 
@@ -553,7 +557,7 @@ pub fn search_open(app: AppHandle, n: State<'_, Notch>, id: String) -> Res<()> {
         }
         Route::Plugin(plugin, row) => on_host(&app, |h, _| just(h.search_open(plugin, row)))?,
         Route::Hit(Hit::App(app_id)) => launch_app(n.clone(), app_id)?,
-        Route::Hit(Hit::Window(hwnd)) => activate_window(n.clone(), hwnd)?,
+        Route::Hit(Hit::Window(hwnd)) => activate_window(n.clone(), hwnd, None)?,
     }
     if let Some(r) = known.filter(|r| r.kind != "plugin") {
         let mut list = n.recents.lock();
@@ -583,7 +587,7 @@ pub fn search_ask(app: AppHandle, n: State<'_, Notch>, query: String) -> Res<Tur
 pub fn open_result(n: State<'_, Notch>, id: String) -> Res<()> {
     match Hit::parse(&id).ok_or(CmdError::Invalid)? {
         Hit::App(app_id) => launch_app(n, app_id),
-        Hit::Window(hwnd) => activate_window(n, hwnd),
+        Hit::Window(hwnd) => activate_window(n, hwnd, None),
     }
 }
 
@@ -938,6 +942,13 @@ pub fn report_hit_rects(
         _ => return Err(CmdError::Invalid),
     }
     Ok(())
+}
+
+/// The calling strip or island window grows before something hangs below the bar and shrinks after it all closed
+/// (`app::window_tall`). A page may ask only for its own window.
+#[tauri::command]
+pub fn window_tall(window: tauri::WebviewWindow, n: State<'_, Notch>, tall: bool) -> Res<()> {
+    crate::app::window_tall(&n, &window, tall).ok_or(CmdError::Unknown)
 }
 
 /// Ctrl+Alt+Shift+D or Settings > About: one text file in `<data>\diagnostics` (`notch_core::diagnostics`: versions

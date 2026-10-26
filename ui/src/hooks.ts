@@ -4,6 +4,7 @@ import { liveAlerts, nextExpiry, sortAlerts } from "./lib/alerts";
 import { livePosition } from "./lib/media";
 import { meetingReminder, type ReminderItem } from "./lib/meetingReminder";
 import { collectHitRects, sameRects } from "./lib/hitRects";
+import { ISLAND_IDLE_HEIGHT, STRIP_IDLE_HEIGHT } from "./lib/windowTall";
 
 /** The strip draws nothing until its monitor is known: a failed query is asked again, 3 tries in all (250, 500 ms apart). */
 export function useMonitor(monitor: string) {
@@ -73,12 +74,17 @@ export function useNow() {
   return now;
 }
 
-/** Reports `[data-hit]` rectangles to Rust (on change, at most once per frame). `view` (the open panel or card) and the devicePixelRatio ride along for "Save diagnostics". */
+/** Reports `[data-hit]` rectangles to Rust (on change, at most once per frame). `view` (the open panel or card) and the devicePixelRatio ride along for "Save diagnostics".
+ *  Returns whether a clickable one reaches below the short window (`useWindowTall`; paint-only marks are left out: the island's resting one is always there). */
 export function useHitRects(page: "strip" | "island", monitor: string, view = "") {
   const last = useRef<Rect[]>([]);
   const lastView = useRef("");
+  const [hang, setHang] = useState(false);
+  const hangRef = useRef(false);
   const send = useCallback(() => {
     const rects = collectHitRects();
+    const h = rects.some((r) => !r.paint && r.y + r.h > (page === "island" ? ISLAND_IDLE_HEIGHT : STRIP_IDLE_HEIGHT));
+    if (h !== hangRef.current) { hangRef.current = h; setHang(h); } // React only on a flip: springs call this every frame
     if (sameRects(rects, last.current) && lastView.current === view) return;
     last.current = rects;
     lastView.current = view;
@@ -100,6 +106,7 @@ export function useHitRects(page: "strip" | "island", monitor: string, view = ""
     schedule();
     return () => { mo.disconnect(); ro.disconnect(); window.removeEventListener("resize", schedule); document.removeEventListener("animationend", schedule, true); document.removeEventListener("transitionend", schedule, true); cancelAnimationFrame(raf); };
   }, [send]);
+  return hang;
 }
 
 /** Now playing; `position()` advances on the local clock while playing. */

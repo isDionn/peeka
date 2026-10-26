@@ -46,6 +46,9 @@ struct IslandPlace {
     hwnd: isize,
     /// The island monitor's refresh rate: the click-through poll runs at it.
     hz: u32,
+    /// The window reaches the full `rect` (`window_tall`); else it is the resting band. `rect` stays the full one: the
+    /// mascot's eyes and the click poll map the cursor through it.
+    tall: bool,
 }
 
 /// A strip window (label `strip-<index>`): taller than its 30 px AppBar so the panels draw under the bar. No window
@@ -58,6 +61,8 @@ pub struct StripPlace {
     origin: (i32, i32),
     size: (i32, i32),
     bar: i32,
+    /// Something hangs below the bar (`window_tall`): the window reaches down the monitor, else it is short.
+    tall: bool,
     pub rects: Vec<CssRect>,
     /// The page's devicePixelRatio and open panel with its last report (`notch_core::diagnostics`).
     pub dpr: Option<f64>,
@@ -241,6 +246,7 @@ pub fn run() {
             crate::commands::get_settings,
             crate::commands::set_settings,
             crate::commands::report_hit_rects,
+            crate::commands::window_tall,
             crate::commands::save_diagnostics,
             crate::commands::diagnostics_open_folder,
             crate::commands::wifi_networks,
@@ -624,6 +630,39 @@ fn place(w: &WebviewWindow, r: Rect) {
     let _ = w.set_size(PhysicalSize::new(r.width().max(1) as u32, r.height().max(1) as u32));
 }
 
+/// Places a strip window short or tall under its bar and records where (the click-through poll maps through it).
+fn place_strip(n: &Notch, label: &str, w: &WebviewWindow, hwnd: isize, m: &Monitor, bar: Rect, tall: bool) {
+    let rect = notch_core::model::strip_window_rect(bar, m, tall);
+    place(w, rect);
+    let mut strips = n.strips.lock();
+    let s = strips.entry(label.to_string()).or_default();
+    *s = StripPlace { hwnd, scale: m.scale, origin: (rect.left, rect.top), size: (rect.width(), rect.height()), bar: bar.height(), tall, ..std::mem::take(s) };
+}
+
+/// `window_tall`: a strip or the island page grows its window before anything paints below the bar and shrinks it after all of it closed.
+pub fn window_tall(n: &Notch, w: &WebviewWindow, tall: bool) -> Option<()> {
+    let label = w.label();
+    if label == "island" {
+        let (rect, scale) = {
+            let mut island = n.island.lock(); // not held while the window moves: the click poll reads it
+            let p = island.as_mut()?;
+            p.tall = tall;
+            (p.rect, p.scale)
+        };
+        place(w, notch_core::model::island_window_rect(rect, scale, tall));
+        return Some(());
+    }
+    let index: usize = label.strip_prefix("strip-")?.parse().ok()?;
+    let m = n.monitors.lock().iter().find(|m| m.index == index)?.clone();
+    let (hwnd, bar) = {
+        let strips = n.strips.lock();
+        let s = strips.get(label)?;
+        (s.hwnd, Rect { left: s.origin.0, top: s.origin.1, right: s.origin.0 + s.size.0, bottom: s.origin.1 + s.bar })
+    };
+    place_strip(n, label, w, hwnd, &m, bar, tall);
+    Some(())
+}
+
 /// Slow one-time reads off the main thread: radio access and DDC/CI brightness; then the page gets fresh status.
 fn probe_once(app: AppHandle) {
     thread::spawn(move || {
@@ -655,13 +694,8 @@ pub fn layout(app: &AppHandle) {
         let Ok(hwnd) = w.hwnd().map(|h| h.0 as isize) else { continue };
         let reserved = if notch_core::brand::RESERVE_APPBAR { ports::reserve(&n.appbar, hwnd, m) } else { None };
         let bar = reserved.unwrap_or_else(|| notch_core::model::strip_rect(m));
-        let rect = notch_core::model::strip_window_rect(bar, m);
-        place(&w, rect);
-        {
-            let mut strips = n.strips.lock();
-            let s = strips.entry(label.clone()).or_default();
-            *s = StripPlace { hwnd, scale: m.scale, origin: (rect.left, rect.top), size: (rect.width(), rect.height()), bar: bar.height(), ..std::mem::take(s) };
-        }
+        let tall = n.strips.lock().get(&label).is_some_and(|s| s.tall); // a monitor change under an open panel keeps it tall
+        place_strip(&n, &label, &w, hwnd, m, bar, tall);
         if !FS_HIDDEN.lock().contains(&label) {
             let _ = w.show(); // a monitor / Explorer change during fullscreen must not bring a hidden strip back
         }
@@ -686,10 +720,11 @@ pub fn layout(app: &AppHandle) {
                 notch_win::session::watch(hwnd.0 as isize, on_session_end, on_session_lock);
             }
             let rect = spot.rect;
-            place(&w, rect);
+            let tall = n.island.lock().is_some_and(|p| p.tall); // a monitor change under an open card keeps it tall
+            place(&w, notch_core::model::island_window_rect(rect, spot.scale, tall));
             let _ = w.set_ignore_cursor_events(true); // nothing is clickable until the page reports rectangles
             notch_win::style::set_island(w.hwnd().map_or(0, |h| h.0 as isize));
-            *n.island.lock() = Some(IslandPlace { rect, scale: spot.scale, hwnd: w.hwnd().map_or(0, |h| h.0 as isize), hz: spot.hz });
+            *n.island.lock() = Some(IslandPlace { rect, scale: spot.scale, hwnd: w.hwnd().map_or(0, |h| h.0 as isize), hz: spot.hz, tall });
             if !FS_HIDDEN.lock().iter().any(|l| l == "island") {
                 let _ = w.show();
             }

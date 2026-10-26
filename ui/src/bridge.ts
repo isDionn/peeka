@@ -216,7 +216,7 @@ export interface Commands {
   import_taskbar_pins: { args: void; ret: PinnedApp[] };
   /** The strip's right-edge "Show desktop": Win+D (a second call brings the windows back). `unsupported` in demo. */
   show_desktop: { args: void; ret: void };
-  activate_window: { args: { hwnd: number }; ret: void };
+  activate_window: { args: { hwnd: number; toggle?: boolean }; ret: void };
   close_window: { args: { hwnd: number }; ret: void };
   new_window: { args: { appId: string }; ret: void };
   launch_app: { args: { appId: string }; ret: void };
@@ -258,6 +258,8 @@ export interface Commands {
   /** Clickable rectangles (CSS pixels inside the window). Clicks outside pass through to the window below. Shared by the strip and island pages. */
   /** `dpr` and `view` (the open panel or card, Peeka's own label) only go into "Save diagnostics". */
   report_hit_rects: { args: { page: "strip" | "island"; monitor: string; rects: Rect[]; dpr?: number; view?: string }; ret: void };
+  /** The calling strip window grows to the monitor's bottom (`tall`) or back to the bar and its glow. */
+  window_tall: { args: { tall: boolean }; ret: void };
   /** Ctrl+Alt+Shift+D / Settings > About: writes one local text file (versions and geometry, no titles or text), returns its name and emits `diagnostics_saved`. `unsupported` in demo mode. */
   save_diagnostics: { args: void; ret: string };
   /** Explorer with the last diagnostics file selected; `unknown` before one was saved. */

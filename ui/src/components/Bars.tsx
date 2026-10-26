@@ -59,6 +59,8 @@ export function Bars({ still = false }: { still?: boolean }) {
         bars.forEach((b) => (b.style.transform = ""));
         return;
       }
+      // 30 fps: the levels arrive 30 times a second, and every drawn frame repaints the whole window (GPU, RC11 measure)
+      if (t - prev < 30) { raf = requestAnimationFrame(frame); return; }
       const dt = Math.min(t - prev, 100);
       prev = t;
       BAND.forEach((b, i) => {

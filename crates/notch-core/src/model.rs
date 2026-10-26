@@ -6,6 +6,9 @@ use serde::{Deserialize, Serialize};
 
 /// The strip's height in CSS px; times the monitor scale on screen.
 pub const STRIP_HEIGHT: f64 = 30.0;
+/// The short strip window's height in CSS px: the strip line's blurred glow (notch.css `#line::after`: bottom at 34,
+/// blur 9 px reaches 3 sigma = 27 px further) must not be cut. Mirrored in ui/src/lib/stripTall.ts.
+pub const STRIP_IDLE_HEIGHT: f64 = 64.0;
 /// The island window's fixed size in CSS px: widest card 640 + shadow and shoulder room, tallest card.
 /// shortcut: placeholder numbers until the UI agent measures the tallest card in the maket; change here only.
 pub const ISLAND_WIDTH: f64 = crate::brand::ISLAND_MAX.0;
@@ -68,13 +71,16 @@ pub fn strip_rect(m: &Monitor) -> Rect {
     Rect { bottom: m.rect.top + px(STRIP_HEIGHT, m.scale), ..m.rect }
 }
 
-/// The strip window: from the reserved bar's top down to 1 px above the monitor's bottom, so the panels hanging under
+/// The strip window, tall: from the reserved bar's top down to 1 px above the monitor's bottom, so the panels hanging under
 /// the bar (Start, Status, Search, settings...) draw at full height in the same page (no region: the cursor poll lets
 /// clicks through outside the bar + the open panel, `clickthrough::strip_captures`). The AppBar keeps only `bar` reserved. 1 px short of the
 /// bottom: a foreground window covering its monitor counts as fullscreen (`foreground_covers`, Explorer's own check)
 /// and would hide the strips.
-pub fn strip_window_rect(bar: Rect, m: &Monitor) -> Rect {
-    Rect { bottom: (m.rect.bottom - 1).max(bar.bottom), ..bar }
+/// Short (nothing hangs below the bar): the bar and what it paints under itself, so the strip's animations recomposite
+/// a small surface, not the whole screen (owner's PC: ~1 core + dwm 65 % with music); the page asks for tall first.
+pub fn strip_window_rect(bar: Rect, m: &Monitor, tall: bool) -> Rect {
+    let bottom = if tall { m.rect.bottom - 1 } else { (bar.top + px(STRIP_IDLE_HEIGHT, m.scale)).min(m.rect.bottom - 1) };
+    Rect { bottom: bottom.max(bar.bottom), ..bar }
 }
 
 /// The island window: centred on the primary monitor, top edge on the screen edge (it covers the strip's middle).
@@ -83,6 +89,19 @@ pub fn island_rect(m: &Monitor) -> Rect {
     let h = px(ISLAND_HEIGHT, m.scale).min(m.rect.height());
     let left = m.rect.left + (m.rect.width() - w) / 2;
     Rect { left, top: m.rect.top, right: left + w, bottom: m.rect.top + h }
+}
+
+/// The short island window's height in CSS px: the resting centre with its hanging 40 px mascot (bottom ~51, fx ~60,
+/// the hit-rect paint envelope ~76) and the mascot's hover bubble (~70). Width stays: everything there is window-relative.
+pub const ISLAND_IDLE_HEIGHT: f64 = 80.0;
+
+/// The island window short (nothing below the resting centre, so its 60 fps mascot, bars and glow recomposite a band,
+/// not 760x620) or tall (`full`, a card / peek / hover is about to paint below). Same top-left either way.
+pub fn island_window_rect(full: Rect, scale: f64, tall: bool) -> Rect {
+    if tall {
+        return full;
+    }
+    Rect { bottom: (full.top + px(ISLAND_IDLE_HEIGHT, scale)).min(full.bottom), ..full }
 }
 
 /// The primary monitor (the island's home); the first one if Windows names none.
@@ -111,11 +130,23 @@ mod tests {
     fn the_strip_window_hangs_to_the_bottom_but_never_covers_the_monitor() {
         let m = mon(0, 1920, 1.25, true);
         let bar = strip_rect(&m);
-        let w = strip_window_rect(bar, &m);
+        let w = strip_window_rect(bar, &m, true);
         assert_eq!(w, Rect { left: 0, top: 0, right: 1920, bottom: 1079 });
         assert!(!w.covers(&m.rect));
         let pushed = Rect { top: 40, bottom: 78, ..bar }; // another top AppBar above ours
-        assert_eq!((strip_window_rect(pushed, &m).top, strip_window_rect(pushed, &m).bottom), (40, 1079));
+        assert_eq!((strip_window_rect(pushed, &m, true).top, strip_window_rect(pushed, &m, true).bottom), (40, 1079));
+    }
+
+    #[test]
+    fn the_idle_strip_window_is_the_bar_plus_its_glow() {
+        let m = mon(0, 1920, 1.0, true);
+        assert_eq!(strip_window_rect(strip_rect(&m), &m, false), Rect { left: 0, top: 0, right: 1920, bottom: 64 });
+        let m = mon(0, 1536, 1.25, true);
+        assert_eq!(strip_window_rect(strip_rect(&m), &m, false).height(), 80);
+        let pushed = Rect { top: 40, bottom: 78, ..strip_rect(&m) };
+        assert_eq!(strip_window_rect(pushed, &m, false).bottom, 120, "it hangs from the bar, wherever the bar is");
+        let tiny = Monitor { rect: Rect { bottom: 50, ..m.rect }, ..m };
+        assert_eq!(strip_window_rect(strip_rect(&tiny), &tiny, false).bottom, 49, "never covers the monitor");
     }
 
     #[test]
@@ -124,6 +155,18 @@ mod tests {
         assert_eq!((r.left, r.top, r.width()), (580, 0, 760));
         let small = island_rect(&mon(0, 700, 1.0, true));
         assert_eq!((small.left, small.width()), (0, 700));
+    }
+
+    #[test]
+    fn the_idle_island_window_is_a_band_with_the_same_top_left() {
+        let full = island_rect(&mon(0, 1920, 1.0, true));
+        assert_eq!(island_window_rect(full, 1.0, true), full);
+        assert_eq!(island_window_rect(full, 1.0, false), Rect { bottom: 80, ..full });
+        let full = island_rect(&mon(0, 1536, 1.25, true));
+        let short = island_window_rect(full, 1.25, false);
+        assert_eq!((short.left, short.top, short.width(), short.height()), (full.left, 0, 950, 100));
+        let tiny = Rect { bottom: 60, ..full };
+        assert_eq!(island_window_rect(tiny, 1.25, false), tiny, "never taller than the full island");
     }
 
     #[test]

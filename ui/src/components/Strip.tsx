@@ -36,7 +36,7 @@ export function pickWindow(item: StripItem): WindowInfo | null {
 
 function activate(item: StripItem) {
   const w = pickWindow(item);
-  if (w) bridge.call("activate_window", { hwnd: w.hwnd }); else bridge.call("launch_app", { appId: item.appId });
+  if (w) bridge.call("activate_window", { hwnd: w.hwnd, toggle: true }); else bridge.call("launch_app", { appId: item.appId });
 }
 
 /** Pins and tabs share one look: the logo alone in a fixed-width slot (strip-items.css), the name in aria-label and the hover bubble.
@@ -178,13 +178,16 @@ export interface StripProps {
   onReorder: (ids: string[]) => void;
   /** Content placed in the center gap (preview only: the island page is a separate window; there DOM order sets Tab order). */
   center?: React.ReactNode;
+  /** The window reaches below the bar (`useWindowTall`): the name bubble and the preview render only then; `onHang` asks for it. */
+  tall?: boolean;
+  onHang?: (on: boolean) => void;
 }
 
 /** Half the island's widest resting center (Island.tsx: centerMax 424 + 24 padding): tabs past it sat under the island's
  *  click area, so a click on the last logo opened an island card (owner, RC5). */
 const ISLAND_HALF = 224;
 
-export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMenu, onReorder, center }: StripProps) {
+export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMenu, onReorder, center, tall = true, onHang }: StripProps) {
   const now = useNow();
   const { date, time, label } = clockParts(now);
   // no pins on secondary displays (reference frame k): windows there are tabs only
@@ -212,7 +215,6 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
     clearTimeout(pvTimer.current);
     const r = el.getBoundingClientRect();
     setPv({ item, x: r.left + r.width / 2, from: el });
-    requestAnimationFrame(() => document.querySelector<HTMLElement>(".preview .small.on, .preview .small")?.focus());
   }, []);
   useEffect(() => () => clearTimeout(pvTimer.current), []);
   // keyboard-opened picker: left/right arrows move, Esc closes and returns focus to the item
@@ -230,6 +232,10 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
     return () => removeEventListener("keydown", key, true);
   }, [from]);
   const live = pv ? [...pinned, ...tabs].find((i) => i.appId === pv.item.appId) : null; // the preview refreshes when a window closes or updates
+  useEffect(() => onHang?.(!!(tip || (pv && live))), [tip, pv, live, onHang]);
+  const pvShown = !!(pv && live && tall);
+  // the keyboard picker: focus moves into the preview once it is drawn (after the window has grown)
+  useEffect(() => { if (from && pvShown) requestAnimationFrame(() => document.querySelector<HTMLElement>(".preview .small.on, .preview .small")?.focus()); }, [from, pvShown]);
   const privacy = usePrivacy();
   const priv = [privacy.screen ? "Screen is being shared" : "", privacy.camera.length ? "Camera in use" : ""].filter(Boolean).join(". "); // owner: no app names; no mic dot on the strip (mic state is in Status)
   // full screen: the strip slides up (t1), returns when the pointer touches the top edge (4 px), leaves ~500 ms after it drops below 140 px (t2); stays visible while an approval drops in (t3)
@@ -345,13 +351,13 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
       {monitor.primary && <Waves />}
     </header>
     {monitor.primary && <StripLine shift={slide ? shift : 0} />}
-    {tip && !(pv && live) && <span className="stripTip" data-paint role="tooltip" style={{ left: tip.x, top: tip.y }}>{tip.name}{tip.title && <span className="tipSub">{tip.title}</span>}</span>}
+    {tip && tall && !(pv && live) && <span className="stripTip" data-paint role="tooltip" style={{ left: tip.x, top: tip.y }}>{tip.name}{tip.title && <span className="tipSub">{tip.title}</span>}</span>}
     <Panel glow={monitor.primary ? monitor.id : undefined} side="left" width={Math.min(6, fit.hidden.length) * 42 + 18} offset={moreLeft} label="More apps" dataKind="more" open={moreOpen} onClose={() => onPanel("more")} ownHint>
       <div className="body moreGrid" role="tablist" aria-label="More apps" style={{ gridTemplateColumns: `repeat(${Math.min(6, fit.hidden.length)}, 40px)` }}>
         {fit.hidden.map((i) => <AppButton key={i.appId} item={i} className={i.pinned ? "pin" + (i.windows.length ? " openPinned" : "") : "tabA"} onHover={hover} onPick={pickByKey} onMenu={onMenu} />)}
       </div>
     </Panel>
-    {pv && live && <WindowPreview item={live} x={pv.x} onEnter={() => clearTimeout(pvTimer.current)} onLeave={() => hover(undefined)} onPick={(w) => { setPv(null); bridge.call("activate_window", { hwnd: w.hwnd }); }} />}
+    {pvShown && live && <WindowPreview item={live} x={pv.x} onEnter={() => clearTimeout(pvTimer.current)} onLeave={() => hover(undefined)} onPick={(w) => { setPv(null); bridge.call("activate_window", { hwnd: w.hwnd, toggle: true }); }} />}
     </>
   );
 }

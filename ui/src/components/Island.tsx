@@ -39,6 +39,7 @@ import { IslandLine, AlertBumpFid, AlertCenter, AssistantOfflineCard, DndRest, L
 import { announceLine, announceNotif, announceWave } from "../lib/lineChan";
 import { AMBER, CYAN, lineOf } from "../lib/line";
 import { installKbModality } from "../lib/kbModality";
+import { ISLAND_IDLE_HEIGHT, useWindowTall } from "../lib/windowTall";
 import { useFirstConnect, useIslandHidden, useRecap } from "../hooks.fidelity";
 import { ext } from "../ext";
 import { request as assistantRequest, useAssistantEvents } from "../lib/assistant";
@@ -249,6 +250,9 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const [bubbleHover, setBubbleHover] = useState(false);
   const [mkHover, setMkHover] = useState(false); // pointer on the strip mascot: the thin "hov" peek mustn't cover the body; show the counts bubble instead
   const [kbIn, setKbIn] = useState(false); // auto-close pauses while keyboard focus is inside the peek (WCAG 2.2.1)
+  // cursor on the island (Rust lets the mouse in only over its rects): the window grows at once, well before the 120 ms hover intent
+  const [ptr, setPtr] = useState(false);
+  useEffect(() => { const on = () => setPtr(true); document.addEventListener("pointerover", on); return () => document.removeEventListener("pointerover", on); }, []);
   const hold = hover || kbIn;
   const [netNote, dismissNet] = useNetNotice(status?.network, !!init?.pin || hold, init?.net ?? null);
   const [summary, setSummary] = useState<AwayCounts | null>(init?.away ?? null); // "While you were away" summary (row 38)
@@ -410,7 +414,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const byHandle = useRef(false);
   const openByHandle = () => { clearTimeout(hoverTimer.current); hoverTimer.current = setTimeout(() => { byHandle.current = true; setHover(true); setUser("modules"); }, 120); };
   useEffect(() => { if (!hold && byHandle.current) { byHandle.current = false; setUser((u) => (u === "modules" ? null : u)); } }, [hold]);
-  useHitRects("island", monitor, kind === "panel" ? "panel:" + panelLabel : kind);
+  const hitHang = useHitRects("island", monitor, kind === "panel" ? "panel:" + panelLabel : kind);
   const plainPanel = panelLabel === "status" || panelLabel === "start"; // while Status / Start is open the counts live in the panel (say it once); the ghost stays
   // the strip window's own ghost (the empty Notifications board; the one-mascot registry can't see across windows) is on screen: the strip ghost steps aside
   const [mkAside, setMkAside] = useState(false);
@@ -465,7 +469,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       bridge.on("diagnostics_saved", () => setDiag(true)),
       bridge.on("cpu_high", setCpuHigh),
       // Rust's cursor poll is the truth for hover: a click-through window never gets pointerleave
-      bridge.on("notch://island_leave", () => { hoverIntent(false); setMkHover(false); setBubbleHover(false); }),
+      bridge.on("notch://island_leave", () => { hoverIntent(false); setMkHover(false); setBubbleHover(false); setPtr(false); }),
       bridge.on("assistant_offline", setOffline),
       bridge.on("meeting_changed", setMeetingOn),
       bridge.on("cc_edit", setEdit),
@@ -706,7 +710,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const editSid = !priv && edit?.file ? edit.sid : null;
   const showDiff = editSid ? () => { setDiffSid(editSid); setUser("diff"); } : null;
   const openApproval = useCallback((id: string) => { setDetailId(id); setUser("approval-card"); }, []);
-  const spec: Spec | null = (() => {
+  const specRaw: Spec | null = (() => {
     switch (kind) {
       case "hov": return { key: "hov", mode: "peek", label: "Open card", node: <button className="peek" tabIndex={-1} aria-label="Open card" onClick={() => setUser("modules")}><i /></button> };
       case "music": return media && { key: "music", mode: "bump", label: "Music", node: <MusicBump media={media} pos={pos} /> };
@@ -752,6 +756,10 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       default: return null;
     }
   })();
+  // the window is a short band until something hangs below the centre: every peek, bump and card renders only once it is tall
+  const [box, setBox] = useState({ w: 0, h: 0, moving: false });
+  const tall = useWindowTall(!!specRaw || ptr || kbIn || demoNot, hitHang || box.h > 0, ISLAND_IDLE_HEIGHT);
+  const spec = tall ? specRaw : null;
   const centerKey = kind === "alert" ? "alert:" + alert?.id : kind === "approval" ? "approval:" + approvalTop?.id : kind === "plugin" ? "plugin:" + surf.protrusion?.title : kind === "rest" || kind === "hov" || kind === "modules" || kind === "noassistant" ? "rest" + (consent ? "-consent" : "") + (hidden ? "-hidden" : offline ? "-offline" : status?.dnd ? "-dnd" : "") : kind === "panel" ? "panel:" + panelLabel : kind;
   // resting center: with an assistant connected, mascot + "Compass ready" + counts (a); otherwise the ghost and music (x0; no clock: the strip's right side has it, RC7 owner), with a sleeping mascot if the assistant is installed but not connected
   const approvalsN = surf.approvals.length;
@@ -814,7 +822,6 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   // with the target: target size right away when growing, old size until the spring ends when shrinking (so clicks aren't lost)
   const islandEl = useRef<HTMLDivElement>(null), cutEl = useRef<HTMLDivElement>(null), layersEl = useRef<HTMLDivElement>(null), toneEl = useRef<HTMLDivElement>(null);
   const engine = useRef<{ shape: Shape; sh: ShoulderLayers } | null>(null);
-  const [box, setBox] = useState({ w: 0, h: 0, moving: false });
   const [slices, setSlices] = useState<HTMLElement[]>([]);
   useLayoutEffect(() => {
     const sh = mountShoulders(layersEl.current!);

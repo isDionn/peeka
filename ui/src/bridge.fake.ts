@@ -190,7 +190,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     set_pins: ({ appIds }) => { pins = [...appIds]; emit("pins_changed", null); return pinned(); },
     import_taskbar_pins: () => { pins = [...new Set([...pins, "explorer", "terminal", "discord"])]; emit("pins_changed", null); return pinned(); },
     show_desktop: () => { log.push({ cmd: "show_desktop", args: null }); },
-    activate_window: ({ hwnd }) => { windows.forEach((w) => (w.active = w.hwnd === hwnd)); emit("windows_changed", { monitor: windows.find((w) => w.hwnd === hwnd)?.monitor ?? "m1" }); },
+    activate_window: ({ hwnd, toggle }) => { const off = toggle && windows.some((w) => w.hwnd === hwnd && w.active); windows.forEach((w) => (w.active = !off && w.hwnd === hwnd)); emit("windows_changed", { monitor: windows.find((w) => w.hwnd === hwnd)?.monitor ?? "m1" }); },
     close_window: ({ hwnd }) => { const m = windows.find((w) => w.hwnd === hwnd)?.monitor ?? "m1"; windows = windows.filter((w) => w.hwnd !== hwnd); emit("windows_changed", { monitor: m }); },
     new_window: ({ appId }) => { windows.push({ ...ref(appId), hwnd: nextHwnd++, title: ref(appId).name, active: false, monitor: "m1" }); emit("windows_changed", { monitor: "m1" }); },
     launch_app: ({ appId }) => { windows.forEach((w) => (w.active = false)); windows.push({ ...ref(appId), hwnd: nextHwnd++, title: ref(appId).name, active: true, monitor: "m1" }); emit("windows_changed", { monitor: "m1" }); },
@@ -278,6 +278,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     },
     audio_level_stop: () => { if (levelTimer) clearInterval(levelTimer); levelTimer = null; },
     report_hit_rects: () => undefined,
+    window_tall: (a) => { log.push({ cmd: "window_tall", args: a }); },
     taskbar_set_mode: ({ mode }) => { settings = { ...settings, taskbarHide: mode }; emit("settings_changed", structuredClone(settings)); },
   };
 

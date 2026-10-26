@@ -16,6 +16,7 @@ import { TrayList } from "./TrayList";
 import "../panel-surface.css";
 import { onX, sendX } from "../lib/xwin";
 import { Strip, type MenuState, type PanelKind } from "./Strip";
+import { STRIP_IDLE_HEIGHT, useWindowTall } from "../lib/windowTall";
 
 export interface ShellInit { panel?: PanelKind | null; menu?: MenuState | null; review?: Alert | null; /** Preview: Ctrl+K opens with this text and this selected row (mockup ara1, ara2). */ query?: string; sel?: number; /** Preview: setup wizard at this step (0-based). */ setupStep?: number; /** Preview: the setup wizard opens by itself on first run (in the product, only in Tauri). */ setup?: boolean }
 const SETTINGS_PAGES: (PanelKind | null)[] = ["appearance", "shortcuts", "plugins", "modules", "clipboard", "mascot"];
@@ -34,7 +35,9 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
   const [toast, setToast] = useState<{ n: Notice; turn?: number } | null>(null);
   const [hoverToast, setHoverToast] = useState(false);
   const [trayRight, setTrayRight] = useState(8);
-  useHitRects("strip", monitorId, panel ?? (menu ? "menu" : "none"));
+  const hang = useHitRects("strip", monitorId, panel ?? (menu ? "menu" : "none"));
+  // the window is short until something hangs below the bar: what hangs renders only once it is tall (`shown`, `tall`)
+  const [stripHang, setStripHang] = useState(false);
   // a Windows notification opens the top-right card by itself: only on the main strip, and not when quiet (do not disturb / full screen / presenting), locked, or another panel is open
   const mirror = useMirror();
   const seenNotices = useRef<Set<string> | null>(null);
@@ -152,54 +155,56 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
     setPins((cur) => ids.map((id) => cur.find((p) => p.appId === id)!).filter(Boolean));
     bridge.call("set_pins", { appIds: ids }).then(setPins);
   };
+  const tall = useWindowTall(panel !== null || !!menu || !!toast || clipNote || stripHang, hang, STRIP_IDLE_HEIGHT);
+  const shown = tall ? panel : null;
   if (!monitor) return null;
   const close = () => setPanel(null);
   const glow = monitor.primary ? monitor.id : undefined; // the strip draws the Drift glow on the primary only; its panels continue it
 
   return (
     <>
-      <Strip monitor={monitor} windows={windows} pins={pins} status={status} openPanel={panel} onPanel={toggle} onMenu={(m) => { setPanel(null); setMenu(m); }} onReorder={reorder} center={center} />
-      <Panel glow={glow} side="left" width={600} label="Start" dataKind="start" open={panel === "start"} onClose={close}>
+      <Strip monitor={monitor} windows={windows} pins={pins} status={status} openPanel={shown} tall={tall} onHang={setStripHang} onPanel={toggle} onMenu={(m) => { setPanel(null); setMenu(m); }} onReorder={reorder} center={center} />
+      <Panel glow={glow} side="left" width={600} label="Start" dataKind="start" open={shown === "start"} onClose={close}>
         <StartPanel monitor={monitor} pins={pins} onClose={close} onSettings={() => setPanel("appearance")} />
       </Panel>
       {monitor.primary && (
-        <Panel glow={glow} side="right" width={360} label="Status" dataKind="status" open={panel === "status"} onClose={close}>
+        <Panel glow={glow} side="right" width={360} label="Status" dataKind="status" open={shown === "status"} onClose={close}>
           {status && <StatusCard monitor={monitor} status={status} setStatus={setStatus} />}
         </Panel>
       )}
       {monitor.primary && (
-        <Panel glow={glow} side="right" width={188} offset={trayRight} label="Hidden icons" dataKind="tray" open={panel === "tray"} onClose={close}>
+        <Panel glow={glow} side="right" width={188} offset={trayRight} label="Hidden icons" dataKind="tray" open={shown === "tray"} onClose={close}>
           <TrayList monitor={monitor.id} onClose={close} />
         </Panel>
       )}
-      <Panel glow={glow} side="right" width={360} label="Calendar" dataKind="calendar" open={panel === "calendar"} onClose={close}>
+      <Panel glow={glow} side="right" width={360} label="Calendar" dataKind="calendar" open={shown === "calendar"} onClose={close}>
         <CalendarPanel />
       </Panel>
-      <Panel glow={glow} side="right" width={400} label="Notifications" dataKind="notif" open={panel === "notif"} onClose={close}>
+      <Panel glow={glow} side="right" width={400} label="Notifications" dataKind="notif" open={shown === "notif"} onClose={close}>
         <NotificationList onReview={(a) => { setReview(a); setPanel("cleanup"); }} onClose={close} onEmpty={setNotifEmpty} />
       </Panel>
-      <Panel glow={glow} side="center" width={520} amb="#FF9F0A" label="Cleanup approval" dataKind="cleanup" open={panel === "cleanup" && !!review} onClose={close}>
+      <Panel glow={glow} side="center" width={520} amb="#FF9F0A" label="Cleanup approval" dataKind="cleanup" open={shown === "cleanup" && !!review} onClose={close}>
         {review && <ReviewCard alert={review} onClose={close} />}
       </Panel>
-      <Panel glow={glow} side="center" width={640} label="Search" dataKind="search" open={panel === "search"} onClose={close}>
+      <Panel glow={glow} side="center" width={640} label="Search" dataKind="search" open={shown === "search"} onClose={close}>
         <SearchPanel onClose={close} initialQuery={init?.query} initialSel={init?.sel} />
       </Panel>
-      <Panel glow={glow} side="center" width={780} label="Peeka settings" dataKind="settings" open={SETTINGS_PAGES.includes(panel)} onClose={close}>
+      <Panel glow={glow} side="center" width={780} label="Peeka settings" dataKind="settings" open={SETTINGS_PAGES.includes(shown)} onClose={close}>
         {settings && <SettingsPanel page={panel === "shortcuts" || panel === "plugins" || panel === "modules" || panel === "clipboard" || panel === "mascot" ? panel : "appearance"} onPage={(p: SettingsPage) => setPanel(p)} settings={settings} onQuit={() => setPanel("quit")} />}
       </Panel>
-      <Panel glow={glow} side="center" width={400} label="Quit Peeka" dataKind="quit" open={panel === "quit"} onClose={close}>
+      <Panel glow={glow} side="center" width={400} label="Quit Peeka" dataKind="quit" open={shown === "quit"} onClose={close}>
         <QuitConfirm onCancel={close} />
       </Panel>
-      <SetupPanel open={panel === "setup"} onClose={close} startStep={init?.setupStep} />
-      {clipNote && panel === null && <div className="clipNote" data-paint role="status">Copied</div>}
-      {toast && (
+      <SetupPanel open={shown === "setup"} onClose={close} startStep={init?.setupStep} />
+      {clipNote && tall && panel === null && <div className="clipNote" data-paint role="status">Copied</div>}
+      {toast && tall && (
         <div style={{ display: "contents" }} onPointerEnter={() => setHoverToast(true)} onPointerLeave={() => setHoverToast(false)}>
           {toast.turn === undefined
             ? <NoticeToast n={toast.n} onClose={() => setToast(null)} onAsk={(turn) => setToast({ n: toast.n, turn })} />
             : <NoticeReply n={toast.n} turn={toast.turn} onClose={() => setToast(null)} />}
         </div>
       )}
-      {menu && (
+      {menu && tall && (
         <ContextMenu menu={{ ...menu, x: Math.max(8, Math.min(menu.x, window.innerWidth - 248)) }} pins={pins} windows={windows} locked={lock.locked} glow={glow} onClose={() => setMenu(null)}
           onPins={reorder} onQuit={() => setPanel("quit")} />
       )}

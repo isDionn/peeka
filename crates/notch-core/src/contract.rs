@@ -37,6 +37,8 @@ pub const COMMANDS: &[&str] = &[
     "get_settings",
     "set_settings",
     "report_hit_rects",
+    // Strip and island windows are short while nothing hangs below the bar (`model::strip_window_rect`, `island_window_rect`)
+    "window_tall",
     "taskbar_set_mode",
     "get_media",
     "media_control",

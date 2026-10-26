@@ -289,6 +289,14 @@ pub fn foreground() -> isize {
     unsafe { GetForegroundWindow() }.0 as isize
 }
 
+/// Minimise a window (the strip's second click on the app already in front, as the Windows taskbar does).
+#[cfg(windows)]
+pub fn minimise(hwnd: isize) -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::{ShowWindowAsync, SW_MINIMIZE};
+    // SAFETY: a handle Notch listed; a stale one just fails.
+    unsafe { ShowWindowAsync(sys::hwnd(hwnd), SW_MINIMIZE) }.as_bool()
+}
+
 /// The foreground window covers its whole monitor (borderless fullscreen video / game).
 #[cfg(windows)]
 pub fn foreground_covers() -> bool {
