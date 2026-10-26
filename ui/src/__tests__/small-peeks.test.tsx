@@ -332,3 +332,29 @@ describe("16 Hey Compass transcript", () => {
     expect(center().textContent).not.toContain("Playing");
   });
 });
+
+describe("music controls only under the pointer (owner: the card covered windows)", () => {
+  const pause = () => screen.queryByRole("button", { name: "Pause" });
+  const hit = () => document.querySelector(".islandHit[data-hit]");
+  it("track change opens nothing and leaves no click area; hover opens the controls, leaving closes them", { timeout: 20000 }, async () => {
+    fakeBridge.setMedia(MUSIC);
+    render(<Island monitor="m1" init={{ view: null }} />);
+    await settle(300);
+    act(() => fakeBridge.setMedia({ ...MUSIC, title: "Next song", positionMs: 0, positionAt: Date.now() }));
+    await settle(1500);
+    expect(pause()).toBeNull();
+    expect(hit()).toBeNull();
+    fireEvent.pointerEnter(center());
+    await settle(400);
+    expect(pause()).toBeTruthy();
+    expect(hit()).toBeTruthy();
+    fireEvent.click(pause()!); // pausing under the cursor keeps the controls there
+    act(() => fakeBridge.setMedia({ ...MUSIC, title: "Next song", playing: false }));
+    await settle(300);
+    expect(screen.queryByRole("button", { name: "Play" })).toBeTruthy();
+    fireEvent.pointerLeave(center());
+    for (let i = 0; i < 20 && hit(); i++) await settle(150); // the shape springs shut
+    expect(screen.queryByRole("button", { name: "Play" })).toBeNull();
+    expect(hit()).toBeNull();
+  });
+});

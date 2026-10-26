@@ -17,7 +17,7 @@ import { BtBump, BtCenter, ChargeBump, ChargeCenter, LowBatteryBump, LowBatteryC
 import { announceCenterClock } from "../lib/centerClock";
 import { clockParts } from "../lib/clock";
 import { fly } from "../lib/flight";
-import { trackKey, trackTitle } from "../lib/media";
+import { trackTitle } from "../lib/media";
 import { focusables, useFocusTrap } from "../lib/useFocusTrap";
 import { isTextEntry } from "../lib/justPressed";
 import { createShape, shoulderOf, type Shape } from "../motion/shape";
@@ -392,15 +392,16 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   if (summary && !calm) acts.push({ kind: "summary" });
   if (shotNow) acts.push({ kind: "clip" });
   if (done && !calm) acts.push({ kind: "done" });
-  if (media && (media.playing || musicAuto)) acts.push({ kind: "music" });
+  const autoTop = useRef<ActivityKind | null>(null);
+  // a paused track keeps its controls while the pointer is still on them (Pause must not pull the bump from under the cursor)
+  if (media && (media.playing || musicAuto || (hold && autoTop.current === "music"))) acts.push({ kind: "music" });
   // nothing swaps places on its own while the pointer is over the island or bubble (doc row 9): the last main activity is held; approvals still jump ahead
   const frozen = hold || bubbleHover;
-  const autoTop = useRef<ActivityKind | null>(null);
   const plan = pickPrimary(acts, pinned ?? (frozen ? autoTop.current : null));
   if (!frozen) autoTop.current = plan.primary?.kind ?? null;
   const pk = plan.primary?.kind;
   const planK: Kind | null = pk === "approval" ? "approval" : pk === "alert" ? "alert" : pk === "timerEnd" && timerDone ? "timerdone" : pk === "timer" || pk === "timerEnd" ? "timer" : pk === "net" ? "net" : pk === "battery" || pk === "batteryCrit" ? "lowbat" : pk === "burst" ? "burst" : pk === "rateLimit" ? "quota" : pk === "musicStopped" ? "musicstop" : pk === "download" ? "download" : pk === "edit" ? "edit" : pk === "cpu" ? "cpu" : pk === "summary" ? "away" : pk === "done" ? "jobdone"
-    : pk === "music" ? (pinned === "music" || (musicAuto && !calm) ? "music" : null) : pk === "live" || pk === "meeting" || pk === "other" ? "plugin" : null;
+    : pk === "music" ? (pinned === "music" || (musicAuto && !calm) || (hold && !mkHover) ? "music" : null) /* owner: music controls only under the pointer or keyboard focus, never on their own over windows */ : pk === "live" || pk === "meeting" || pk === "other" ? "plugin" : null;
   const transient: Kind | null = osd ? "osd" : diag ? "diag" : pk === "clip" ? "shot" : shelfDrag ? "shelfdrag" : bt && !calm ? "bt" : charge && !calm ? "charge" : null;
   const base: Kind = viewK ?? (pk === "approval" ? "approval" : transient ?? planK ?? (hover && !mkHover ? "hov" : "rest"));
   const pinnedLive = pinned !== null && acts.some((a) => a.kind === pinned);
@@ -652,14 +653,6 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   useEffect(() => { if (user === "approval-card" && hadApproval.current && !approvalCard) setUser(null); }, [user, approvalCard]);
 
   // new track or playback start: the peek opens on its own. The first read is silent.
-  const prevTrack = useRef<string | undefined>(undefined);
-  const prevPlaying = useRef(false);
-  useEffect(() => {
-    if (!ready) return;
-    const k = trackKey(media), first = prevTrack.current === undefined;
-    if (media?.playing && !first && (k !== prevTrack.current || !prevPlaying.current)) setMusicAuto(true);
-    prevTrack.current = k; prevPlaying.current = !!media?.playing;
-  }, [media, ready]);
   useEffect(() => { if (!musicAuto || pin || hold) return; const t = setTimeout(() => setMusicAuto(false), MUSIC_MS); return () => clearTimeout(t); }, [musicAuto, pin, media, hold]);
   useEffect(() => { if (ready && !media) setMusicAuto(false); }, [media, ready]);
   // if playback disappears while the player card is open (the app closed), "Paused" doesn't get stuck on the strip
@@ -676,7 +669,6 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const back = useCallback(() => {
     if (more) return setMore(false);
     if (tucked && (user === "music-card" || user === "clipboard")) return setUser("ext");
-    if (user === "music-card") { setUser(null); if (media) setMusicAuto(true); return; }
     if (user === "welcome") markFirstRun(); // Esc / × / clicking outside counts as "Skip": the card shouldn't come back on every launch
     if (user === "recap") ackRecap(); // closing it any way counts: not again this week
     if (user) return setUser(null);

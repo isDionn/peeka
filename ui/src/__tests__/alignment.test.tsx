@@ -55,6 +55,7 @@ describe("Tab across windows", () => {
   it("on the island Tab from the end goes to the strip's right group, Shift+Tab from the start to the left group; to-island gives the island focus", async () => {
     const got: XMsg[] = [];
     const off = onX((m) => got.push(m));
+    fakeBridge.setMedia(null); // with music playing, keyboard focus on the island shows the controls and Tab walks into them first
     render(<Island monitor="m1" init={{ view: null }} />);
     await settle();
     const merkez = document.querySelector<HTMLElement>("button.islandCenter")!;
@@ -86,6 +87,7 @@ describe("OS focus and the admin window", () => {
   it("if OS focus is refused (focus is not in Peeka) there is no cross-window handoff; if accepted there is", async () => {
     const got: XMsg[] = [];
     const off = onX((m) => got.push(m));
+    fakeBridge.setMedia(null); // no music: the center is the island's last stop (music controls would follow it under keyboard focus)
     render(<Island monitor="m2" init={{ view: null }} />);
     await settle();
     const merkez = document.querySelector<HTMLElement>("button.islandCenter")!;

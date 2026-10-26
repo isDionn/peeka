@@ -175,8 +175,8 @@ describe("clicking the island while a peek shows opens something", () => {
 
 /* ---------------- 5. A self-closing peek doesn't close under the cursor ---------------- */
 describe("the peek stays open while the cursor is on it", () => {
-  // each case is a self-closing peek (volume indicator 1.8 s, music 6 s)
-  const CASES = [["volume (OSD), preview", P("a"), "osd"], ["volume (OSD), island.html", "/island.html?autostart=1", "osd"], ["music (track changed), island.html", "/island.html?autostart=1", "music"]];
+  // each case is a self-closing peek (volume indicator 1.8 s); a track change opens no music peek any more (owner: controls only under the pointer)
+  const CASES = [["volume (OSD), preview", P("a"), "osd"], ["volume (OSD), island.html", "/island.html?autostart=1", "osd"]];
   const fire = (page, kind) => page.evaluate(async (k) => {
     const f = (await import("/src/bridge.fake.ts")).fakeBridge;
     if (k === "osd") f.emit("volume_osd", { percent: 40, muted: false, device: "Speakers" });

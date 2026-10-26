@@ -84,15 +84,12 @@ describe("island: keyboard and focus", () => {
     expect(screen.queryByRole("dialog", { name: /^Modules/ })).toBeNull();
     expect(document.activeElement).toBe(opener);
   });
-  it("Esc goes back one step: player, music peek, rest", async () => {
+  it("Esc closes the player straight to rest: no music peek left over the windows without the pointer", async () => {
     render(<Island monitor="m1" init={{ view: "music-card" }} />);
     await settle();
     fireEvent.keyDown(screen.getByRole("dialog", { name: "Music" }), { key: "Escape" });
     await settle();
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByRole("group", { name: "Music" })).toBeTruthy();
-    fireEvent.keyDown(document, { key: "Escape" });
-    await settle();
     expect(screen.queryByRole("group", { name: "Music" })).toBeNull();
   });
   it("clicking the center while music plays opens Modules on the Music tab; switching to General; Esc closes", async () => {
