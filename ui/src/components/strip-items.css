@@ -25,9 +25,21 @@
 @keyframes tipIn { from { opacity: 0; transform: translate(-50%, -3px); } }
 .stripTip .tipSub { display: block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; color: var(--l2); font-size: 11px; }
 
-/* hit area: tabs end left of the island (Strip --sekmeMax); when they don't fit they shrink together and never overlap the island */
-.bar .tabs { min-width: 0; }
-.bar .tabA { flex: 0 1 auto; }
+/* the list ends left of the island (Strip fitStrip): --slot shrinks to 26 px, then "+N" holds the rest; items never shrink on their own */
+.bar :is(.pin, .tabA) { flex: none; }
+.bar .more { width: var(--slot); min-width: 0; padding: 0; position: relative; font-size: 11px; font-weight: 650; color: var(--l2); }
+.bar .more.attn::after { content: ""; position: absolute; bottom: 0; left: 50%; width: 4px; height: 3px; border-radius: 2px; background: var(--dotAttn);
+  transform: translateX(-50%); animation: dotAttn 1.1s ease-in-out infinite; }
+/* the "+N" panel: the hidden logos in 40 px cells (as the hidden-icons grid), same dots and badges as on the strip */
+html .body.moreGrid { display: grid; gap: 2px; padding: 6px; }
+.moreGrid :is(.pin, .tabA) { position: relative; left: auto; top: auto; width: 40px; height: 40px; border-radius: 6px; cursor: default; }
+.moreGrid .appIcon { width: 18px; height: 18px; }
+.moreGrid .ikK { position: relative; display: inline-flex; }
+.moreGrid .ikK .count { position: absolute; top: -5px; right: -7px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 7px; display: grid; place-items: center;
+  font-size: 9.5px; line-height: 13px; font-weight: 650; color: var(--countText); background: var(--countBg); }
+.moreGrid .pin:not(.openPinned) { color: var(--l3); }
+.moreGrid :is(.pin, .tabA).attn::after { background: var(--dotAttn); animation: dotAttn 1.1s ease-in-out infinite; }
+@media (hover: hover) and (pointer: fine) { .moreGrid :is(.pin, .tabA):hover { background: var(--hover); color: var(--l1); } }
 
 /* Show desktop (owner RC5): a thin full-height target that reaches the screen's right edge (the strip's 8 px padding is
    pulled in), a 1 px divider at rest, a light fill on hover; no press scale, it is a corner, not a key */

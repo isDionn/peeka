@@ -36,15 +36,18 @@ pub struct ScreenPlan {
 /// - Presentation mode is the owner's own switch: everything hides.
 /// - A covering window explains "busy" / "D3D fullscreen" / "Store app fullscreen": only its monitor hides (the island
 ///   too, if that is the primary one).
-/// - "Busy" and friends with no covering window found (an exclusive game Windows reports but no window rect shows):
-///   everything hides, as before.
+/// - "Busy" and friends with no covering window found (an exclusive game Windows reports but no window rect shows, or
+///   the user clicked over to another screen while the game keeps running): the primary is blamed, where exclusive
+///   games run. Hiding every strip left the other screens with no taskbar at all (RC8 owner, 2 monitors).
+///   shortcut: an exclusive game on a SECONDARY screen keeps that screen's strip over it; blame its window's monitor
+///   when such a report comes in.
 pub fn screen_plan(presence: Presence, covered: Option<usize>, primary: usize, strips: &[usize]) -> ScreenPlan {
     let busy = matches!(presence, Presence::Busy | Presence::D3dFullscreen | Presence::App);
-    let everywhere = presence == Presence::Presentation || (busy && covered.is_none());
-    if everywhere {
+    if presence == Presence::Presentation {
         return ScreenPlan { island_hidden: true, hidden_strips: strips.to_vec(), island_presence: presence, island_handle: false };
     }
-    let Some(m) = covered else {
+    let guessed = busy && covered.is_none();
+    let Some(m) = covered.or(guessed.then_some(primary)) else {
         return ScreenPlan { island_hidden: false, hidden_strips: vec![], island_presence: presence, island_handle: false };
     };
     let elsewhere = m != primary && busy;
@@ -52,7 +55,8 @@ pub fn screen_plan(presence: Presence, covered: Option<usize>, primary: usize, s
         island_hidden: m == primary,
         hidden_strips: strips.iter().copied().filter(|s| *s == m).collect(),
         island_presence: if elsewhere { Presence::Normal } else { presence },
-        island_handle: m == primary && presence != Presence::D3dFullscreen,
+        // No window to blame: a topmost handle over exclusive fullscreen would flicker the mode, so the island hides.
+        island_handle: m == primary && presence != Presence::D3dFullscreen && !guessed,
     }
 }
 
@@ -165,12 +169,48 @@ mod tests {
     }
 
     #[test]
-    fn presentation_mode_and_a_busy_report_with_no_covering_window_still_hide_everything() {
-        for (p, covered) in [(Presence::Presentation, Some(1)), (Presence::Presentation, None), (Presence::Busy, None)] {
-            let plan = screen_plan(p, covered, 0, &[0, 1]);
-            assert!(plan.island_hidden && plan.hidden_strips == [0, 1], "{p:?} {covered:?}");
+    fn presentation_mode_still_hides_everything() {
+        for covered in [Some(1), None] {
+            let plan = screen_plan(Presence::Presentation, covered, 0, &[0, 1]);
+            assert!(plan.island_hidden && plan.hidden_strips == [0, 1], "{covered:?}");
         }
         assert!(!screen_plan(Presence::QuietTime, None, 0, &[0, 1]).island_hidden, "quiet time is not fullscreen");
+    }
+
+    /// RC8 owner, 2 monitors: "a game on the main screen, the side screen has no taskbar". An exclusive game (or the
+    /// user clicked over to the side screen while it runs) gives a busy report with no covering foreground window.
+    #[test]
+    fn a_busy_report_with_no_covering_window_hides_only_the_primary_and_the_side_strips_stay() {
+        for p in [Presence::Busy, Presence::D3dFullscreen, Presence::App] {
+            let plan = screen_plan(p, None, 0, &[0, 1, 2]);
+            assert_eq!(plan.hidden_strips, [0], "{p:?}: the side screens keep their strips");
+            assert!(plan.island_hidden && !plan.island_handle, "{p:?}: no window to blame, the island hides");
+            assert_eq!(plan.island_presence, p, "the island is busy: only approvals get through");
+        }
+        // Secondary strips off: the primary is the only strip and it hides.
+        assert_eq!(screen_plan(Presence::D3dFullscreen, None, 0, &[0]).hidden_strips, [0]);
+    }
+
+    /// The game's lifetime on 2 fake monitors through `covering_monitor` + `screen_plan`, as `fullscreen_watch` runs it.
+    #[test]
+    fn a_game_on_the_primary_hides_its_strip_only_and_both_come_back_when_it_exits() {
+        let ms = |w0, h0| sorted(vec![mon(0, w0, h0, 1.0, true), mon(2560, 1920, 1080, 1.0, false)]);
+        let game = |r: Rect| FgWindow { rect: r, class: "UnrealWindow", visible: true, ..Default::default() };
+        let plan = |p, fg: &FgWindow, ms: &[Monitor]| screen_plan(p, covering_monitor(fg, ms), 0, &[0, 1]);
+        let desk = ms(2560, 1440);
+        // Borderless on the primary.
+        let p = plan(Presence::Busy, &game(desk[0].rect), &desk);
+        assert_eq!((p.hidden_strips.as_slice(), p.island_handle), (&[0][..], true));
+        // Exclusive: the game switches the primary to 1280x720; the monitor list is rebuilt with that rect.
+        let exclusive = ms(1280, 720);
+        let p = plan(Presence::D3dFullscreen, &game(exclusive[0].rect), &exclusive);
+        assert_eq!((p.hidden_strips.as_slice(), p.island_handle), (&[0][..], false), "the side strip stays");
+        // The user clicks a chat app on the side screen; the game keeps the D3D report.
+        let chat = FgWindow { rect: Rect { left: 2600, top: 100, right: 3400, bottom: 900 }, class: "Chrome_WidgetWin_1", ..game(desk[1].rect) };
+        assert_eq!(plan(Presence::D3dFullscreen, &chat, &desk).hidden_strips, [0], "still only the game's screen");
+        // The game exits: both strips and the island come back.
+        let p = plan(Presence::Normal, &chat, &desk);
+        assert_eq!((p.hidden_strips.is_empty(), p.island_hidden), (true, false));
     }
 
     #[test]

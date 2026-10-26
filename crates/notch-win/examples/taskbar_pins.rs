@@ -6,7 +6,7 @@ fn main() {
         use notch_core::ports::Desktop;
         notch_win::com();
         let raw = notch_win::Win32Desktop.windows();
-        let running: Vec<String> = notch_core::apps::merge(&[], &raw).into_iter().map(|i| i.app_id).collect();
+        let running: Vec<String> = notch_core::apps::merge(&[], &raw, |_| None).into_iter().map(|i| i.app_id).collect();
         let pins = notch_win::startmenu::taskbar_pins(&running);
         let kind = |p: &str| pins.iter().filter(|x| x.app_id.starts_with(p)).count();
         let unique = notch_core::apps::add_pins(&[], pins.clone()).len();

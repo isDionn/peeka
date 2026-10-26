@@ -271,7 +271,8 @@ pub fn enumerate(monitors: &[Monitor]) -> Vec<RawWindow> {
                 // SAFETY: as above; a constant property name.
                 deleted: !unsafe { GetPropW(h, w!("ITaskList_Deleted")) }.is_invalid(),
                 owned,
-                aumid: sys::aumid(h),
+                // a Store app's window often sets none: its package's AUMID is what its pin holds (Terminal, Claude)
+                aumid: sys::aumid(h).or_else(|| sys::package_aumid(pid)),
                 exe_path,
                 monitor: rect.as_ref().and_then(|r| monitor_of(r, monitors)),
                 elevated: notch_core::apps::beyond_reach(notch_elevated(), sys::elevated(pid)),

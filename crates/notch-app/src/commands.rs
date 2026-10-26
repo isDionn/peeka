@@ -161,7 +161,7 @@ pub fn snapshot(n: &Notch) -> Vec<AppItem> {
     let pins = n.settings.lock().pins.clone();
     let raw = Win32Desktop.windows();
     let prev = n.items.lock().clone();
-    let mut list = apps::keep_order(&prev, apps::merge(&pins, &raw));
+    let mut list = apps::keep_order(&prev, apps::merge(&pins, &raw, app_target));
     // a pin saved from the strip before 0.3.5 kept the exe stem: it gets the proper name too
     for item in list.iter_mut().filter(|i| !i.pinned || i.name == apps::fallback_name(&i.app_id)) {
         let w = raw.iter().find(|w| apps::app_id(w.aumid.as_deref(), &w.exe_path).as_deref() == Some(item.app_id.as_str()));
@@ -170,6 +170,20 @@ pub fn snapshot(n: &Notch) -> Vec<AppItem> {
     *n.items.lock() = list.clone();
     *LISTED.lock() = Some(generation);
     list
+}
+
+/// An `aumid:` pin's exe (`apps::merge`), asked of the shell once per id (a miss too) for the app's lifetime.
+fn app_target(app_id: &str) -> Option<String> {
+    static TARGETS: parking_lot::Mutex<Option<HashMap<String, Option<String>>>> = parking_lot::Mutex::new(None);
+    let mut cache = TARGETS.lock();
+    let cache = cache.get_or_insert_with(HashMap::new);
+    if let Some(t) = cache.get(app_id) {
+        return t.clone();
+    }
+    notch_win::com();
+    let t = app_id.strip_prefix("aumid:").and_then(notch_win::startmenu::app_target);
+    cache.insert(app_id.to_string(), t.clone());
+    t
 }
 
 /// An app's strip name (cached per id, a miss too; the shell is asked only for a new app). `w` = one of its windows.

@@ -10,6 +10,29 @@ pub const GUARD_ARG: &str = "--guard";
 #[cfg(windows)]
 pub struct Win32Shell;
 
+/// The other monitors' taskbars are Peeka's to hide only while those monitors have a strip (setting "strips on other
+/// monitors"); off = Windows' own bar stays there, so no monitor is left with no taskbar at all.
+#[cfg(windows)]
+static SECONDARY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+#[cfg(windows)]
+use std::sync::atomic::Ordering::SeqCst;
+
+/// `app::layout` says whether the other monitors have strips. Off: their bars come back now (a no-op when visible);
+/// on: the taskbar worker's next re-hide check hides them.
+#[cfg(windows)]
+pub fn hide_secondary(on: bool) {
+    use windows::Win32::UI::WindowsAndMessaging::{ShowWindowAsync, SW_SHOWNA};
+    if SECONDARY.swap(on, SeqCst) && !on {
+        for &bar in sys::bars(true).iter().skip(sys::bars(false).len()) {
+            // SAFETY: handles just returned by FindWindow(Ex)W; async, so a hung Explorer cannot block.
+            let _ = unsafe { ShowWindowAsync(bar, SW_SHOWNA) };
+        }
+    }
+}
+
+#[cfg(not(windows))]
+pub fn hide_secondary(_on: bool) {}
+
 #[cfg(windows)]
 mod sys {
     use windows::core::{w, PCWSTR};
@@ -23,8 +46,12 @@ mod sys {
     }
 
     /// Every taskbar window, found fresh each time (an Explorer restart makes new ones; handles are never cached).
-    pub fn bars() -> Vec<HWND> {
+    /// `secondary` = the other monitors' bars too.
+    pub fn bars(secondary: bool) -> Vec<HWND> {
         let mut out: Vec<HWND> = tray().into_iter().collect();
+        if !secondary {
+            return out;
+        }
         let mut after = HWND::default();
         // shortcut: at most 16 secondary bars (monitors); more is not a desk anyone has.
         for _ in 0..16 {
@@ -67,14 +94,15 @@ impl Shell for Win32Shell {
 
     fn bars_visible(&self) -> Option<bool> {
         use windows::Win32::UI::WindowsAndMessaging::IsWindowVisible;
-        let bars = sys::bars();
+        let bars = sys::bars(SECONDARY.load(SeqCst));
         // SAFETY: handles just returned by FindWindow(Ex)W; a stale one only answers false.
         (!bars.is_empty()).then(|| bars.iter().any(|&bar| unsafe { IsWindowVisible(bar) }.as_bool()))
     }
 
     fn show_bars(&self, show: bool) -> bool {
         use windows::Win32::UI::WindowsAndMessaging::{ShowWindowAsync, SW_HIDE, SW_SHOWNA};
-        let bars = sys::bars();
+        // Putting back is always every bar; hiding skips the other monitors' bars when they have no strip.
+        let bars = sys::bars(show || SECONDARY.load(SeqCst));
         for &bar in &bars {
             // SAFETY: as above. Async: a hung Explorer cannot block Notch (or the guard). SW_SHOWNA shows without
             // taking the focus. The return value only says the request was posted.

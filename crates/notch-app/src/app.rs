@@ -695,6 +695,7 @@ pub fn layout(app: &AppHandle) {
             }
         }
     }
+    notch_win::taskbar::hide_secondary(secondary); // before `set_appbars` wakes the taskbar worker
     crate::taskbar::set_appbars(n.appbar.handles());
     fullscreen_poke(); // a strip built during fullscreen (monitor plugged in) hides at once, not after the 1 s re-check
 }

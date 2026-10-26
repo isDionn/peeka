@@ -158,7 +158,10 @@ pub struct AppItem {
 
 /// Pins first in pin order (each with its open windows, a pin with none is a launch tile), then the other apps in
 /// enumeration order (`keep_order` makes it first-seen). `windows` is the enumerator's raw list; the filter runs here.
-pub fn merge(pins: &[Pin], windows: &[RawWindow]) -> Vec<AppItem> {
+/// `target`: an `aumid:` pin's exe path (its `shell:AppsFolder` link target). A desktop app that sets its AUMID per process
+/// (Discord, Opera) has windows without one; they join that pin by exe (`same_exe`), as the Windows taskbar groups them.
+pub fn merge(pins: &[Pin], windows: &[RawWindow], target: impl Fn(&str) -> Option<String>) -> Vec<AppItem> {
+    let targets: Vec<Option<String>> = pins.iter().map(|p| p.app_id.starts_with("aumid:").then(|| target(&p.app_id)).flatten()).collect();
     let mut items: Vec<AppItem> = pins
         .iter()
         .map(|p| AppItem {
@@ -171,7 +174,8 @@ pub fn merge(pins: &[Pin], windows: &[RawWindow]) -> Vec<AppItem> {
         .collect();
     for w in windows.iter().filter(|w| is_app_window(w)) {
         let Some(id) = app_id(w.aumid.as_deref(), &w.exe_path) else { continue };
-        let at = match items.iter().position(|i| i.app_id == id) {
+        let by_exe = || w.aumid.is_none().then(|| targets.iter().position(|t| t.as_deref().is_some_and(|t| same_exe(t, &w.exe_path)))).flatten();
+        let at = match items.iter().position(|i| i.app_id.eq_ignore_ascii_case(&id)).or_else(by_exe) {
             Some(at) => at,
             None => {
                 let name = fallback_name(&id);
@@ -192,6 +196,15 @@ pub fn merge(pins: &[Pin], windows: &[RawWindow]) -> Vec<AppItem> {
         });
     }
     items
+}
+
+/// Is the running `exe` the app a pin's `target` starts? The same path, or the same file one folder down: Squirrel apps
+/// (Discord, Slack) run `<dir>\app-1.2.3\x.exe` from a `<dir>\x.exe` stub. shortcut: a launcher that starts a differently
+/// named exe (FiveM's game process) stays apart; a process's own AUMID has no public getter.
+pub fn same_exe(target: &str, exe: &str) -> bool {
+    let (t, e) = (target.to_lowercase(), exe.to_lowercase());
+    let Some((dir, file)) = t.rsplit_once('\\') else { return false };
+    t == e || e.strip_prefix(dir).and_then(|r| r.strip_prefix('\\')?.split_once('\\')).is_some_and(|(sub, f)| !sub.is_empty() && f == file)
 }
 
 /// The strip keeps its order when the focus moves (EnumWindows lists in Z-order): unpinned apps, and each app's
@@ -511,7 +524,7 @@ mod tests {
 
     #[test]
     fn actions_only_reach_what_notch_listed() {
-        let items = merge(&[Pin { app_id: "aumid:A!App".into(), name: "A".into(), relaunch: None }], &[win(9, "C:\\b.exe", None)]);
+        let items = merge(&[Pin { app_id: "aumid:A!App".into(), name: "A".into(), relaunch: None }], &[win(9, "C:\\b.exe", None)], |_| None);
         let ctl = FakeAppControl::default();
         assert_eq!(activate(&ctl, &items, "aumid:A!App"), Ok(()));
         assert_eq!(activate(&ctl, &items, "exe:c:\\b.exe"), Ok(()));
@@ -529,7 +542,7 @@ mod tests {
         assert!(!beyond_reach(false, Some(false)), "an ordinary app");
         assert!(!beyond_reach(true, Some(true)) && !beyond_reach(true, None), "an elevated Notch reaches it");
         let admin = RawWindow { elevated: true, ..win(7, "C:\\regedit.exe", None) };
-        let items = merge(&[], &[admin, win(8, "C:\\b.exe", None)]);
+        let items = merge(&[], &[admin, win(8, "C:\\b.exe", None)], |_| None);
         assert!(items[0].windows[0].elevated && !items[1].windows[0].elevated, "merge keeps the flag");
         let ctl = FakeAppControl::default();
         assert_eq!(close_window(&ctl, &items, 7), Err(AppError::Elevated));
@@ -546,7 +559,7 @@ mod tests {
             ListedApp { app_id: "lnk:c:\\p\\İnkscape.lnk".into(), name: "İnkscape".into(), exe: None },
             ListedApp { app_id: "lnk:c:\\p\\Word.lnk".into(), name: "Word".into(), exe: Some("winword.exe".into()) },
         ];
-        let items = merge(&[], &[win(9, "C:\\b.exe", None)]);
+        let items = merge(&[], &[win(9, "C:\\b.exe", None)], |_| None);
         let ctl = FakeAppControl::default();
         assert_eq!(launch_any(&ctl, &items, &apps, "lnk:c:\\p\\Word.lnk", None), Ok(()));
         assert_eq!(launch_any(&ctl, &items, &apps, "lnk:c:\\evil.lnk", None), Err(AppError::Unknown));
@@ -638,7 +651,7 @@ mod tests {
             win(4, "C:\\Chrome.exe", Some("Chrome.Profile2")), // its own identity, its own item
             RawWindow { cloaked: true, ..win(5, "C:\\Code.exe", None) },
         ];
-        let items = merge(&pins, &windows);
+        let items = merge(&pins, &windows, |_| None);
         let shape: Vec<_> = items.iter().map(|i| (i.name.as_str(), i.pinned, i.windows.len())).collect();
         assert_eq!(
             shape,
@@ -650,13 +663,67 @@ mod tests {
         assert!(find_window(&items, 5).is_none(), "a filtered window is not actionable");
     }
 
+    /// RC7 on the owner's PC: 20 imported taskbar pins, and Terminal, Claude, Discord, Opera showed twice (pin + tab).
+    /// Ids and paths as the owner's PC reported them (home folder shortened).
+    #[test]
+    fn a_running_app_lights_up_its_imported_pin_instead_of_a_second_item() {
+        let pin = |id: &str| Pin { app_id: id.into(), name: id.into(), relaunch: None };
+        let pins = [
+            pin("aumid:Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"), // Store app: the window has only its package's AUMID
+            pin("aumid:com.squirrel.Discord.Discord"),                // Squirrel: stub at the root, app in app-<version>\
+            pin("aumid:OperaSoftware.OperaGXWebBrowser.1755079229"),  // per-process AUMID: the window has none
+            pin("aumid:Chrome"),
+            pin(r"exe:c:\windows\explorer.exe"),
+            pin("aumid:CitizenFX.FiveM.Client"),
+        ];
+        let target = |id: &str| match id {
+            "aumid:com.squirrel.Discord.Discord" => Some(r"C:\U\AppData\Local\Discord\Discord.exe".to_string()),
+            "aumid:OperaSoftware.OperaGXWebBrowser.1755079229" => Some(r"C:\U\AppData\Local\Programs\Opera GX\opera.exe".to_string()),
+            "aumid:Chrome" => Some(r"C:\Program Files\Google\Chrome\Application\chrome.exe".to_string()),
+            "aumid:CitizenFX.FiveM.Client" => Some(r"C:\U\AppData\Local\FiveM\FiveM.exe".to_string()),
+            _ => None,
+        };
+        let windows = [
+            win(1, r"C:\Program Files\WindowsApps\Microsoft.WindowsTerminal_1.24.11911.0_x64__8wekyb3d8bbwe\WindowsTerminal.exe", Some("Microsoft.WindowsTerminal_8wekyb3d8bbwe!App")),
+            win(2, r"C:\U\AppData\Local\Discord\app-1.0.9265\Discord.exe", None),
+            win(3, r"C:\U\AppData\Local\Programs\Opera GX\opera.exe", None),
+            win(4, r"C:\Program Files\Google\Chrome\Application\chrome.exe", None),
+            win(5, r"C:\Program Files\Google\Chrome\Application\chrome.exe", Some("Chrome.UserData.Profile 2")),
+            win(6, r"C:\Windows\explorer.exe", None),
+            win(7, r"C:\U\AppData\Roaming\Spotify\Spotify.exe", None),
+            win(8, r"C:\U\AppData\Local\FiveM\FiveM.app\data\cache\subprocess\FiveM_b3258_GTAProcess.exe", None),
+            win(9, r"C:\U\AppData\Local\Discord\app-1.0.9265\Discord.exe", None),
+        ];
+        let items = merge(&pins, &windows, target);
+        let shape: Vec<_> = items.iter().map(|i| (i.app_id.as_str(), i.windows.iter().map(|w| w.hwnd).collect::<Vec<_>>())).collect();
+        assert_eq!(
+            shape,
+            [
+                ("aumid:Microsoft.WindowsTerminal_8wekyb3d8bbwe!App", vec![1]),
+                ("aumid:com.squirrel.Discord.Discord", vec![2, 9]),
+                ("aumid:OperaSoftware.OperaGXWebBrowser.1755079229", vec![3]),
+                ("aumid:Chrome", vec![4]),
+                (r"exe:c:\windows\explorer.exe", vec![6]),
+                ("aumid:CitizenFX.FiveM.Client", vec![]),
+                ("aumid:Chrome.UserData.Profile 2", vec![5]), // a profile keeps its own item, as on the Windows taskbar
+                (r"exe:c:\u\appdata\roaming\spotify\spotify.exe", vec![7]),
+                (r"exe:c:\u\appdata\local\fivem\fivem.app\data\cache\subprocess\fivem_b3258_gtaprocess.exe", vec![8]), // the shortcut above
+            ]
+        );
+        let ids = merge(&[pin("aumid:microsoft.todos_8wekyb3d8bbwe!app")], &[win(1, r"C:\t.exe", Some("Microsoft.Todos_8wekyb3d8bbwe!App"))], |_| None);
+        assert_eq!(ids.len(), 1, "AUMIDs compare without case");
+        assert!(same_exe(r"C:\A\x.exe", r"c:\a\X.EXE") && same_exe(r"C:\A\x.exe", r"C:\A\app-2\x.exe"));
+        assert!(!same_exe(r"C:\A\x.exe", r"C:\A\b\c\x.exe"), "two folders down is another app (Steam games under Steam)");
+        assert!(!same_exe(r"C:\A\x.exe", r"C:\A\app-2\y.exe") && !same_exe(r"C:\A\x.exe", r"C:\AB\app\x.exe"));
+    }
+
     #[test]
     fn switching_apps_does_not_reorder_the_strip() {
         let pins = [Pin { app_id: "exe:c:\\p.exe".into(), name: "P".into(), relaunch: None }];
         let z = |order: &[(isize, &str)]| order.iter().map(|&(h, exe)| win(h, exe, None)).collect::<Vec<_>>();
-        let first = keep_order(&[], merge(&pins, &z(&[(1, "C:\\a.exe"), (2, "C:\\b.exe"), (3, "C:\\a.exe"), (9, "C:\\p.exe")])));
+        let first = keep_order(&[], merge(&pins, &z(&[(1, "C:\\a.exe"), (2, "C:\\b.exe"), (3, "C:\\a.exe"), (9, "C:\\p.exe")]), |_| None));
         // b comes to the front, then a's second window: Z-order changes, the strip does not
-        let next = keep_order(&first, merge(&pins, &z(&[(3, "C:\\a.exe"), (2, "C:\\b.exe"), (9, "C:\\p.exe"), (1, "C:\\a.exe")])));
+        let next = keep_order(&first, merge(&pins, &z(&[(3, "C:\\a.exe"), (2, "C:\\b.exe"), (9, "C:\\p.exe"), (1, "C:\\a.exe")]), |_| None));
         let shape = |items: &[AppItem]| {
             items.iter().map(|i| (i.app_id.clone(), i.windows.iter().map(|w| w.hwnd).collect::<Vec<_>>())).collect::<Vec<_>>()
         };
@@ -664,7 +731,7 @@ mod tests {
         assert_eq!(shape(&first)[1], ("exe:c:\\a.exe".to_string(), vec![1, 3]), "windows first-seen too: cycling goes round");
         // a new app and a new window go last; a closed app leaves no gap
         let z3 = z(&[(4, "C:\\c.exe"), (5, "C:\\a.exe"), (1, "C:\\a.exe"), (9, "C:\\p.exe"), (3, "C:\\a.exe")]);
-        let later = keep_order(&next, merge(&pins, &z3));
+        let later = keep_order(&next, merge(&pins, &z3, |_| None));
         assert_eq!(
             shape(&later),
             [
@@ -684,7 +751,7 @@ mod tests {
         assert_eq!(split_command(r"C:\Program Files\X\x.EXE -a b"), Some((r"C:\Program Files\X\x.EXE".into(), "-a b".into())));
         assert_eq!(split_command("notepad"), Some(("notepad".into(), String::new())));
         assert_eq!(split_command("  "), None);
-        let items = merge(&[], &[win(9, "C:\\chrome.exe", Some("Chrome.UserData.P1"))]);
+        let items = merge(&[], &[win(9, "C:\\chrome.exe", Some("Chrome.UserData.P1"))], |_| None);
         let ctl = FakeAppControl::default();
         let cmd = r#""C:\chrome.exe" --profile-directory="Profile 1""#;
         assert_eq!(launch(&ctl, &items, "aumid:Chrome.UserData.P1", Some(cmd)), Ok(()));

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { Battery, BatteryCharging, BatteryFull, BatteryLow, BatteryMedium, ChevronDown, Moon, Search, Volume2, VolumeX, Wifi, WifiOff } from "lucide-react";
 import { bridge, type MonitorInfo, type PinnedApp, type Status, type WindowInfo } from "../bridge";
 import { clockParts } from "../lib/clock";
-import { dragLayout, mergePins, reorder, type StripItem } from "../lib/mergePins";
+import { dragLayout, fitStrip, mergePins, reorder, type StripItem } from "../lib/mergePins";
 import { useNow, usePrivacy, useSurfaces } from "../hooks";
 import { StripLine, Waves } from "./Fidelity";
 import { onX, sendX, stripSides, tabLeaves, focusViaKeys } from "../lib/xwin";
@@ -11,7 +11,7 @@ import { listenLine } from "../lib/lineChan";
 import { WindowPreview } from "./WindowPreview";
 import { SPRINGS } from "../motion/spring";
 import { useSpring } from "../motion/useSpring";
-import { AppIcon, AppLetter, WinLogo } from "./common";
+import { AppIcon, AppLetter, Panel, WinLogo } from "./common";
 import "./strip-items.css";
 import { GlowField } from "./Glow";
 import { PromotedTray } from "./TrayList";
@@ -20,7 +20,7 @@ import { IslandHiddenGlyph } from "./IslandHidden";
 import { useIslandHidden } from "../hooks.fidelity";
 import { cap99 } from "../lib/plugin";
 
-export type PanelKind = "setup" | "calendar" | "start" | "status" | "search" | "appearance" | "shortcuts" | "plugins" | "modules" | "clipboard" | "mascot" | "quit" | "notif" | "cleanup" | "tray";
+export type PanelKind = "setup" | "calendar" | "start" | "status" | "search" | "appearance" | "shortcuts" | "plugins" | "modules" | "clipboard" | "mascot" | "quit" | "notif" | "cleanup" | "tray" | "more";
 export type MenuState = { kind: "app"; appId: string; x: number } | { kind: "strip"; x: number };
 
 const GAP = 2;
@@ -92,7 +92,8 @@ function Pins({ items, pins, onMenu, onReorder, onHover, onPick }: { items: Stri
       target.removeEventListener("pointercancel", up);
       if (moved.current) {
         const { to } = dragLayout(widths, from, ev.clientX - x0);
-        if (to !== from) onReorder(reorder(pins.map((p) => p.appId), from, to));
+        const ids = pins.map((p) => p.appId), at = (i: number) => ids.indexOf(items[i].appId); // visible index -> pin index ("+N" hides some)
+        if (to !== from) onReorder(reorder(ids, at(from), at(to)));
         setDrag(null);
       }
     };
@@ -124,6 +125,19 @@ function Pins({ items, pins, onMenu, onReorder, onHover, onPick }: { items: Stri
         );
       })}
     </div>
+  );
+}
+
+/** One app tab (also a cell of the "+N" panel): click brings it forward, hover names it, right-click opens its menu. */
+function AppButton({ item, className, onHover, onPick, onMenu }: { item: StripItem; className: string; onHover: HoverFn; onPick: OpenPick; onMenu: (m: MenuState) => void }) {
+  return (
+    <button className={className + stateOf(item)} role="tab" aria-selected={item.active} aria-label={ariaOf(item)} data-app={item.appId}
+      onPointerEnter={(e) => onHover(item, e.currentTarget)} onPointerLeave={() => onHover(undefined)} onPointerDown={() => onHover(null)}
+      onFocus={(e) => onHover(item, e.currentTarget, true)} onBlur={() => onHover(null, undefined, true)}
+      onKeyDown={(e) => pickKeys(e, item, e.currentTarget, onPick)} onKeyUp={(e) => { if (e.key === " " && item.windows.length > 1) e.preventDefault(); }}
+      onClick={() => activate(item)} onContextMenu={(e) => { e.preventDefault(); onMenu({ kind: "app", appId: item.appId, x: e.currentTarget.getBoundingClientRect().left }); }}>
+      <ItemLabel item={item} />
+    </button>
   );
 }
 
@@ -180,7 +194,7 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
   // window preview: opens after ~250 ms of hover, closes ~200 ms after leaving (same approach as island hover intent)
   const [pv, setPv] = useState<{ item: StripItem; x: number; from?: HTMLElement } | null>(null);
   // name bubble (logos only, owner): with the same hover intent as the preview; an app with windows shows its name on the preview instead
-  const [tip, setTip] = useState<{ name: string; title?: string; x: number } | null>(null);
+  const [tip, setTip] = useState<{ name: string; title?: string; x: number; y?: number } | null>(null);
   const pvTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const hover: HoverFn = useCallback((item, el, kb) => {
     clearTimeout(pvTimer.current);
@@ -188,9 +202,10 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
     if (item === undefined) { pvTimer.current = setTimeout(() => { setPv(null); setTip(null); }, 200); return; }
     if (!el || (kb && !document.documentElement.hasAttribute("data-kb"))) return;
     const r = el.getBoundingClientRect(), x = r.left + r.width / 2;
+    const y = el.closest("[data-panel]") ? r.bottom + 6 : undefined; // in the "+N" panel the bubble goes under the logo; the strip preview would cover the panel
     pvTimer.current = setTimeout(() => {
       // owner (RC5): one window is not worth a big preview card; the bubble carries its title on a second line
-      if (item.windows.length > 1 && !kb) { setTip(null); setPv({ item, x }); } else { setPv(null); setTip({ name: item.name, title: item.windows.length === 1 ? item.windows[0].title : undefined, x }); }
+      if (item.windows.length > 1 && !kb && y === undefined) { setTip(null); setPv({ item, x }); } else { setPv(null); setTip({ name: item.name, title: item.windows.length === 1 ? item.windows[0].title : undefined, x, y }); }
     }, pv || tip ? 0 : 250);
   }, [pv, tip]);
   const pickByKey: OpenPick = useCallback((item, el) => {
@@ -252,43 +267,55 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
     if (tabLeaves(e, left, document.activeElement) && !e.shiftKey) { e.preventDefault(); bridge.call("focus_island").then(() => sendX({ t: "to-island" }), () => undefined); }
     else if (tabLeaves(e, right, document.activeElement) && e.shiftKey) { e.preventDefault(); bridge.call("focus_island").then(() => sendX({ t: "to-island", end: true }), () => undefined); }
   };
-  // hit area: tabs fit left of the island (half width ~170); if they don't, they shrink together via flex (instead of overlapping the island by 10-36 px)
-  const tabsBox = useRef<HTMLDivElement>(null);
+  // the app list ends left of the island: slots shrink, then the rest goes behind "+N" (fitStrip). Measured again on any
+  // resize (a monitor or DPI change resizes the page); no layout (jsdom, a hidden page) = no limit
+  const searchKey = useRef<HTMLButtonElement>(null);
+  const [avail, setAvail] = useState(Infinity);
   useLayoutEffect(() => {
-    const el = tabsBox.current, bar = document.querySelector("header.bar");
-    if (!el || !bar) return;
-    const fit = () => { el.style.maxWidth = Math.max(40, window.innerWidth / 2 - ISLAND_HALF - el.getBoundingClientRect().left) + "px"; };
-    fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(bar);
+    const el = bar.current, key = searchKey.current;
+    if (!el || !key) return;
+    const measure = () => {
+      const room = window.innerWidth / 2 - ISLAND_HALF - key.getBoundingClientRect().right - GAP;
+      setAvail(el.getBoundingClientRect().width && Number.isFinite(room) ? room : Infinity);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
     return () => ro.disconnect();
-  }, [tabs.length, pinned.length, monitor.primary]);
+  }, []);
+  const [hold, setHold] = useState<number | null>(null); // the slot width while the pointer is on the list (nothing resizes under it)
+  const fit = useMemo(() => fitStrip(pinned, tabs, avail, hold), [pinned, tabs, avail, hold]);
+  const moreBtn = useRef<HTMLButtonElement>(null);
+  const [moreLeft, setMoreLeft] = useState(8);
+  const moreOpen = openPanel === "more" && fit.hidden.length > 0;
+  useLayoutEffect(() => {
+    if (!moreOpen) return;
+    setMoreLeft(Math.max(8, Math.round(moreBtn.current?.getBoundingClientRect().left ?? 8))); // the panel hangs under "+N", left edges aligned
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-panel="more"] button')?.focus());
+    return () => { if (document.documentElement.hasAttribute("data-kb")) moreBtn.current?.focus(); }; // Esc hands the keyboard back to "+N"
+  }, [moreOpen]);
   const trigger = (k: PanelKind) => ({ "data-panel-trigger": k, "aria-expanded": openPanel === k, onClick: () => onPanel(k) });
 
   return (
     <>
-    <header ref={bar} className="bar" data-hit aria-label="Peeka strip" onKeyDown={crossKey} style={slide ? { transform: slide } : undefined}
+    <header ref={bar} className="bar" data-hit aria-label="Peeka strip" onKeyDown={crossKey} style={{ "--slot": fit.slot + "px", transform: slide } as CSSProperties}
       onContextMenu={(e) => { if (e.target === e.currentTarget || (e.target as HTMLElement).closest(".empty")) { e.preventDefault(); onMenu({ kind: "strip", x: e.clientX }); } }}>
       {monitor.primary && <div className="glowHost"><GlowField monitor={monitor.id} /></div>}{/* the strip's slice of the Drift glow (the island window draws the rest) */}
       {!monitor.primary && badge > 0 && <span className="approvalBadge" role="status" aria-label={`${badge} awaiting approval`}>{badge > 9 ? "9+" : badge} {badge === 1 ? "approval" : "approvals"}</span>}
-      <div className="side" ref={left}>
+      <div className="side" ref={left} onPointerEnter={() => setHold(fit.slot)} onPointerLeave={() => setHold(null)}>
         <SelectionPill host={left} watch={activeKey} />
         {monitor.primary && priv && <span className="privacyDot" role="img" aria-label={priv} title={priv} data-only={privacy.screen ? undefined : "camera"} />}
         <button className={"key keyIcon" + (openPanel === "start" ? " shown" : "")} title="Start" aria-label="Start" aria-haspopup="dialog" {...trigger("start")}><WinLogo /></button>
-        <button className={"key keyIcon" + (openPanel === "search" ? " shown" : "")} title="Search (Ctrl+K)" aria-label="Search" aria-haspopup="dialog" {...trigger("search")}><Search /></button>
-        {monitor.primary && <Pins items={pinned} pins={pins} onReorder={onReorder} onHover={hover} onPick={pickByKey} onMenu={(appId, x) => onMenu({ kind: "app", appId, x })} />}
-        {tabs.length > 0 && <span className="divider" />}
-        <div className="tabs" ref={tabsBox} role="tablist" aria-label="Windows on this display">
-          {tabs.map((t) => (
-            <button key={t.appId} className={"tabA" + stateOf(t)} role="tab" aria-selected={t.active} aria-label={ariaOf(t)} data-app={t.appId}
-              onPointerEnter={(e) => hover(t, e.currentTarget)} onPointerLeave={() => hover(undefined)} onPointerDown={() => hover(null)}
-              onFocus={(e) => hover(t, e.currentTarget, true)} onBlur={() => hover(null, undefined, true)}
-              onKeyDown={(e) => pickKeys(e, t, e.currentTarget, pickByKey)} onKeyUp={(e) => { if (e.key === " " && t.windows.length > 1) e.preventDefault(); }}
-              onClick={() => activate(t)} onContextMenu={(e) => { e.preventDefault(); onMenu({ kind: "app", appId: t.appId, x: e.currentTarget.getBoundingClientRect().left }); }}>
-              <ItemLabel item={t} />
-            </button>
-          ))}
+        <button ref={searchKey} className={"key keyIcon" + (openPanel === "search" ? " shown" : "")} title="Search (Ctrl+K)" aria-label="Search" aria-haspopup="dialog" {...trigger("search")}><Search /></button>
+        {monitor.primary && <Pins items={fit.pinned} pins={pins} onReorder={onReorder} onHover={hover} onPick={pickByKey} onMenu={(appId, x) => onMenu({ kind: "app", appId, x })} />}
+        {fit.tabs.length > 0 && <span className="divider" />}
+        <div className="tabs" role="tablist" aria-label="Windows on this display">
+          {fit.tabs.map((t) => <AppButton key={t.appId} item={t} className="tabA" onHover={hover} onPick={pickByKey} onMenu={onMenu} />)}
         </div>
+        {fit.hidden.length > 0 && (
+          <button ref={moreBtn} className={"key more num" + (fit.hidden.some((i) => i.windows.some((w) => w.attention)) ? " attn" : "") + (moreOpen ? " shown" : "")}
+            title="More apps" aria-label={`${fit.hidden.length} more apps`} aria-haspopup="dialog" {...trigger("more")}>+{cap99(fit.hidden.length)}</button>
+        )}
       </div>
       {/* center gap: the island window */}
       <div className="empty" style={{ flex: 1, alignSelf: "stretch" }}>
@@ -318,7 +345,12 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
       {monitor.primary && <Waves />}
     </header>
     {monitor.primary && <StripLine shift={slide ? shift : 0} />}
-    {tip && !(pv && live) && <span className="stripTip" data-paint role="tooltip" style={{ left: tip.x }}>{tip.name}{tip.title && <span className="tipSub">{tip.title}</span>}</span>}
+    {tip && !(pv && live) && <span className="stripTip" data-paint role="tooltip" style={{ left: tip.x, top: tip.y }}>{tip.name}{tip.title && <span className="tipSub">{tip.title}</span>}</span>}
+    <Panel glow={monitor.primary ? monitor.id : undefined} side="left" width={Math.min(6, fit.hidden.length) * 42 + 18} offset={moreLeft} label="More apps" dataKind="more" open={moreOpen} onClose={() => onPanel("more")} ownHint>
+      <div className="body moreGrid" role="tablist" aria-label="More apps" style={{ gridTemplateColumns: `repeat(${Math.min(6, fit.hidden.length)}, 40px)` }}>
+        {fit.hidden.map((i) => <AppButton key={i.appId} item={i} className={i.pinned ? "pin" + (i.windows.length ? " openPinned" : "") : "tabA"} onHover={hover} onPick={pickByKey} onMenu={onMenu} />)}
+      </div>
+    </Panel>
     {pv && live && <WindowPreview item={live} x={pv.x} onEnter={() => clearTimeout(pvTimer.current)} onLeave={() => hover(undefined)} onPick={(w) => { setPv(null); bridge.call("activate_window", { hwnd: w.hwnd }); }} />}
     </>
   );

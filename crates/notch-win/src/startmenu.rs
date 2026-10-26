@@ -90,14 +90,27 @@ fn target_args(lnk: &Path) -> Option<(String, bool)> {
 /// A shortcut's own AppUserModelID (`PKEY_AppUserModel_ID`), the id Windows groups its windows by.
 #[cfg(windows)]
 fn shortcut_aumid(lnk: &str) -> Option<String> {
-    use windows::Win32::Storage::EnhancedStorage::PKEY_AppUserModel_ID;
+    shell_prop(lnk, &windows::Win32::Storage::EnhancedStorage::PKEY_AppUserModel_ID)
+}
+
+/// The exe an Apps-folder AUMID starts (`System.Link.TargetParsingPath`): a desktop app's Start Menu shortcut target
+/// (Discord's stub, Opera's opera.exe); None for a Store app (the shell gives ""). Needs COM on the calling thread.
+#[cfg(windows)]
+pub fn app_target(aumid: &str) -> Option<String> {
+    let target = shell_prop(&format!("shell:AppsFolder\\{aumid}"), &windows::Win32::Storage::EnhancedStorage::PKEY_Link_TargetParsingPath)?;
+    target.to_ascii_lowercase().ends_with(".exe").then_some(target)
+}
+
+/// One string property of a shell item, by its parsing name; None = no item, unset or empty.
+#[cfg(windows)]
+fn shell_prop(parsing: &str, key: &windows::Win32::Foundation::PROPERTYKEY) -> Option<String> {
     use windows::Win32::System::Com::{CoTaskMemFree, StructuredStorage::PropVariantToStringAlloc};
     use windows::Win32::UI::Shell::PropertiesSystem::{IPropertyStore, SHGetPropertyStoreFromParsingName, GPS_DEFAULT};
-    let path = crate::to_wide(lnk);
+    let path = crate::to_wide(parsing);
     // SAFETY: a NUL-terminated path; the store and value are released on drop; `s` is a CoTaskMem string we free.
     unsafe {
         let store: IPropertyStore = SHGetPropertyStoreFromParsingName(windows::core::PCWSTR(path.as_ptr()), None, GPS_DEFAULT).ok()?;
-        let value = store.GetValue(&PKEY_AppUserModel_ID).ok()?;
+        let value = store.GetValue(key).ok()?;
         let s = PropVariantToStringAlloc(&value).ok()?;
         let out = s.to_string().ok();
         CoTaskMemFree(Some(s.0 as *const _));
