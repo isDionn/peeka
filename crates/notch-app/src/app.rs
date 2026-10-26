@@ -26,7 +26,7 @@ use notch_core::apps::{AppItem, ListedApp};
 use notch_core::clickthrough::{captures, CssRect};
 use notch_core::model::{Monitor, Rect};
 use notch_core::settings::{self, HideMode, Settings};
-use notch_core::shortcuts::{self as keys, ShortcutGate, ShortcutId, EMERGENCY_SPARE};
+use notch_core::shortcuts::{self as keys, ShortcutGate, ShortcutId, DIAGNOSTICS_KEYS, EMERGENCY_SPARE};
 use notch_core::status::Status;
 use notch_core::{ports, supervise};
 use notch_win::appbar::Win32AppBar;
@@ -56,6 +56,9 @@ pub struct StripPlace {
     size: (i32, i32),
     bar: i32,
     pub rects: Vec<CssRect>,
+    /// The page's devicePixelRatio and open panel with its last report (`notch_core::diagnostics`).
+    pub dpr: Option<f64>,
+    pub view: String,
     /// The region last applied: an unchanged report sets nothing.
     applied: Vec<(i32, i32, i32, i32)>,
 }
@@ -69,11 +72,17 @@ pub struct Notch {
     pub items: Mutex<Vec<AppItem>>,
     /// The island page's clickable rectangles (CSS px, window-relative).
     pub rects: Mutex<Vec<CssRect>>,
+    /// The island page's devicePixelRatio and open card with its last report (`notch_core::diagnostics`).
+    pub island_view: Mutex<(Option<f64>, String)>,
+    /// The last diagnostics file: "Open folder" shows only this one.
+    pub diag_last: Mutex<Option<PathBuf>>,
     pub monitors: Mutex<Vec<Monitor>>,
     /// The Start panel's last list (and when it was scanned): `launch_app` accepts these ids too.
     pub apps: Mutex<(Vec<ListedApp>, Option<Instant>)>,
     /// App id -> PNG data URL ("" = the shell had none).
     pub icons: Mutex<HashMap<String, notch_win::icons::Icon>>,
+    /// App id -> its strip name (`apps::display_name`), a miss too.
+    pub names: Mutex<HashMap<String, String>>,
     /// The primary monitor's DDC/CI brightness; None = not controllable (read once at start, then after each set).
     pub brightness: Mutex<Option<u8>>,
     /// `Radio::RequestAccessAsync` said yes (true until it has answered).
@@ -123,6 +132,45 @@ impl Notch {
             return Ok(()); // the caller keeps `s` in memory
         }
         settings::save(&settings::settings_path(&self.data_dir), s)
+    }
+
+    /// The island and strip windows for "Save diagnostics": geometry, applied region, what the pages last reported.
+    pub fn diag_pages(&self) -> Vec<notch_core::diagnostics::PageDiag> {
+        use notch_core::clickthrough::{region_boxes, strip_region_boxes};
+        use notch_win::diagnostics::{region, window_rect};
+        let mut out = vec![];
+        let island = *self.island.lock(); // not held while the other locks are taken
+        if let Some(p) = island {
+            let rects = self.rects.lock().clone();
+            let (dpr, view) = self.island_view.lock().clone();
+            out.push(notch_core::diagnostics::PageDiag {
+                label: "island".into(),
+                window: window_rect(p.hwnd),
+                region: region(p.hwnd),
+                wanted: region_boxes(&rects, p.scale, (p.rect.width(), p.rect.height())),
+                scale: p.scale,
+                rects,
+                dpr,
+                view,
+            });
+        }
+        let strips = self.strips.lock();
+        let mut labels: Vec<&String> = strips.keys().collect();
+        labels.sort();
+        for l in labels {
+            let s = &strips[l];
+            out.push(notch_core::diagnostics::PageDiag {
+                label: l.clone(),
+                window: window_rect(s.hwnd),
+                region: region(s.hwnd),
+                wanted: strip_region_boxes(&s.rects, s.scale, s.size, s.bar),
+                scale: s.scale,
+                rects: s.rects.clone(),
+                dpr: s.dpr,
+                view: s.view.clone(),
+            });
+        }
+        out
     }
 
     /// The island window's rectangle (physical px) and scale, once `layout` placed it.
@@ -188,6 +236,8 @@ pub fn run() {
             crate::commands::get_settings,
             crate::commands::set_settings,
             crate::commands::report_hit_rects,
+            crate::commands::save_diagnostics,
+            crate::commands::diagnostics_open_folder,
             crate::commands::taskbar_set_mode,
             crate::commands::get_media,
             crate::commands::media_control,
@@ -261,6 +311,7 @@ pub fn run() {
             crate::commands::agent_bridges,
             crate::commands::agent_bridge_install,
             crate::commands::agent_bridge_remove,
+            crate::commands::agent_bridge_preview,
             crate::commands::cc_focus_terminal,
             crate::commands::cc_diff,
             crate::commands::cc_diff_open,
@@ -335,9 +386,12 @@ fn setup(app: &AppHandle) -> Result<(), String> {
         appbar: Win32AppBar::default(),
         items: Mutex::new(vec![]),
         rects: Mutex::new(vec![]),
+        island_view: Mutex::new((None, String::new())),
+        diag_last: Mutex::new(None),
         monitors: Mutex::new(vec![]),
         apps: Mutex::new((vec![], None)),
         icons: Mutex::new(HashMap::new()),
+        names: Mutex::new(HashMap::new()),
         brightness: Mutex::new(None),
         radios_ok: Mutex::new(true),
         island: Mutex::new(None),
@@ -376,6 +430,13 @@ fn setup(app: &AppHandle) -> Result<(), String> {
     }
     let handle = app.clone();
     notch_win::foreground::watch(move |exe| on_foreground(&handle, &exe));
+    let handle = app.clone();
+    notch_win::flash::watch(move || {
+        let Some(n) = handle.try_state::<Notch>() else { return };
+        for m in n.monitors.lock().iter() {
+            let _ = handle.emit("windows_changed", serde_json::json!({ "monitor": m.index.to_string() }));
+        }
+    });
     // TODO(Wave 0 test 4): the tray path - the real hidden-icons panel moved under the strip, a tray mirror
     // (own `Shell_TrayWnd`), or a plain list - is chosen from the owner's `probe tray` result. Until
     // then `open_tray` returns the plain list (`notch_core::tray`, Wave 6) so the chevron is not dead. Its
@@ -472,6 +533,7 @@ fn build(app: &AppHandle, label: &str, url: &str) -> Option<WebviewWindow> {
         .ok()?;
     if let Ok(hwnd) = w.hwnd() {
         notch_win::style::no_activate(hwnd.0 as isize);
+        notch_win::style::no_frame_line(hwnd.0 as isize);
         notch_win::style::tool_window(hwnd.0 as isize); // not on the taskbar, not in Alt+Tab (skip_taskbar alone is only the taskbar)
         notch_win::style::strip_no_activate(hwnd.0 as isize); // a press on a strip or the island leaves the user's app in front
         notch_win::style::share_drop_target(hwnd.0 as isize); // else no file drag over Peeka reaches wry's handler
@@ -542,7 +604,7 @@ pub fn layout(app: &AppHandle) {
         }
     }
     // A monitor change (unplugged, lid closed) lands here: `build` returns the SAME island window, so what its page
-    // holds (an open card) stays; only the place, the scale and the click region change (`screens` tests).
+    // holds (an open card) stays; only the place, the scale and the click rectangles' mapping change (`screens` tests).
     if let Some(spot) = plan.island {
         let url = if n.quiet { "island.html?autostart=1" } else { "island.html" };
         if let Some(w) = build(app, "island", url) {
@@ -555,24 +617,15 @@ pub fn layout(app: &AppHandle) {
             let _ = w.set_ignore_cursor_events(true); // nothing is clickable until the page reports rectangles
             notch_win::style::set_island(w.hwnd().map_or(0, |h| h.0 as isize));
             *n.island.lock() = Some(IslandPlace { rect, scale: spot.scale, hwnd: w.hwnd().map_or(0, |h| h.0 as isize), hz: spot.hz });
-            apply_region(app); // clipped to the reported shape before it is first shown
             let _ = w.show();
         }
     }
     crate::taskbar::set_appbars(n.appbar.handles());
 }
 
-/// Clips the island window to the rectangles the page reported (`clickthrough::region_boxes`): if the page's
-/// transparency ever fails, the black stays inside the island instead of covering a 760x590 patch of screen. Run on
-/// the main thread (the window's own); `layout` and `report_hit_rects` call it.
-pub fn apply_region(app: &AppHandle) {
-    let Some(n) = app.try_state::<Notch>() else { return };
-    let Some(place) = *n.island.lock() else { return };
-    let boxes = notch_core::clickthrough::region_boxes(&n.rects.lock(), place.scale, (place.rect.width(), place.rect.height()));
-    notch_win::style::set_region(place.hwnd, &boxes);
-}
-
-/// Clips a strip window to its bar + the rectangles its page reported. Main thread, like `apply_region`.
+/// Clips a strip window to its bar + the rectangles its page reported. Main thread (the window's own). The island has
+/// no region: it is a fixed transparent rectangle and the cursor poll (`click_through`) lets clicks through outside its
+/// rectangles (the real-PC 1 px lines and stale boxes are suspected to come from region changes, tanitim/bug-034).
 pub fn apply_strip_region(app: &AppHandle, label: &str) {
     let Some(n) = app.try_state::<Notch>() else { return };
     let mut strips = n.strips.lock();
@@ -649,6 +702,12 @@ fn register_shortcuts(app: &AppHandle) -> bool {
             notice(app, &format!("Could not register shortcut: {}", s.keys));
         }
     }
+    // Fixed, not in Settings: rarely used, only for bug reports. Skipped quietly if it would break typing or is taken.
+    if shortcut_problem(DIAGNOSTICS_KEYS).is_none() {
+        if let Some(k) = shortcut_of(DIAGNOSTICS_KEYS) {
+            let _ = gs.register(k);
+        }
+    }
     emergency
 }
 
@@ -657,6 +716,10 @@ fn on_shortcut(app: &AppHandle, pressed: &Shortcut, event: tauri_plugin_global_s
         return;
     }
     let Some(n) = app.try_state::<Notch>() else { return };
+    if shortcut_of(DIAGNOSTICS_KEYS).as_ref() == Some(pressed) {
+        let _ = crate::commands::save_diagnostics(app.clone(), n);
+        return;
+    }
     let spare = shortcut_of(EMERGENCY_SPARE);
     let id = n
         .settings
@@ -708,13 +771,13 @@ fn on_foreground(app: &AppHandle, exe: &str) {
     }
 }
 
-/// One thread for the slow things: status and fullscreen, windows and monitors every 2 s; alert expiry every 1 s.
+/// One thread for the slow things: status, fullscreen and monitors every 2 s, windows every 12 s; alert expiry every 1 s.
 /// shortcut: polled; volume is an event now (`live.rs`), network / power / windows still wait for theirs
 ///. Charger and low-battery alerts are judged from these status readings.
 fn ticks(app: AppHandle) {
     thread::spawn(move || {
         notch_win::com();
-        let (mut status, mut items, mut hidden): (Option<Status>, Vec<AppItem>, bool) = (None, vec![], false);
+        let (mut status, mut hidden): (Option<Status>, bool) = (None, false);
         // Scenarios 39 / 40: the strips hidden by a fullscreen app (per monitor), the windows we hid, the last badge.
         let mut hidden_strips: Vec<usize> = vec![];
         let mut hidden_labels: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -746,12 +809,14 @@ fn ticks(app: AppHandle) {
                     crate::live::on_battery(&app, before, now.battery.as_ref());
                     status = Some(now);
                 }
-                let list = crate::commands::snapshot(&n);
-                if list != items {
-                    for m in n.monitors.lock().iter() {
-                        let _ = app.emit("windows_changed", serde_json::json!({ "monitor": m.index.to_string() }));
+                // The slow safety re-scan: window events (`notch_win::flash::poke`) relist the strips at once.
+                if tick % 12 == 0 {
+                    let before = n.items.lock().clone();
+                    if crate::commands::snapshot(&n) != before {
+                        for m in n.monitors.lock().iter() {
+                            let _ = app.emit("windows_changed", serde_json::json!({ "monitor": m.index.to_string() }));
+                        }
                     }
-                    items = list;
                 }
                 let presence = notch_win::presence::read();
                 let strips = strip_monitors(&n);

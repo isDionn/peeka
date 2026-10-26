@@ -352,7 +352,7 @@ mod tests {
         assert_eq!(s.taskbar_hide, HideMode::Full);
         assert!(s.autostart && s.secondary_strips && !s.dnd);
         s.taskbar_hide = HideMode::Auto;
-        s.pins.push(Pin { app_id: "exe:c:\\a.exe".into(), name: "A".into() });
+        s.pins.push(Pin { app_id: "exe:c:\\a.exe".into(), name: "A".into(), relaunch: None });
         save(&path, &s).unwrap();
         assert_eq!(load(&path), s);
     }

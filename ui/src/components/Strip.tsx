@@ -38,18 +38,20 @@ function activate(item: StripItem) {
   if (w) bridge.call("activate_window", { hwnd: w.hwnd }); else bridge.call("launch_app", { appId: item.appId });
 }
 
-/** Pins and tabs share one look: icon + name in a fixed-width slot (strip-items.css); long names are truncated, the full name is in title/aria-label. */
+/** Pins and tabs share one look: the logo alone in a fixed-width slot (strip-items.css), the name in aria-label and the hover bubble.
+ *  No logo from Windows: the name's first letter in a coloured circle. Several windows: a count badge on the logo's corner. */
 function ItemLabel({ item }: { item: StripItem }) {
   return (
-    <>
-      <span className="ikK">
-        <AppIcon src={item.icon} color={item.colorIcon} />
-        {item.windows.length > 1 && <span className="count num">{cap99(item.windows.length)}</span>}
-      </span>
-      <span className="pinName">{item.name}</span>
-    </>
+    <span className="ikK">
+      {item.icon || item.colorIcon ? <AppIcon src={item.icon} color={item.colorIcon} /> : <span className="appLetter" style={{ "--hue": hueOf(item.name) } as CSSProperties} aria-hidden="true">{[...item.name.trim()][0]?.toUpperCase() ?? "?"}</span>}
+      {item.windows.length > 1 && <span className="count num">{cap99(item.windows.length)}</span>}
+    </span>
   );
 }
+/** A steady hue per name, so the same app keeps its letter colour. */
+export const hueOf = (name: string) => [...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
+/** Item classes shared by pins and tabs: the dot under the logo says running / foreground / asking for attention. */
+const stateOf = (item: StripItem) => (item.active ? " active" : "") + (item.windows.some((w) => w.attention) ? " attn" : "");
 
 /** Preview intent: item + its box (open), `undefined` = pointer left (close after a delay), `null` = close now. */
 /** F-05: on a multi-window item, Enter/Space/Down arrow opens the window picker (Strip keeps the picker with kb). */
@@ -59,7 +61,8 @@ const pickKeys = (e: React.KeyboardEvent, item: StripItem, el: HTMLElement, open
   e.preventDefault();
   open(item, el);
 };
-type HoverFn = (item: StripItem | null | undefined, el?: HTMLElement) => void;
+/** `kb`: keyboard focus (only while the keyboard is in use, `data-kb`): the name bubble alone, no preview; with `null` (blur) only the bubble closes. */
+type HoverFn = (item: StripItem | null | undefined, el?: HTMLElement, kb?: boolean) => void;
 const ariaOf = (item: StripItem) =>
   item.windows.length ? `${item.name}${item.windows.length > 1 ? `, ${item.windows.length} windows` : ""}` : `${item.name}, pinned, not running`;
 
@@ -109,10 +112,11 @@ function Pins({ items, pins, onMenu, onReorder, onHover, onPick }: { items: Stri
             : { transform: `translateX(${drag.shifts[i]}px)`, transition: "transform .38s cubic-bezier(.34,1.36,.64,1)" }
           : undefined;
         return (
-          <button key={item.appId} role="tab" aria-selected={item.active} aria-label={ariaOf(item)} title={item.name + (open ? "" : " (pinned, not running)")}
-            className={"pin" + (open ? " openPinned" : "") + (item.active ? " active" : "") + (drag?.from === i ? " grabbing" : "")}
+          <button key={item.appId} role="tab" aria-selected={item.active} aria-label={ariaOf(item)}
+            className={"pin" + (open ? " openPinned" : "") + stateOf(item) + (drag?.from === i ? " grabbing" : "")}
             data-app={item.appId} style={style}
             onPointerDown={(e) => { onHover(null); down(e, i); }} onPointerEnter={(e) => onHover(item, e.currentTarget)} onPointerLeave={() => onHover(undefined)}
+            onFocus={(e) => onHover(item, e.currentTarget, true)} onBlur={() => onHover(null, undefined, true)}
             onKeyDown={(e) => pickKeys(e, item, e.currentTarget, onPick)} onKeyUp={(e) => { if (e.key === " " && item.windows.length > 1) e.preventDefault(); }}
             onClick={() => { if (!moved.current) activate(item); moved.current = false; }}
             onContextMenu={(e) => { e.preventDefault(); onMenu(item.appId, e.currentTarget.getBoundingClientRect().left); }}>
@@ -176,15 +180,19 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
   const activeKey = [...pinned, ...tabs].filter((i) => i.active).map((i) => i.appId).join() + "|" + pinned.map((p) => p.appId + p.windows.length).join() + tabs.map((t) => t.appId + t.windows.length).join();
   // window preview: opens after ~250 ms of hover, closes ~200 ms after leaving (same approach as island hover intent)
   const [pv, setPv] = useState<{ item: StripItem; x: number; from?: HTMLElement } | null>(null);
+  // name bubble (logos only, owner): with the same hover intent as the preview; an app with windows shows its name on the preview instead
+  const [tip, setTip] = useState<{ name: string; x: number } | null>(null);
   const pvTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const hover: HoverFn = useCallback((item, el) => {
+  const hover: HoverFn = useCallback((item, el, kb) => {
     clearTimeout(pvTimer.current);
-    if (item === null) return setPv(null);
-    if (item === undefined) { pvTimer.current = setTimeout(() => setPv(null), 200); return; }
-    if (!item.windows.length || !el) return;
-    const r = el.getBoundingClientRect();
-    pvTimer.current = setTimeout(() => setPv({ item, x: r.left + r.width / 2 }), pv ? 0 : 250);
-  }, [pv]);
+    if (item === null) { setTip(null); return kb ? undefined : setPv(null); } // a blur takes only the bubble: the keyboard picker moves focus into the preview
+    if (item === undefined) { pvTimer.current = setTimeout(() => { setPv(null); setTip(null); }, 200); return; }
+    if (!el || (kb && !document.documentElement.hasAttribute("data-kb"))) return;
+    const r = el.getBoundingClientRect(), x = r.left + r.width / 2;
+    pvTimer.current = setTimeout(() => {
+      if (item.windows.length && !kb) { setTip(null); setPv({ item, x }); } else { setPv(null); setTip({ name: item.name, x }); }
+    }, pv || tip ? 0 : 250);
+  }, [pv, tip]);
   const pickByKey: OpenPick = useCallback((item, el) => {
     clearTimeout(pvTimer.current);
     const r = el.getBoundingClientRect();
@@ -271,8 +279,9 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
         {tabs.length > 0 && <span className="divider" />}
         <div className="tabs" ref={tabsBox} role="tablist" aria-label="Windows on this display">
           {tabs.map((t) => (
-            <button key={t.appId} className={"tabA" + (t.active ? " active" : "")} title={t.name} role="tab" aria-selected={t.active} aria-label={ariaOf(t)} data-app={t.appId}
+            <button key={t.appId} className={"tabA" + stateOf(t)} role="tab" aria-selected={t.active} aria-label={ariaOf(t)} data-app={t.appId}
               onPointerEnter={(e) => hover(t, e.currentTarget)} onPointerLeave={() => hover(undefined)} onPointerDown={() => hover(null)}
+              onFocus={(e) => hover(t, e.currentTarget, true)} onBlur={() => hover(null, undefined, true)}
               onKeyDown={(e) => pickKeys(e, t, e.currentTarget, pickByKey)} onKeyUp={(e) => { if (e.key === " " && t.windows.length > 1) e.preventDefault(); }}
               onClick={() => activate(t)} onContextMenu={(e) => { e.preventDefault(); onMenu({ kind: "app", appId: t.appId, x: e.currentTarget.getBoundingClientRect().left }); }}>
               <ItemLabel item={t} />
@@ -305,6 +314,7 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
       {monitor.primary && <Waves />}
     </header>
     {monitor.primary && <StripLine shift={slide ? shift : 0} />}
+    {tip && !(pv && live) && <span className="stripTip" data-paint role="tooltip" style={{ left: tip.x }}>{tip.name}</span>}
     {pv && live && <WindowPreview item={live} x={pv.x} onEnter={() => clearTimeout(pvTimer.current)} onLeave={() => hover(undefined)} onPick={(w) => { setPv(null); bridge.call("activate_window", { hwnd: w.hwnd }); }} />}
     </>
   );

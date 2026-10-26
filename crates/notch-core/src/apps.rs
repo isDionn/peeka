@@ -3,8 +3,9 @@
 //! An app's identity is its AppUserModelID when the window has one (Store apps, Chrome profiles and PWAs get their
 //! own), else its exe path. `app_id` carries which: `aumid:<id>` or `exe:<lowercased path>`. Pins store the same id.
 //! Window filter = what the Windows taskbar shows:
-//! visible or minimised, titled, not a tool / no-activate window, not cloaked, not owned (unless `WS_EX_APPWINDOW`),
-//! not the shell's own furniture.
+//! visible (a minimised window keeps `WS_VISIBLE`; an app hidden to the tray does not), titled, not a tool / no-activate
+//! window, not cloaked, not removed with `ITaskbarList::DeleteTab`, not owned (unless `WS_EX_APPWINDOW`), not the shell's
+//! own furniture. Idea from YASB (MIT): `ITaskList_Deleted`.
 
 use serde::{Deserialize, Serialize};
 
@@ -25,6 +26,8 @@ pub struct RawWindow {
     pub visible: bool,
     pub minimized: bool,
     pub cloaked: bool,
+    /// The window carries the `ITaskList_Deleted` property (`ITaskbarList::DeleteTab`): its app asked for no button.
+    pub deleted: bool,
     pub owned: bool,
     pub aumid: Option<String>,
     /// Full exe path; empty when the process could not be opened (elevated, protected).
@@ -48,7 +51,8 @@ pub fn is_own(pid: u32, exe_path: &str, own_pid: u32, own_exe: &str) -> bool {
 
 /// Would the Windows taskbar show a button for this window?
 pub fn is_app_window(w: &RawWindow) -> bool {
-    (w.visible || w.minimized)
+    w.visible
+        && !w.deleted
         && !w.title.trim().is_empty()
         && !SHELL_CLASSES.contains(&w.class.to_ascii_lowercase().as_str())
         && w.ex_style & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE) == 0
@@ -77,14 +81,46 @@ pub fn launch_target(app_id: &str) -> Option<String> {
     app_id.strip_prefix("exe:").filter(|p| !p.is_empty()).map(str::to_string)
 }
 
+/// Where an app's icon is read from, in order: the id's own target; for an AUMID that is really an exe path (League of
+/// Legends sets its window's AUMID to `D:\Riot Games\...\LeagueClient.exe`), that path, since `shell:AppsFolder`
+/// doesn't know it and anti-cheat may hide the process's exe; then a running window's package app and exe.
+pub fn icon_sources(app_id: &str, pkg_aumid: Option<String>, exe: Option<String>) -> Vec<String> {
+    let path = app_id.strip_prefix("aumid:").filter(|a| a.get(1..3) == Some(":\\") && a.to_lowercase().ends_with(".exe"));
+    [launch_target(app_id), path.map(str::to_string), pkg_aumid.map(|a| format!("shell:AppsFolder\\{a}")), exe]
+        .into_iter()
+        .flatten()
+        .filter(|s| !s.trim().is_empty())
+        .collect()
+}
+
 /// The exe's file name, lowercased (`C:\x\Code.exe` -> `code.exe`): what shortcut exceptions compare.
 pub fn exe_name(path: &str) -> String {
     path.rsplit(['\\', '/']).next().unwrap_or("").to_lowercase()
 }
 
+/// A running app's strip name: the first thing the shell says (`shell(parsing name)`: an exe's FileDescription, an
+/// AUMID's display name) about `sources` (the app id's own target, the window's package app, its exe), else
+/// `fallback_name`. An answer that is only a file name ("Notepad.exe", Store apps' FileDescription) or the raw AUMID
+/// (the shell echoes one it doesn't know, like Blender's `blender.5.2`) doesn't count. File Explorer is named as
+/// the taskbar names it (its FileDescription says "Windows Explorer"). Start Menu shortcuts are no source: a folder
+/// or log shortcut also targets explorer.exe or notepad.exe.
+pub fn display_name(app_id: &str, sources: &[String], shell: impl Fn(&str) -> Option<String>) -> String {
+    let fallback = fallback_name(app_id);
+    if app_id.starts_with("exe:") && exe_name(app_id) == "explorer.exe" {
+        return "File Explorer".into();
+    }
+    let raw = app_id.split_once(':').map_or(app_id, |(_, rest)| rest);
+    sources
+        .iter()
+        .filter(|t| !t.trim().is_empty())
+        .filter_map(|t| shell(t))
+        .map(|s| s.trim().chars().take(64).collect::<String>())
+        .find(|s| !s.is_empty() && *s != fallback && s != raw && !s.to_lowercase().ends_with(".exe"))
+        .unwrap_or(fallback)
+}
+
 /// A readable name when nothing better is known: the exe's stem (`code.exe` -> `code`) or the AUMID's last part.
-/// shortcut: no FileDescription / Store display name yet; Wave 2 reads them with the icons.
-pub(crate) fn fallback_name(app_id: &str) -> String {
+pub fn fallback_name(app_id: &str) -> String {
     let raw = app_id.split_once(':').map_or(app_id, |(_, rest)| rest);
     let tail = raw.rsplit(['\\', '/', '!']).next().unwrap_or(raw);
     tail.strip_suffix(".exe").unwrap_or(tail).to_string()
@@ -94,6 +130,10 @@ pub(crate) fn fallback_name(app_id: &str) -> String {
 pub struct Pin {
     pub app_id: String,
     pub name: String,
+    /// The pinned window's relaunch command (`PKEY_AppUserModel_RelaunchCommand`), kept for an AUMID that no Start
+    /// entry has: a Chrome / Edge profile, which `shell:AppsFolder` cannot open once its windows are closed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relaunch: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -117,7 +157,7 @@ pub struct AppItem {
 }
 
 /// Pins first in pin order (each with its open windows, a pin with none is a launch tile), then the other apps in
-/// first-seen order. `windows` is the enumerator's raw list; the filter runs here.
+/// enumeration order (`keep_order` makes it first-seen). `windows` is the enumerator's raw list; the filter runs here.
 pub fn merge(pins: &[Pin], windows: &[RawWindow]) -> Vec<AppItem> {
     let mut items: Vec<AppItem> = pins
         .iter()
@@ -152,6 +192,33 @@ pub fn merge(pins: &[Pin], windows: &[RawWindow]) -> Vec<AppItem> {
         });
     }
     items
+}
+
+/// The strip keeps its order when the focus moves (EnumWindows lists in Z-order): unpinned apps, and each app's
+/// windows, stay where `prev` (the last list) had them; new ones go last. Pins keep pin order. Idea from new_win (MIT).
+pub fn keep_order(prev: &[AppItem], mut next: Vec<AppItem>) -> Vec<AppItem> {
+    let at = |id: &str| prev.iter().position(|p| p.app_id == id).unwrap_or(usize::MAX);
+    let pins = next.iter().take_while(|i| i.pinned).count();
+    next[pins..].sort_by_key(|i| at(&i.app_id)); // stable: new apps keep their order among themselves
+    for item in &mut next {
+        let Some(old) = prev.iter().find(|p| p.app_id == item.app_id) else { continue };
+        item.windows.sort_by_key(|w| old.windows.iter().position(|o| o.hwnd == w.hwnd).unwrap_or(usize::MAX));
+    }
+    next
+}
+
+/// A relaunch command line as `ShellExecute` takes it: (file, arguments). A quoted file, or an unquoted path cut after
+/// its `.exe`. None = empty.
+pub fn split_command(cmd: &str) -> Option<(String, String)> {
+    let cmd = cmd.trim();
+    let (file, args) = if let Some(rest) = cmd.strip_prefix('"') {
+        rest.split_once('"').unwrap_or((rest, ""))
+    } else if let Some(end) = cmd.to_ascii_lowercase().find(".exe").map(|i| i + 4) {
+        cmd.split_at(end)
+    } else {
+        cmd.split_once(' ').unwrap_or((cmd, ""))
+    };
+    (!file.trim().is_empty()).then(|| (file.trim().to_string(), args.trim().to_string()))
 }
 
 /// One app of the Start panel's list (a Start Menu shortcut). `exe` = the shortcut target's lower-case file name
@@ -245,9 +312,15 @@ pub fn search(query: &str, apps: &[ListedApp], items: &[AppItem]) -> Vec<Hit> {
 }
 
 /// Start an app the page saw in either list: the strip's (pins + windows) or the Start panel's.
-pub fn launch_any(ctl: &dyn AppControl, items: &[AppItem], apps: &[ListedApp], app_id: &str) -> Result<(), AppError> {
+pub fn launch_any(
+    ctl: &dyn AppControl,
+    items: &[AppItem],
+    apps: &[ListedApp],
+    app_id: &str,
+    relaunch: Option<&str>,
+) -> Result<(), AppError> {
     if items.iter().any(|i| i.app_id == app_id) {
-        return launch(ctl, items, app_id);
+        return launch(ctl, items, app_id, relaunch);
     }
     let listed = apps.iter().find(|a| a.app_id == app_id).ok_or(AppError::Unknown)?;
     let target = launch_target(&listed.app_id).ok_or(AppError::Unknown)?;
@@ -274,9 +347,15 @@ fn item<'a>(items: &'a [AppItem], app_id: &str) -> Result<&'a AppItem, AppError>
     items.iter().find(|i| i.app_id == app_id).ok_or(AppError::Unknown)
 }
 
-/// Start an app from the list (a new window too). The target comes from the id, never from the page.
-pub fn launch(ctl: &dyn AppControl, items: &[AppItem], app_id: &str) -> Result<(), AppError> {
-    let target = launch_target(&item(items, app_id)?.app_id).ok_or(AppError::Unknown)?;
+/// Start an app from the list (a new window too). The target comes from the id, never from the page; an AUMID app
+/// with a relaunch command (its window's, or its pin's: a Chrome / Edge profile) runs that instead, as the Windows
+/// taskbar does. Idea from new_win (MIT).
+pub fn launch(ctl: &dyn AppControl, items: &[AppItem], app_id: &str, relaunch: Option<&str>) -> Result<(), AppError> {
+    let id = &item(items, app_id)?.app_id;
+    if let Some((file, args)) = relaunch.filter(|_| id.starts_with("aumid:")).and_then(split_command) {
+        return ctl.run(&file, &args).then_some(()).ok_or(AppError::Refused);
+    }
+    let target = launch_target(id).ok_or(AppError::Unknown)?;
     ctl.launch(&target).then_some(()).ok_or(AppError::Refused)
 }
 
@@ -284,7 +363,7 @@ pub fn launch(ctl: &dyn AppControl, items: &[AppItem], app_id: &str) -> Result<(
 pub fn activate(ctl: &dyn AppControl, items: &[AppItem], app_id: &str) -> Result<(), AppError> {
     match item(items, app_id)?.windows.first() {
         Some(w) => ctl.focus(w.hwnd).then_some(()).ok_or(AppError::Refused),
-        None => launch(ctl, items, app_id),
+        None => launch(ctl, items, app_id, None),
     }
 }
 
@@ -314,13 +393,37 @@ mod tests {
     use super::*;
     use crate::fake::FakeAppControl;
 
+    /// 0.3.4 on the owner's PC: unpinned apps showed "explorer", "claude", "blender.5.2".
+    #[test]
+    fn strip_names_are_the_apps_own_not_the_exe_stem() {
+        let shell = |t: &str| match t {
+            r"c:\x\claude.exe" => Some(" Claude ".to_string()),
+            r"C:\B\blender.exe" => Some("Blender".to_string()),
+            r"shell:AppsFolder\blender.5.2" => Some("blender.5.2".to_string()), // the shell echoes an AUMID it doesn't know
+            r"shell:AppsFolder\Microsoft.Paint_8wekyb3d8bbwe!App" => Some("Paint".to_string()),
+            r"c:\w\mspaint.exe" => Some("mspaint.exe".to_string()), // a Store app's FileDescription
+            r"c:\x\y.exe" => Some("  ".to_string()),
+            _ => None,
+        };
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert_eq!(display_name(r"exe:c:\windows\explorer.exe", &s(&[r"c:\windows\explorer.exe"]), shell), "File Explorer");
+        assert_eq!(display_name(r"exe:c:\x\claude.exe", &s(&[r"c:\x\claude.exe"]), shell), "Claude", "FileDescription");
+        let blender = s(&[r"shell:AppsFolder\blender.5.2", "", r"C:\B\blender.exe"]);
+        assert_eq!(display_name("aumid:blender.5.2", &blender, shell), "Blender", "unknown AUMID: the window's exe");
+        let paint = s(&[r"c:\w\mspaint.exe", r"shell:AppsFolder\Microsoft.Paint_8wekyb3d8bbwe!App"]);
+        assert_eq!(display_name(r"exe:c:\w\mspaint.exe", &paint, shell), "Paint", "a file name is no name: the package's");
+        assert_eq!(display_name(r"exe:c:\x\codewalker.exe", &s(&[r"c:\x\codewalker.exe"]), shell), "codewalker", "nothing better: the stem");
+        assert_eq!(display_name(r"exe:c:\x\y.exe", &s(&[r"c:\x\y.exe"]), shell), "y", "a blank description is not a name");
+        assert_eq!(display_name("aumid:Some.App", &[], shell), "Some.App");
+    }
+
     #[test]
     fn actions_only_reach_what_notch_listed() {
-        let items = merge(&[Pin { app_id: "aumid:A!App".into(), name: "A".into() }], &[win(9, "C:\\b.exe", None)]);
+        let items = merge(&[Pin { app_id: "aumid:A!App".into(), name: "A".into(), relaunch: None }], &[win(9, "C:\\b.exe", None)]);
         let ctl = FakeAppControl::default();
         assert_eq!(activate(&ctl, &items, "aumid:A!App"), Ok(()));
         assert_eq!(activate(&ctl, &items, "exe:c:\\b.exe"), Ok(()));
-        assert_eq!(launch(&ctl, &items, "exe:c:\\windows\\system32\\cmd.exe"), Err(AppError::Unknown));
+        assert_eq!(launch(&ctl, &items, "exe:c:\\windows\\system32\\cmd.exe", None), Err(AppError::Unknown));
         assert_eq!(close_window(&ctl, &items, 1234), Err(AppError::Unknown));
         assert_eq!(close_app(&ctl, &items, "exe:c:\\b.exe"), Ok(()));
         assert_eq!(close_app(&ctl, &items, "exe:c:\\windows\\explorer.exe"), Err(AppError::Unknown), "quit_app");
@@ -353,9 +456,9 @@ mod tests {
         ];
         let items = merge(&[], &[win(9, "C:\\b.exe", None)]);
         let ctl = FakeAppControl::default();
-        assert_eq!(launch_any(&ctl, &items, &apps, "lnk:c:\\p\\Word.lnk"), Ok(()));
-        assert_eq!(launch_any(&ctl, &items, &apps, "lnk:c:\\evil.lnk"), Err(AppError::Unknown));
-        assert_eq!(launch_any(&ctl, &items, &apps, "exe:c:\\b.exe"), Ok(()));
+        assert_eq!(launch_any(&ctl, &items, &apps, "lnk:c:\\p\\Word.lnk", None), Ok(()));
+        assert_eq!(launch_any(&ctl, &items, &apps, "lnk:c:\\evil.lnk", None), Err(AppError::Unknown));
+        assert_eq!(launch_any(&ctl, &items, &apps, "exe:c:\\b.exe", Some(r#""c:\x.exe" --y"#)), Ok(()), "exe ids ignore it");
         assert_eq!(*ctl.log.borrow(), ["launch c:\\p\\Word.lnk", "launch c:\\b.exe"]);
         assert_eq!(launch_target("lnk:c:\\x.exe"), None, "lnk: is only ever a shortcut");
         assert_eq!(search("INKS", &apps, &items), [Hit::App(apps[0].app_id.clone())], "İ folds to i");
@@ -393,7 +496,9 @@ mod tests {
     fn the_filter_is_the_taskbar_rule() {
         let ok = win(1, "C:\\a.exe", None);
         assert!(is_app_window(&ok));
-        assert!(is_app_window(&RawWindow { visible: false, minimized: true, ..ok.clone() }), "minimised counts");
+        assert!(is_app_window(&RawWindow { minimized: true, ..ok.clone() }), "minimised counts");
+        assert!(!is_app_window(&RawWindow { visible: false, minimized: true, ..ok.clone() }), "hidden to the tray");
+        assert!(!is_app_window(&RawWindow { deleted: true, ..ok.clone() }), "ITaskList_Deleted");
         assert!(!is_app_window(&RawWindow { visible: false, ..ok.clone() }));
         assert!(!is_app_window(&RawWindow { title: "  ".into(), ..ok.clone() }));
         assert!(!is_app_window(&RawWindow { class: "Shell_TrayWnd".into(), ..ok.clone() }));
@@ -416,14 +521,23 @@ mod tests {
         assert_eq!(launch_target("exe:c:\\a.exe").unwrap(), "c:\\a.exe");
         assert_eq!(launch_target("C:\\Windows\\cmd.exe"), None, "only ids Notch made");
         assert_eq!(launch_target("exe:"), None);
+        assert_eq!(
+            icon_sources(r"aumid:D:\Riot Games\LeagueClient.exe", None, Some(String::new())),
+            [r"shell:AppsFolder\D:\Riot Games\LeagueClient.exe", r"D:\Riot Games\LeagueClient.exe"],
+            "an AUMID that is an exe path is read as that path; an unreadable exe adds nothing"
+        );
+        assert_eq!(
+            icon_sources("aumid:A!B", Some("P!App".into()), Some(r"c:.exe".into())),
+            [r"shell:AppsFolder\A!B", r"shell:AppsFolder\P!App", r"c:.exe"]
+        );
         assert_eq!(exe_name("C:\\Users\\x\\AppData\\Discord.exe"), "discord.exe");
     }
 
     #[test]
     fn pinned_and_open_windows_merge_into_one_item_per_app() {
         let pins = vec![
-            Pin { app_id: "exe:c:\\chrome.exe".into(), name: "Chrome".into() },
-            Pin { app_id: "aumid:Spotify".into(), name: "Spotify".into() },
+            Pin { app_id: "exe:c:\\chrome.exe".into(), name: "Chrome".into(), relaunch: None },
+            Pin { app_id: "aumid:Spotify".into(), name: "Spotify".into(), relaunch: None },
         ];
         let windows = vec![
             win(1, "C:\\Code.exe", None),
@@ -442,5 +556,50 @@ mod tests {
         assert_eq!(items[1].exe, "", "a pin with no window is a launch tile");
         assert_eq!(find_window(&items, 3).map(|(i, _)| i.name.as_str()), Some("Chrome"));
         assert!(find_window(&items, 5).is_none(), "a filtered window is not actionable");
+    }
+
+    #[test]
+    fn switching_apps_does_not_reorder_the_strip() {
+        let pins = [Pin { app_id: "exe:c:\\p.exe".into(), name: "P".into(), relaunch: None }];
+        let z = |order: &[(isize, &str)]| order.iter().map(|&(h, exe)| win(h, exe, None)).collect::<Vec<_>>();
+        let first = keep_order(&[], merge(&pins, &z(&[(1, "C:\\a.exe"), (2, "C:\\b.exe"), (3, "C:\\a.exe"), (9, "C:\\p.exe")])));
+        // b comes to the front, then a's second window: Z-order changes, the strip does not
+        let next = keep_order(&first, merge(&pins, &z(&[(3, "C:\\a.exe"), (2, "C:\\b.exe"), (9, "C:\\p.exe"), (1, "C:\\a.exe")])));
+        let shape = |items: &[AppItem]| {
+            items.iter().map(|i| (i.app_id.clone(), i.windows.iter().map(|w| w.hwnd).collect::<Vec<_>>())).collect::<Vec<_>>()
+        };
+        assert_eq!(shape(&next), shape(&first));
+        assert_eq!(shape(&first)[1], ("exe:c:\\a.exe".to_string(), vec![1, 3]), "windows first-seen too: cycling goes round");
+        // a new app and a new window go last; a closed app leaves no gap
+        let z3 = z(&[(4, "C:\\c.exe"), (5, "C:\\a.exe"), (1, "C:\\a.exe"), (9, "C:\\p.exe"), (3, "C:\\a.exe")]);
+        let later = keep_order(&next, merge(&pins, &z3));
+        assert_eq!(
+            shape(&later),
+            [
+                ("exe:c:\\p.exe".to_string(), vec![9]),
+                ("exe:c:\\a.exe".to_string(), vec![1, 3, 5]),
+                ("exe:c:\\c.exe".to_string(), vec![4]),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_profile_window_relaunches_with_its_own_command() {
+        assert_eq!(
+            split_command(r#""C:\Program Files\Google\Chrome\Application\chrome.exe" --profile-directory="Profile 1""#),
+            Some((r"C:\Program Files\Google\Chrome\Application\chrome.exe".into(), r#"--profile-directory="Profile 1""#.into()))
+        );
+        assert_eq!(split_command(r"C:\Program Files\X\x.EXE -a b"), Some((r"C:\Program Files\X\x.EXE".into(), "-a b".into())));
+        assert_eq!(split_command("notepad"), Some(("notepad".into(), String::new())));
+        assert_eq!(split_command("  "), None);
+        let items = merge(&[], &[win(9, "C:\\chrome.exe", Some("Chrome.UserData.P1"))]);
+        let ctl = FakeAppControl::default();
+        let cmd = r#""C:\chrome.exe" --profile-directory="Profile 1""#;
+        assert_eq!(launch(&ctl, &items, "aumid:Chrome.UserData.P1", Some(cmd)), Ok(()));
+        assert_eq!(launch(&ctl, &items, "aumid:Chrome.UserData.P1", None), Ok(()));
+        assert_eq!(
+            *ctl.log.borrow(),
+            [r#"run C:\chrome.exe --profile-directory="Profile 1""#, r"launch shell:AppsFolder\Chrome.UserData.P1"]
+        );
     }
 }

@@ -43,6 +43,7 @@ export function WindowPreview({ item, x, onEnter, onLeave, onPick }: { item: Str
   useEffect(() => { const r = requestAnimationFrame(() => setOn(true)); return () => cancelAnimationFrame(r); }, []);
   return (
     <div ref={box} className={"preview" + (on ? " on" : "")} data-hit role="group" aria-label={`${item.name} windows`} style={{ left }} onPointerEnter={onEnter} onPointerLeave={onLeave}>
+      <div className="pvName" aria-hidden="true">{item.name}</div>{/* logos-only strip: the app's name rides on its preview */}
       {item.windows.slice(0, 4).map((w) => <Thumb key={w.hwnd} w={w} item={item} onPick={onPick} />)}
     </div>
   );

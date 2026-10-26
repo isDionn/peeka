@@ -8,6 +8,7 @@ pub mod clickthrough;
 pub mod claude_chat;
 pub mod clip;
 pub mod cmd;
+pub mod diagnostics;
 pub mod contract;
 pub mod downloads;
 pub mod fake;

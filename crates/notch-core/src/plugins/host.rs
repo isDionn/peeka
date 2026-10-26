@@ -69,9 +69,9 @@ pub enum UiEvent {
     JobDone { title: String, took: String, seconds: Option<u64> },
     /// `first_connect` (null): a main assistant reached Notch for the first time ever.
     FirstConnect,
-    /// `cc_event` (`{agent, kind, tool, reason, sid}`): the main assistant's `cc.event` or Peeka's own hook, one coding
+    /// `cc_event` (`{agent, kind, tool, reason, sid, origin}`): the main assistant's `cc.event` or Peeka's own hook, one coding
     /// agent's hook event for the mascot; `agent` is one of `cc_hooks::AGENT_IDS` (absent on the wire = `claude`).
-    CcEvent { agent: String, kind: String, tool: Option<String>, reason: Option<String>, sid: Option<String> },
+    CcEvent { agent: String, kind: String, tool: Option<String>, reason: Option<String>, sid: Option<String>, origin: Option<String> },
     /// `cc_edit` (`{sid, file, add, del}`): an Edit/Write inside the session cwd, from Peeka's own hook only. `file` is
     /// relative to the cwd; the app strips it while locked or presenting.
     CcEdit { sid: Option<String>, file: String, add: u32, del: u32 },

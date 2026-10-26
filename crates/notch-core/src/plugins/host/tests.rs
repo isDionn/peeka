@@ -824,16 +824,19 @@ fn cc_event_passes_only_known_kinds_and_plain_words() {
         json!({"kind": "stop", "sid": "ABCDEF01"}),
         json!({"kind": "stop", "agent": "aider"}),
         json!({"kind": "stop", "agent": 1}),
+        json!({"kind": "stop", "origin": "C:/Users/x/Cursor.exe"}),
+        json!({"kind": "stop", "origin": "jetbrains"}),
+        json!({"kind": "stop", "origin": 1}),
     ] {
         assert_eq!(err_code(&h.line(1, &rpc(3, "cc.event", bad.clone()), 1000)), Some(code::INVALID_PARAMS), "{bad}");
     }
     let ev = |kind: &str, tool: Option<&str>, reason: Option<&str>| {
-        Out::Ui(UiEvent::CcEvent { agent: "claude".into(), kind: kind.into(), tool: tool.map(Into::into), reason: reason.map(Into::into), sid: None })
+        Out::Ui(UiEvent::CcEvent { agent: "claude".into(), kind: kind.into(), tool: tool.map(Into::into), reason: reason.map(Into::into), sid: None, origin: None })
     };
     assert!(h.line(1, &rpc(4, "cc.event", json!({"kind": "prompt"})), 1000).contains(&ev("prompt", None, None)));
     assert!(h
         .line(1, &rpc(8, "cc.event", json!({"kind": "stop", "sid": "0a1b2c3d"})), 1000)
-        .contains(&Out::Ui(UiEvent::CcEvent { agent: "claude".into(), kind: "stop".into(), tool: None, reason: None, sid: Some("0a1b2c3d".into()) })));
+        .contains(&Out::Ui(UiEvent::CcEvent { agent: "claude".into(), kind: "stop".into(), tool: None, reason: None, sid: Some("0a1b2c3d".into()), origin: None })));
     assert!(h
         .line(1, &rpc(5, "cc.event", json!({"kind": "pre_tool", "tool": "mcp__x__web.search"})), 1000)
         .contains(&ev("pre_tool", Some("mcp__x__web.search"), None)));
@@ -850,7 +853,7 @@ fn peekas_own_hook_reaches_the_page_unless_the_main_assistant_sends_cc_event() {
     use crate::plugins::cc_hooks::hook_params;
     let (mut h, _t) = host();
     let ev = |kind: &str, tool: Option<&str>| {
-        Out::Ui(UiEvent::CcEvent { agent: "claude".into(), kind: kind.into(), tool: tool.map(Into::into), reason: None, sid: None })
+        Out::Ui(UiEvent::CcEvent { agent: "claude".into(), kind: kind.into(), tool: tool.map(Into::into), reason: None, sid: None, origin: None })
     };
     // the hook process's line, built from a raw Claude Code payload
     let raw = json!({"hook_event_name": "PreToolUse", "tool_name": "Grep", "tool_input": {"pattern": "password"}});
@@ -864,9 +867,11 @@ fn peekas_own_hook_reaches_the_page_unless_the_main_assistant_sends_cc_event() {
     assert_eq!(h.cc_hook(prompt, 1000), Some(vec![ev("prompt", None)]), "main assistant connected but silent: ours shows");
     h.line(1, &rpc(2, "cc.event", json!({"kind": "prompt"})), 2000);
     assert_eq!(h.cc_hook(prompt, 3000), Some(vec![]), "the main assistant forwards Claude Code: ours is dropped");
-    let codex = Out::Ui(UiEvent::CcEvent { agent: "codex".into(), kind: "stop".into(), tool: None, reason: None, sid: None });
+    let codex = Out::Ui(UiEvent::CcEvent { agent: "codex".into(), kind: "stop".into(), tool: None, reason: None, sid: None, origin: None });
     assert_eq!(h.cc_hook(br#"{"agent":"codex","kind":"stop"}"#, 3000), Some(vec![codex]), "it forwards only Claude Code");
     assert_eq!(h.cc_hook(br#"{"agent":"aider","kind":"stop"}"#, 3000), None);
+    let cursor = Out::Ui(UiEvent::CcEvent { agent: "codex".into(), kind: "stop".into(), tool: None, reason: None, sid: None, origin: Some("cursor".into()) });
+    assert_eq!(h.cc_hook(br#"{"agent":"codex","kind":"stop","origin":"cursor"}"#, 3000), Some(vec![cursor]), "one origin word passes");
     assert_eq!(h.cc_hook(prompt, 2000 + 120_000), Some(vec![ev("prompt", None)]), "2 min of main-assistant silence");
     h.line(1, &rpc(3, "cc.event", json!({"kind": "prompt"})), 200_000);
     h.disconnect(1, 200_500);

@@ -24,6 +24,8 @@ pub enum ShortcutId {
 }
 
 pub const EMERGENCY_SPARE: &str = "ctrl+alt+shift+g";
+/// "Save diagnostics" (`diagnostics`): fixed, not in Settings > Shortcuts.
+pub const DIAGNOSTICS_KEYS: &str = "ctrl+alt+shift+d";
 
 /// Ctrl+K is these apps' own (Word/Outlook link, browser address bar, Slack/Discord quick switch,
 /// VS Code chords, Teams search).

@@ -235,6 +235,19 @@ function Shortcuts({ settings }: { settings: Settings }) {
   );
 }
 
+/** One local text file to attach to a bug report (also Ctrl+Alt+Shift+D). Nothing is sent; the island shows "Open folder" too. */
+function Diagnostics() {
+  const [saved, setSaved] = useState<string | null>(null);
+  const save = () => bridge.call("save_diagnostics").then(setSaved).catch(() => setSaved(null));
+  return (
+    <Row title="Diagnostics" sub={saved ? `Saved ${saved}. Nothing was sent` : "Saves a text file for bug reports: versions and screen sizes, no window titles or text. Ctrl+Alt+Shift+D"}>
+      {saved
+        ? <button className="btn kk glass" onClick={() => bridge.call("diagnostics_open_folder").catch(() => undefined)}>Open folder</button>
+        : <button className="btn kk glass" onClick={save}>Save diagnostics</button>}
+    </Row>
+  );
+}
+
 function About({ settings, onQuit }: { settings: Settings; onQuit?: () => void }) {
   return (
     <>
@@ -243,6 +256,7 @@ function About({ settings, onQuit }: { settings: Settings; onQuit?: () => void }
         <Row title="Peeka" sub="A strip and island that replace the Windows taskbar. Assistants connect to it as plugins." />
         <Row title="Updates" sub="Opens the latest release on GitHub. Peeka never checks on its own"><button className="btn kk glass" onClick={() => bridge.call("open_windows_settings", { uri: "https://github.com/isDionn/peeka/releases/latest" }).catch(() => undefined)}>Check for updates</button></Row>
         <Row title="Emergency shortcut" sub="Restores the taskbar"><Kbd keys={settings.shortcuts.emergency} /></Row>
+        <Diagnostics />
         <Row title="Demo mode" sub={settings.demo ? "Sample data, nothing is saved. Peeka restarts normally" : "Try Peeka with sample data. Nothing is saved; Peeka restarts"}><button className="btn kk glass" style={{ width: 92 }} onClick={() => bridge.call("demo_restart", { on: !settings.demo }).catch(() => undefined)}>{settings.demo ? "Stop demo" : "Try demo"}</button></Row>
         {onQuit && <Row title="Quit Peeka" sub="The Windows taskbar comes back. You'll be asked to confirm first"><button className="btn kk glass destructive" onClick={onQuit}>Quit</button></Row>}
       </div>

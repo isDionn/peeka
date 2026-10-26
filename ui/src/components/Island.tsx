@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowUpRight, Clipboard, LayoutGrid, Lock, Search, Settings as SettingsIcon, ShieldCheck, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowUpRight, Clipboard, FileText, LayoutGrid, Lock, Search, Settings as SettingsIcon, ShieldCheck, Volume2, VolumeX, X } from "lucide-react";
 import { bridge, UNSUPPORTED_EVENT, type Alert, type Attached, type ApprovalItem, type AssistantCounts, type BluetoothEvent, type CcEdit, type ClipPlain, type CpuHigh, type DownloadDone, type Media, type MusicStopped, type ProtrusionItem, type Status, type TimerState, type VolumeOsd } from "../bridge";
 import { timerLeft, useAlerts, useBluetooth, useComposer, useConsent, useHitRects, useInput, useLock, useMainAssistant, useMedia, useMirror, useNow, usePlugins, useMeetingReminder, useSecond, useSettings, useShelf, useShelfDrag, useStatus, useSurfaces, useSysmon, useTimer } from "../hooks";
 import { pickProtrusion } from "../lib/alerts";
@@ -92,7 +92,7 @@ export interface IslandInit {
 /** When it starts with Windows, Rust opens the page with `?autostart=1`: no welcome card (it shows on a manual start). */
 const autoStarted = () => new URLSearchParams(location.search).get("autostart") === "1";
 
-type Kind = "rest" | "hov" | "edit" | "music" | "alert" | "osd" | "approval" | "plugin" | "shot" | "lock" | "charge" | "lowbat" | "burst" | "quota" | "musicstop" | "download" | "cpu" | "bt" | "timer" | "timerdone" | "net" | "away" | "shelfdrag" | "panel" | "jobdone" | "ky" | "kh" | "kb" | IslandView;
+type Kind = "rest" | "hov" | "edit" | "music" | "alert" | "osd" | "approval" | "plugin" | "shot" | "lock" | "charge" | "lowbat" | "burst" | "quota" | "musicstop" | "download" | "cpu" | "bt" | "timer" | "timerdone" | "net" | "away" | "shelfdrag" | "panel" | "jobdone" | "ky" | "kh" | "kb" | "diag" | IslandView;
 interface Spec { key: string; mode: "peek" | "bump" | "card"; kw?: number; label: string; node: ReactNode }
 
 const HOVER_SPRING = { response: 0.3, damping: 1 };
@@ -173,6 +173,7 @@ const centerOf = (kind: Kind, o: CenterOpts): ReactNode => {
   const { media, alert, osd, approval, plug, composerLabel, main, rest } = o;
   switch (kind) {
     case "clipboard": return <ClipboardCenter />;
+    case "diag": return <span className="ms"><FileText /><span className="b6">Diagnostics saved</span></span>;
     case "lock": return <LockCenter />;
     case "shot": return <ShotCenter main={main} item={o.shot ?? undefined} ghost={o.ghost(kind)} />;
     case "approval": return approval && <ApprovalCenter a={approval} />;
@@ -320,6 +321,9 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   useEffect(() => { if (!cpuHigh || pin || hold) return; const t = setTimeout(() => setCpuHigh(null), 10_000); return () => clearTimeout(t); }, [cpuHigh, pin, hold]);
   const [dl, setDl] = useState<DownloadDone | null>(init?.dl ?? null);
   useEffect(() => { if (!dl || pin || hold) return; const t = setTimeout(() => setDl(null), 8000); return () => clearTimeout(t); }, [dl, pin, hold]);
+  // "Save diagnostics" wrote its file (Rust `diagnostics_saved`, Ctrl+Alt+Shift+D or Settings > About): "Open folder"; 8 s
+  const [diag, setDiag] = useState(false);
+  useEffect(() => { if (!diag || pin || hold) return; const t = setTimeout(() => setDiag(false), 8000); return () => clearTimeout(t); }, [diag, pin, hold]);
   const [stopped, setStopped] = useState<MusicStopped | null>(init?.stopped ?? null);
   useEffect(() => { if (!stopped || pin || hold) return; const t = setTimeout(() => setStopped(null), 8000); return () => clearTimeout(t); }, [stopped, pin, hold]);
   useEffect(() => { if (!quota || pin || hold) return; const t = setTimeout(() => setQuota(false), 30_000); return () => clearTimeout(t); }, [quota, pin, hold]);
@@ -336,7 +340,6 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const [, setTickSecond] = useState(0);
   // a silent Claude Code session drops out even without events (once a minute)
   useEffect(() => { if (nSess === 0) return; const t = setInterval(() => { setNSess(sessCount.count(Date.now())); setSessList(sessCount.list(Date.now())); }, 60_000); return () => clearInterval(t); }, [nSess > 0]); // eslint-disable-line react-hooks/exhaustive-deps
-  useHitRects("island", monitor);
 
   // Rust's attention budget decides `top` (do not disturb, full screen, meeting); the page only filters out ones already seen.
   const alertRaw = pickProtrusion(alerts.filter((a) => a.id === top), seen);
@@ -396,12 +399,13 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const pk = plan.primary?.kind;
   const planK: Kind | null = pk === "approval" ? "approval" : pk === "alert" ? "alert" : pk === "timerEnd" && timerDone ? "timerdone" : pk === "timer" || pk === "timerEnd" ? "timer" : pk === "net" ? "net" : pk === "battery" || pk === "batteryCrit" ? "lowbat" : pk === "burst" ? "burst" : pk === "rateLimit" ? "quota" : pk === "musicStopped" ? "musicstop" : pk === "download" ? "download" : pk === "edit" ? "edit" : pk === "cpu" ? "cpu" : pk === "summary" ? "away" : pk === "done" ? "jobdone"
     : pk === "music" ? (pinned === "music" || (musicAuto && !calm) ? "music" : null) : pk === "live" || pk === "meeting" || pk === "other" ? "plugin" : null;
-  const transient: Kind | null = osd ? "osd" : pk === "clip" ? "shot" : shelfDrag ? "shelfdrag" : bt && !calm ? "bt" : charge && !calm ? "charge" : null;
+  const transient: Kind | null = osd ? "osd" : diag ? "diag" : pk === "clip" ? "shot" : shelfDrag ? "shelfdrag" : bt && !calm ? "bt" : charge && !calm ? "charge" : null;
   const base: Kind = viewK ?? (pk === "approval" ? "approval" : transient ?? planK ?? (hover && !mkHover ? "hov" : "rest"));
   const pinnedLive = pinned !== null && acts.some((a) => a.kind === pinned);
   useEffect(() => { if (pinned !== null && !pinnedLive) setPinned(null); }, [pinned, pinnedLive]); // the brought-forward activity ended: the order returns on its own
   // while Search / Settings is open on the strip page, a short label in the center (say it once); if something else is in the peek, it stays
   const kind: Kind = (panelLabel === "search" || panelLabel === "settings" || panelLabel === "cleanup") && (base === "rest" || base === "hov") ? "panel" : base;
+  useHitRects("island", monitor, kind === "panel" ? "panel:" + panelLabel : kind);
   const plainPanel = panelLabel === "status" || panelLabel === "start"; // while Status / Start is open the counts live in the panel (say it once); the ghost stays
   // the strip window's own ghost (the empty Notifications board; the one-mascot registry can't see across windows) is on screen: the strip ghost steps aside
   const [mkAside, setMkAside] = useState(false);
@@ -434,6 +438,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       bridge.on("notch://fullscreen", setFullscreen),
       bridge.on("music_stopped", setStopped),
       bridge.on("download_done", setDl),
+      bridge.on("diagnostics_saved", () => setDiag(true)),
       bridge.on("cpu_high", setCpuHigh),
       // Rust's cursor poll is the truth for hover: a click-through window never gets pointerleave
       bridge.on("notch://island_leave", () => { hoverIntent(false); setMkHover(false); setBubbleHover(false); }),
@@ -669,6 +674,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     if (quota) return setQuota(false);
     if (stopped) return setStopped(null);
     if (dl) return setDl(null);
+    if (diag) return setDiag(false);
     if (edit) return setEdit(null);
     if (cpuHigh) return setCpuHigh(null);
     if (bt) return dismissBt();
@@ -701,6 +707,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       case "cpu": return cpuHigh && { key: "cpu", mode: "bump", label: priv || !cpuHigh.app ? "CPU is very busy" : `${flat(cpuHigh.app, 28)} is using a lot of CPU`, node: <CpuBump /> };
       case "edit": return edit && { key: "edit", mode: "bump", label: editLabel(edit, priv), node: <EditBump onShow={showDiff} /> };
       case "diff": return diffSid ? { key: "diff", mode: "card", kw: 620, label: "Changes", node: <DiffCard sid={diffSid} /> } : null;
+      case "diag": return { key: "diag", mode: "bump", label: "Diagnostics saved", node: <div className="peekBar"><button className="btn kk primary" onClick={() => { bridge.call("diagnostics_open_folder").catch(() => undefined); setDiag(false); }}>Open folder</button></div> };
       case "download": return dl && { key: "download", mode: "bump", label: priv ? "Download complete" : `Downloaded: ${flat(dl.name, 40)}`, node: <DownloadBump id={dl.id} generic={priv} /> };
       case "musicstop": return stopped && { key: "musicstop", mode: "bump", label: priv ? "Music paused" : `Music paused, ${stopped.name} disconnected`, node: <MusicStoppedBump onResume={() => { resumeMusic(); setStopped(null); }} /> };
       case "quota": return { key: "quota", mode: "bump", label: "Usage limit reached", node: <QuotaBump onOk={() => setQuota(false)} /> };
@@ -720,7 +727,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       case "approval-card": return approvalCard && { key: "approval-card:" + approvalCard.id, mode: "card", kw: 620, label: approvalCard.title, node: <ApprovalCard a={approvalCard} generic={priv} /> };
       case "composer": return surf.composer && { key: "composer", mode: "card", kw: 620, label: "Ask", node: <ComposerCard owner={surf.composer} turns={composer.turns} send={composer.send} autoShelf={autoShelf} picked={picked} /> };
       case "music-card": return musicCard && { key: "music-card", mode: "card", kw: 520, label: "Music", node: musicCard };
-      case "modules": return { key: "modules", mode: "card", kw: modPage === "general" && !surf.tabs.length && !surf.summary.length ? 620 : modulesKw(modPage, innerWidth), label: "Modules: " + modName, node: <ModulesCard start={modStart} meeting={meetingItem} onPage={onModPage} onClose={back} media={media} pos={pos} sys={sys.tick} cpu={sys.cpu} surf={surf} shelf={shelf} main={main} onApproval={openApproval} timer={timer} /> };
+      case "modules": return { key: "modules", mode: "card", kw: modPage === "general" && !surf.tabs.length && !surf.summary.length ? 620 : modulesKw(modPage, screen.width, innerWidth - 2 * SHADOW_SIDE) /* the island window is narrower than the screen (0.3.4: General was 418 px, its content cut) */, label: "Modules: " + modName, node: <ModulesCard start={modStart} meeting={meetingItem} onPage={onModPage} onClose={back} media={media} pos={pos} sys={sys.tick} cpu={sys.cpu} surf={surf} shelf={shelf} main={main} onApproval={openApproval} timer={timer} /> };
       case "meeting": return meetingItem && { key: "meeting", mode: "card", kw: 520, label: "Meeting", node: <MeetingCard item={meetingItem} /> };
       case "recap": return recap && { key: "recap", mode: "card", kw: 520, label: "Your week", node: <RecapCard week={recap} onDone={() => { ackRecap(); setUser(null); }} /> };
       case "firstconnect": return { key: "firstconnect", mode: "card", kw: 520, label: `${mainP ? pluginName(mainP) : "Assistant"} connected`, node: <FirstConnectCard onDone={() => { ackFc(); setUser(null); }} /> };
@@ -857,6 +864,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     else if (kind === "quota") setQuota(false);
     else if (kind === "musicstop") setStopped(null);
     else if (kind === "download") setDl(null);
+    else if (kind === "diag") setDiag(false);
     else if (kind === "edit") (showDiff ?? (() => setEdit(null)))();
     else if (kind === "cpu") setCpuHigh(null);
     else if (kind === "plugin" && meetingItem) openMod("calendar");
@@ -904,7 +912,10 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       {settings?.demo && <span className="demoBadge" data-paint style={{ left: `calc(50% + ${sideItems.length ? Math.max(W, mw + 24) / 2 + 8 + 30 + 8 : (mw + 24) / 2 + 8}px)` }}>Demo</span>}{/* past the side bubble (30 px) when one is shown */}
       {demoNot && <div className="mkBubble demoNote" data-paint role="status">Not available in demo mode</div>}
       {mode !== "none" || H > 0.4 ? <div className="islandHit" data-hit style={{ width: box.current.w, height: box.current.h }} /> : null}
-      {mode !== "none" || H > 0.4 ? <div className="islandHit islandShadow" data-paint style={{ width: box.current.w + 2 * SHADOW_SIDE, height: box.current.h + SHADOW_BOTTOM }} /> : null}
+      {mode !== "none" || H > 0.4 ? <div className="islandHit islandShadow" data-paint style={{ width: box.current.w + 2 * SHADOW_SIDE, height: box.current.h + SHADOW_BOTTOM }} />
+        // at rest the hover peek's footprint (same size as its "hov" spec: mw + 40 by 14) is already in the window region, as paint only: a pointer near the
+        // ghost or clock grows nothing, so the peek is never drawn half (RC1 owner's PC: a grey band beside the ghost, the rest of the peek missing)
+        : restShown ? <div className="islandHit islandShadow" data-paint style={{ width: mw + 40 + 2 * SHADOW_SIDE, height: 14 + SHADOW_BOTTOM }} /> : null}
       <div id="island" className="dangling" style={shapeStyle} onPointerEnter={() => hoverIntent(true)} onPointerLeave={() => hoverIntent(false)}>
         <div className="cut">
           <div className="amb" />

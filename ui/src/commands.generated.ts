@@ -111,6 +111,7 @@ export const COMMAND_NAMES = [
   "agent_bridges",
   "agent_bridge_install",
   "agent_bridge_remove",
+  "agent_bridge_preview",
   "cc_focus_terminal",
   "cc_diff",
   "cc_diff_open",
@@ -135,6 +136,8 @@ export const COMMAND_NAMES = [
   "claude_chat_send",
   "claude_chat_stop",
   "claude_chat_new",
+  "save_diagnostics",
+  "diagnostics_open_folder",
 ] as const;
 export const EVENT_NAMES = [
   "windows_changed",
@@ -180,4 +183,5 @@ export const EVENT_NAMES = [
   "notch://island_leave",
   "claude_chat_delta",
   "claude_chat_done",
+  "diagnostics_saved",
 ] as const;

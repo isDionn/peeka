@@ -1,6 +1,10 @@
 import type { Rect } from "../bridge";
 
-const rectOf = (r: DOMRect | { left: number; top: number; width: number; height: number }): Rect => ({ x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) });
+/** Whole CSS px that cover the box: left/top down, right/bottom up (rounding each on its own could cut the last row or column). */
+export const rectOf = (r: DOMRect | { left: number; top: number; width: number; height: number }): Rect => {
+  const x = Math.floor(r.left), y = Math.floor(r.top);
+  return { x, y, w: Math.ceil(r.left + r.width) - x, h: Math.ceil(r.top + r.height) - y };
+};
 
 /** Rectangles of the page's `[data-hit]` (clickable) and `[data-paint]` (drawn, clicks pass through) elements, CSS pixels; empty and invisible ones are skipped.
  *  Every ghost is in too (a fading one too, as paint only), wherever it sits: its drawn box overflows its parents (the 40 px one hangs below the strip) and its effects move past that
@@ -25,3 +29,16 @@ export function collectHitRects(root: ParentNode = document): Rect[] {
 }
 
 export const sameRects = (a: Rect[], b: Rect[]) => a.length === b.length && a.every((r, i) => r.x === b[i].x && r.y === b[i].y && r.w === b[i].w && r.h === b[i].h && !r.paint === !b[i].paint);
+
+/** Does `next` cover anything `prev` didn't (some rectangle not inside one of the old ones)? Then the window region grows. */
+export const grows = (prev: Rect[], next: Rect[]) => next.some((r) => !prev.some((p) => r.x >= p.x && r.y >= p.y && r.x + r.w <= p.x + p.w && r.y + r.h <= p.y + p.h));
+
+/** Makes the WebView draw the whole page again. Areas newly added to the window region otherwise keep what was on screen
+ *  there before (a closed card's piece, a white line, a card cut at the old size; 0.3.4 owner's PC, VM v035-03): Chromium
+ *  only redraws what changed, and its updates there landed while the region still clipped them. A root opacity change
+ *  repaints everything; .999 for two frames is invisible. */
+export function repaintAll(doc: Document = document) {
+  const s = doc.documentElement.style;
+  s.opacity = "0.999";
+  requestAnimationFrame(() => requestAnimationFrame(() => { s.opacity = ""; }));
+}

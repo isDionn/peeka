@@ -9,6 +9,7 @@ import { timerLeft, useAlerts, useClips, useMainAssistant, useSecond } from "../
 import { Lead, SummaryBoxes, TabBlocks, TabGlyph, tabLabel } from "./Plugin";
 import { MeetingCard, ShelfSuggestRow } from "./Fidelity";
 import { WaveMascot } from "./CardsExtra";
+import { Mascot } from "../mascot";
 import "./cards.css";
 import { durationSec, fmtTime, timeSlot, trackTitle } from "../lib/media";
 import { ClipboardView } from "./Pano";
@@ -185,12 +186,12 @@ function GeneralTiles({ ids, go, media, meeting, timer, sys, approvals, onApprov
     : timer?.running && on("timer") ? [<><TimerLeft key="t" t={timer} /> left</>, flat(timer.label, 32)]
     : media && on("music") ? [trackTitle(media), media.playing ? (media.artist || "Playing") : "Paused"]
     : ["All quiet", "Nothing needs you right now"];
-  const mood = approvals.length > 0 ? "approval" : media?.playing ? "music" : "ready";
+  const mood = approvals.length > 0 ? "approval" : media?.playing ? "music" : "idle";
   return (
     <div className="genHome">
       <div className="genNow">
-        {/* the ghost's spot is fixed (reserved even with no assistant): nothing reflows when it arrives */}
-        <span className="genGhost">{main && <Lead plugin={{ id: main.id, name: main.name, main: true }} mascot={mood} size={56} />}</span>
+        {/* always drawn, like the strip's rest ghost it replaces (owner rule): not gated on a connected assistant */}
+        <span className="genGhost"><Mascot size={56} mood={mood} isMainAssistant /></span>
         <div className="genText">
           <div className="t20 b6 genLine">{head}</div>
           <div className="t13 l3 genLine">{sub}</div>
@@ -250,7 +251,8 @@ function AlertsTab() {
  */
 /** Wide for General's 3 columns; every other tab is the SAME width (owner decision: Calendar and Timer mustn't differ). 620 = same width class as the Clipboard/Shelf/Ask cards; fits 11 tabs + gear + ×. */
 export const MOD_NARROW = 620;
-export const modulesKw = (page: string, screenW: number) => (page === "general" ? Math.min(1056, Math.round(screenW * 0.55)) : MOD_NARROW);
+/** `room` = the widest card the island window can draw (its width minus the card's side shadows): General never grows past it, nor shrinks below the others. */
+export const modulesKw = (page: string, screenW: number, room = Infinity) => (page === "general" ? Math.max(MOD_NARROW, Math.min(1056, Math.round(screenW * 0.55), room)) : MOD_NARROW);
 
 /** Core tabs (mockup j): Peeka's own; then a divider and plugin tabs. `id` matches the Settings › Modules id (wire name, stays Turkish). */
 const CORE: [string, string, LucideIcon][] = [["general", "General", LayoutGrid], ["music", "Music", Music], ["clipboard", "Clipboard", Clipboard], ["shelf", "Shelf", Inbox], ["calendar", "Calendar", Calendar], ["timer", "Timer", Timer], ["system", "System", Cpu], ["notifications", "Notifications", Bell], ["claude", "Claude", MessageCircle]];

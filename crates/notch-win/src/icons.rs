@@ -129,8 +129,19 @@ pub fn icon(parsing_name: &str) -> Option<Icon> {
     let factory: IShellItemImageFactory = unsafe { SHCreateItemFromParsingName(PCWSTR(name.as_ptr()), None) }.ok()?;
     let size = WSIZE { cx: SIZE as i32, cy: SIZE as i32 };
     // Exactly SIZE: a 16 px-only icon is scaled up, not left small in a corner; a 256 px one is scaled down.
-    // SAFETY: a valid factory; the returned HBITMAP is ours and deleted below.
-    let hbmp = unsafe { factory.GetImage(size, SIIGBF_ICONONLY | SIIGBF_SCALEUP) }.ok()?;
+    // E_PENDING (0x8000000A) = the shell is still extracting it (an app just started, or sign-in): ask again, up to
+    // ~300 ms (idea from the MIT project new_win's app_icon.rs).
+    let mut tries = 0;
+    let hbmp = loop {
+        // SAFETY: a valid factory; the returned HBITMAP is ours and deleted below.
+        match unsafe { factory.GetImage(size, SIIGBF_ICONONLY | SIIGBF_SCALEUP) } {
+            Err(e) if e.code() == windows::core::HRESULT(0x8000_000A_u32 as i32) && tries < 10 => {
+                tries += 1;
+                std::thread::sleep(std::time::Duration::from_millis(30));
+            }
+            r => break r.ok()?,
+        }
+    };
     let mut bm = BITMAP::default();
     // SAFETY: `bm` is a BITMAP-sized out-param.
     let got = unsafe {
@@ -162,6 +173,35 @@ pub fn icon(parsing_name: &str) -> Option<Icon> {
     // SAFETY: the bitmap GetImage handed us; never used after this.
     let _ = unsafe { DeleteObject(HGDIOBJ(hbmp.0)) };
     ok.then(|| analyze(&buf, w, h)).flatten()
+}
+
+/// The shell's name for an app: an exe's FileDescription ("Claude"), else the item's display name (an AUMID's
+/// "Blender 5.2"; for a bare exe that is its file name, so it is skipped). Needs COM on the calling thread.
+#[cfg(windows)]
+pub fn name(parsing_name: &str) -> Option<String> {
+    use windows::core::{PCWSTR, PWSTR};
+    use windows::Win32::Storage::EnhancedStorage::PKEY_FileDescription;
+    use windows::Win32::System::Com::CoTaskMemFree;
+    use windows::Win32::UI::Shell::{IShellItem2, SHCreateItemFromParsingName, SIGDN_NORMALDISPLAY};
+
+    let take = |s: PWSTR| {
+        // SAFETY: a CoTaskMem string the shell handed us; read, then freed.
+        let out = unsafe { s.to_string() }.ok();
+        unsafe { CoTaskMemFree(Some(s.0 as *const _)) };
+        out.filter(|t| !t.trim().is_empty())
+    };
+    let wide = crate::to_wide(parsing_name);
+    // SAFETY: a NUL-terminated wide string that outlives the call; the item is released on drop.
+    let item: IShellItem2 = unsafe { SHCreateItemFromParsingName(PCWSTR(wide.as_ptr()), None) }.ok()?;
+    // SAFETY: a valid item and a constant key.
+    if let Some(d) = unsafe { item.GetString(&PKEY_FileDescription) }.ok().and_then(take) {
+        return Some(d);
+    }
+    if !parsing_name.starts_with("shell:") {
+        return None;
+    }
+    // SAFETY: a valid item.
+    unsafe { item.GetDisplayName(SIGDN_NORMALDISPLAY) }.ok().and_then(take)
 }
 
 #[cfg(test)]

@@ -2,7 +2,7 @@
 // Rationale and table: notch/docs/plugin-api.md `cc.event`. Drop timeouts: the hook sometimes goes quiet (an interrupted turn sends no Stop), so the face doesn't get stuck.
 import type { Mood } from "./moods";
 
-export interface CcEvent { /** claude | codex | cursor | gemini | copilot | opencode; absent = claude. */ agent?: string | null; kind: string; tool?: string | null; reason?: string | null; /** Session tag: a salted 8-hex-digit hash of the Claude Code session id (Rust). Absent if the main assistant doesn't send it. */ sid?: string | null }
+export interface CcEvent { /** claude | codex | cursor | gemini | copilot | opencode; absent = claude. */ agent?: string | null; kind: string; tool?: string | null; reason?: string | null; /** Session tag: a salted 8-hex-digit hash of the Claude Code session id (Rust). Absent if the main assistant doesn't send it. */ sid?: string | null; /** Where a Claude Code session was started (Peeka's own hook only): terminal | desktop | cursor | vscode. */ origin?: string | null }
 
 const SEARCH_TOOLS = /^(WebSearch|WebFetch|Grep|Glob)$|search/i;
 const QUESTION_TOOLS = /^(AskUserQuestion|ExitPlanMode)$/;

@@ -62,6 +62,21 @@ pub fn share_drop_target(hwnd: isize) {
     }
 }
 
+/// No Windows 11 frame line and no rounded corners: an undecorated tao window keeps `WS_CAPTION`, so DWM draws a 1 px
+/// border around it (suspected for the real-PC thin white/grey lines, tanitim/bug-034). Windows 10 refuses both
+/// attributes; that is ignored. Not a window style, so tao's style rebuilds keep it.
+#[cfg(windows)]
+pub fn no_frame_line(hwnd: isize) {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_BORDER_COLOR, DWMWA_COLOR_NONE, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND};
+    let h = HWND(hwnd as _);
+    // SAFETY: a live window of this process; each value is a 4-byte local that outlives its call.
+    unsafe {
+        let _ = DwmSetWindowAttribute(h, DWMWA_BORDER_COLOR, &DWMWA_COLOR_NONE as *const u32 as *const _, 4);
+        let _ = DwmSetWindowAttribute(h, DWMWA_WINDOW_CORNER_PREFERENCE, &DWMWCP_DONOTROUND as *const _ as *const _, 4);
+    }
+}
+
 /// The extended style with `WS_EX_TOOLWINDOW` on and `WS_EX_APPWINDOW` off (no taskbar button, no Alt+Tab entry).
 pub fn with_tool_window(ex_style: u32) -> u32 {
     (ex_style | notch_core::apps::WS_EX_TOOLWINDOW) & !notch_core::apps::WS_EX_APPWINDOW

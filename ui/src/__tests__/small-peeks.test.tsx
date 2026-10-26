@@ -65,7 +65,7 @@ describe("pure logic", () => {
     expect(s.feed({ kind: "session_start", sid: "bbbbbbbb" }, 10)).toBe(2);
     expect(s.feed({ kind: "pre_tool", tool: "Bash", sid: "aaaaaaaa" }, 20)).toBe(2);
     expect(s.feed({ kind: "post_tool", sid: "aaaaaaaa" }, 30)).toBe(2);
-    expect(s.list(30)).toEqual([{ sid: "aaaaaaaa", agent: "claude", tool: "Bash", at: 30 }, { sid: "bbbbbbbb", agent: "claude", tool: null, at: 10 }]);
+    expect(s.list(30)).toEqual([{ sid: "aaaaaaaa", agent: "claude", tool: "Bash", at: 30, origin: null }, { sid: "bbbbbbbb", agent: "claude", tool: null, at: 10, origin: null }]);
     expect(s.count(5020)).toBe(1); // b stayed silent for 5 s and dropped out
     expect(s.feed({ kind: "session_end", sid: "aaaaaaaa" }, 5100)).toBe(0);
     expect(s.feed({ kind: "stop", sid: "bbbbbbbb" }, 5200)).toBe(1); // a dropped session comes back with a new event
@@ -208,6 +208,16 @@ describe("13 two sessions", () => {
     expect(list).toContain("Session 2: Grep");
     expect(list).not.toContain("can't be told apart");
     expect(list).not.toContain("1a2b3c4d");
+  });
+  it("a session started in Claude Desktop or Cursor gets a small label; a terminal one shows none", { timeout: 20000 }, async () => {
+    render(<Island monitor="m1" init={{ view: null }} />);
+    await settle();
+    act(() => { fakeBridge.emit("cc_event", { kind: "session_start", sid: "1a2b3c4d", origin: "desktop" }); fakeBridge.emit("cc_event", { kind: "pre_tool", tool: "Grep", sid: "5e6f7a8b", origin: "terminal" }); fakeBridge.emit("cc_event", { kind: "stop", sid: "1a2b3c4d" }); });
+    await settle(100);
+    fireEvent.click(screen.getByRole("button", { name: /2 sessions/ }));
+    const rows = [...screen.getByRole("group", { name: "Claude Code sessions" }).querySelectorAll(".sideRow")].map((r) => r.textContent);
+    expect(rows.find((r) => r?.includes("Session 1"))).toMatch(/Desktop$/); // kept from session_start
+    expect(rows.find((r) => r?.includes("Session 2"))).not.toMatch(/Terminal|Desktop/);
   });
   it("mixed agents: each row names its agent with its accent dot", { timeout: 20000 }, async () => {
     render(<Island monitor="m1" init={{ view: null }} />);

@@ -25,3 +25,10 @@ lto = true
 opt-level = 3
 panic = "abort"
 strip = true
+
+# Quick builds for trying a change in a real window (owner's PC, VM); tagged releases still use `release`.
+[profile.fast]
+inherits = "release"
+codegen-units = 16
+lto = false
+incremental = true

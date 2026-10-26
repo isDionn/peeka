@@ -64,6 +64,8 @@ pub struct WindowInfo {
     pub color_icon: Option<String>,
     /// Notch cannot close it (an elevated app): the menu offers "Open Task Manager" (`open_task_manager`).
     pub elevated: bool,
+    /// Its taskbar button would flash (`notch_win::flash`): the strip pulses an amber dot under the app.
+    pub attention: bool,
 }
 
 /// bridge.ts `MonitorInfo`.
@@ -120,9 +122,22 @@ fn look(n: &Notch, app_id: &str) -> notch_win::icons::Icon {
         return i.clone();
     }
     notch_win::com();
-    let i = apps::launch_target(app_id).and_then(|s| notch_win::icons::icon(&s)).unwrap_or_default();
-    n.icons.lock().insert(app_id.to_string(), i.clone());
+    let hwnd = n.items.lock().iter().find(|i| i.app_id == app_id).and_then(|i| i.windows.first()).map(|w| w.hwnd);
+    let pkg = hwnd.and_then(notch_win::apps::package_aumid_of_window);
+    let exe = hwnd.map(notch_win::apps::exe_of_window);
+    let i = apps::icon_sources(app_id, pkg, exe).iter().find_map(|s| notch_win::icons::icon(s)).unwrap_or_default();
+    // a miss is not cached: an app found while it (or the shell, at sign-in) was still starting gets its icon on the next
+    // list. shortcut: an app with no icon at all is asked again on every list; cache misses with a time if that shows.
+    if !i.url.is_empty() {
+        n.icons.lock().insert(app_id.to_string(), i.clone());
+    }
     i
+}
+
+/// A pin's name: as saved, unless that is only the exe stem (`snapshot`).
+fn pin_ref(n: &Notch, p: &apps::Pin) -> AppRef {
+    let shown = if p.name == apps::fallback_name(&p.app_id) { name(n, &p.app_id, None) } else { p.name.clone() };
+    app_ref(n, &p.app_id, &shown)
 }
 
 fn app_ref(n: &Notch, app_id: &str, name: &str) -> AppRef {
@@ -136,12 +151,38 @@ fn color(n: &Notch, app_id: &str) -> Option<String> {
     (!i.url.is_empty() && !i.dark && (i.blob || n.settings.lock().color_icons)).then_some(i.url)
 }
 
-/// Pins + open windows now; also what later commands are checked against.
+/// The window-event generation (`flash::generation`) `n.items` was listed at.
+static LISTED: parking_lot::Mutex<Option<u64>> = parking_lot::Mutex::new(None);
+
+/// Pins + open windows now, in the strip's steady order (`apps::keep_order`); also what later commands are checked
+/// against.
 pub fn snapshot(n: &Notch) -> Vec<AppItem> {
+    let generation = notch_win::flash::generation();
     let pins = n.settings.lock().pins.clone();
-    let list = apps::merge(&pins, &Win32Desktop.windows());
+    let raw = Win32Desktop.windows();
+    let prev = n.items.lock().clone();
+    let mut list = apps::keep_order(&prev, apps::merge(&pins, &raw));
+    // a pin saved from the strip before 0.3.5 kept the exe stem: it gets the proper name too
+    for item in list.iter_mut().filter(|i| !i.pinned || i.name == apps::fallback_name(&i.app_id)) {
+        let w = raw.iter().find(|w| apps::app_id(w.aumid.as_deref(), &w.exe_path).as_deref() == Some(item.app_id.as_str()));
+        item.name = name(n, &item.app_id, w);
+    }
     *n.items.lock() = list.clone();
+    *LISTED.lock() = Some(generation);
     list
+}
+
+/// An app's strip name (cached per id, a miss too; the shell is asked only for a new app). `w` = one of its windows.
+fn name(n: &Notch, app_id: &str, w: Option<&apps::RawWindow>) -> String {
+    if let Some(s) = n.names.lock().get(app_id) {
+        return s.clone();
+    }
+    notch_win::com();
+    let pkg = w.and_then(|w| notch_win::apps::package_aumid_of_window(w.hwnd)).map(|a| format!("shell:AppsFolder\\{a}"));
+    let sources: Vec<String> = [apps::launch_target(app_id), pkg, w.map(|w| w.exe_path.clone())].into_iter().flatten().collect();
+    let s = apps::display_name(app_id, &sources, notch_win::icons::name);
+    n.names.lock().insert(app_id.to_string(), s.clone());
+    s
 }
 
 /// The Start panel's list, scanned again when older than `APPS_TTL`.
@@ -217,6 +258,7 @@ fn windows_on(n: &Notch, items: &[AppItem], foreground: isize) -> Vec<WindowInfo
                 active: w.hwnd == foreground,
                 monitor: w.monitor.map(|m| m.to_string()).unwrap_or_default(),
                 elevated: w.elevated,
+                attention: w.hwnd != foreground && notch_win::flash::flashing(w.hwnd),
             }
         })
         .collect()
@@ -225,23 +267,40 @@ fn windows_on(n: &Notch, items: &[AppItem], foreground: isize) -> Vec<WindowInfo
 #[tauri::command]
 pub async fn list_windows(n: State<'_, Notch>, monitor: String) -> Res<Vec<WindowInfo>> {
     let _ = monitor; // kept in the signature (contract): every strip lists every monitor's windows
-    let items = snapshot(&n);
+    // One enumeration per window event: the other strips relisting after it take the same list (the foreground and
+    // the flashing are read fresh). Serialised, so the second strip waits for the first instead of enumerating too.
+    static ONE: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+    let items = {
+        let _one = ONE.lock();
+        let fresh = *LISTED.lock() == Some(notch_win::flash::generation());
+        if fresh { n.items.lock().clone() } else { snapshot(&n) }
+    };
     Ok(windows_on(&n, &items, notch_win::apps::foreground()))
 }
 
 #[tauri::command]
 pub async fn get_pins(n: State<'_, Notch>) -> Res<Vec<AppRef>> {
     let pins = n.settings.lock().pins.clone();
-    Ok(pins.iter().map(|p| app_ref(&n, &p.app_id, &p.name)).collect())
+    Ok(pins.iter().map(|p| pin_ref(&n, p)).collect())
 }
 
 /// New pin order; each id must already be pinned or be in Notch's last strip list.
 #[tauri::command]
 pub async fn set_pins(app: AppHandle, n: State<'_, Notch>, app_ids: Vec<String>) -> Res<Vec<AppRef>> {
     let items = n.items.lock().clone();
+    // A new AUMID pin remembers its window's relaunch command: a Chrome / Edge profile opens again once closed. Read
+    // before the settings lock: another app's window may be slow to answer.
+    let relaunch: HashMap<String, String> = items
+        .iter()
+        .filter(|i| i.app_id.starts_with("aumid:") && app_ids.contains(&i.app_id))
+        .filter_map(|i| Some((i.app_id.clone(), notch_win::apps::relaunch_command(i.windows.first()?.hwnd)?)))
+        .collect();
     let next = {
         let mut s = n.settings.lock();
-        let pins = cmd::pins_order(&s.pins, &items, &app_ids)?;
+        let mut pins = cmd::pins_order(&s.pins, &items, &app_ids)?;
+        for p in pins.iter_mut().filter(|p| p.relaunch.is_none()) {
+            p.relaunch = relaunch.get(&p.app_id).cloned();
+        }
         let mut next = s.clone();
         next.pins = pins;
         n.save(&next).map_err(|_| CmdError::Io)?;
@@ -249,7 +308,7 @@ pub async fn set_pins(app: AppHandle, n: State<'_, Notch>, app_ids: Vec<String>)
         next
     };
     let _ = app.emit("pins_changed", ());
-    Ok(next.pins.iter().map(|p| app_ref(&n, &p.app_id, &p.name)).collect())
+    Ok(next.pins.iter().map(|p| pin_ref(&n, p)).collect())
 }
 
 #[tauri::command]
@@ -268,12 +327,27 @@ pub fn close_window(n: State<'_, Notch>, hwnd: isize) -> Res<()> {
 pub fn launch_app(n: State<'_, Notch>, app_id: String) -> Res<()> {
     let items = n.items.lock().clone();
     let apps = n.apps.lock().0.clone();
-    Ok(apps::launch_any(&Win32Control, &items, &apps, &app_id)?)
+    let relaunch = relaunch_of(&n, &items, &app_id);
+    Ok(apps::launch_any(&Win32Control, &items, &apps, &app_id, relaunch.as_deref())?)
 }
 
 #[tauri::command]
 pub fn new_window(n: State<'_, Notch>, app_id: String) -> Res<()> {
-    Ok(apps::launch(&Win32Control, &n.items.lock(), &app_id)?)
+    let items = n.items.lock().clone();
+    let relaunch = relaunch_of(&n, &items, &app_id);
+    Ok(apps::launch(&Win32Control, &items, &app_id, relaunch.as_deref())?)
+}
+
+/// An AUMID app's relaunch command: a running window's, else its pin's (`apps::launch`).
+fn relaunch_of(n: &Notch, items: &[AppItem], app_id: &str) -> Option<String> {
+    if !app_id.starts_with("aumid:") {
+        return None;
+    }
+    notch_win::com();
+    let window = items.iter().find(|i| i.app_id == app_id).and_then(|i| i.windows.first());
+    window.and_then(|w| notch_win::apps::relaunch_command(w.hwnd)).or_else(|| {
+        n.settings.lock().pins.iter().find(|p| p.app_id == app_id).and_then(|p| p.relaunch.clone())
+    })
 }
 
 #[tauri::command]
@@ -654,26 +728,74 @@ pub async fn set_settings(app: AppHandle, n: State<'_, Notch>, patch: UiPatch) -
     Ok(SaveResult { ok: true, error: None })
 }
 
-/// The page's rectangles become its window's region (island: also the click-through poll's rectangles; strip: the
-/// bar is always in, `clickthrough::strip_region_boxes`).
+/// The page's rectangles: the island's click-through poll's rectangles (no region), a strip's window region (the bar
+/// is always in, `clickthrough::strip_region_boxes`).
 #[tauri::command]
-pub fn report_hit_rects(app: AppHandle, n: State<'_, Notch>, page: String, monitor: String, rects: Vec<CssRect>) -> Res<()> {
+pub fn report_hit_rects(
+    app: AppHandle,
+    n: State<'_, Notch>,
+    page: String,
+    monitor: String,
+    rects: Vec<CssRect>,
+    dpr: Option<f64>,
+    view: Option<String>,
+) -> Res<()> {
     let rects = sanitize(rects).ok_or(CmdError::Invalid)?;
+    // only for "Save diagnostics": a sane ratio and Peeka's own short label, nothing else
+    let dpr = dpr.filter(|d| d.is_finite() && (0.1..=10.0).contains(d));
+    let view = notch_core::diagnostics::clean_view(view.as_deref().unwrap_or(""));
     match page.as_str() {
         "island" => {
             *n.rects.lock() = rects;
-            let handle = app.clone();
-            let _ = app.run_on_main_thread(move || crate::app::apply_region(&handle)); // the window's own thread
+            *n.island_view.lock() = (dpr, view);
         }
         "strip" => {
             let label = format!("strip-{monitor}");
-            n.strips.lock().get_mut(&label).ok_or(CmdError::Unknown)?.rects = rects;
+            let mut strips = n.strips.lock();
+            let s = strips.get_mut(&label).ok_or(CmdError::Unknown)?;
+            (s.rects, s.dpr, s.view) = (rects, dpr, view);
+            drop(strips);
             let handle = app.clone();
             let _ = app.run_on_main_thread(move || crate::app::apply_strip_region(&handle, &label));
         }
         _ => return Err(CmdError::Invalid),
     }
     Ok(())
+}
+
+/// Ctrl+Alt+Shift+D or Settings > About: one text file in `<data>\diagnostics` (`notch_core::diagnostics`: versions
+/// and geometry only, no titles, clipboard or notification text). Nothing is sent; `diagnostics_saved` shows the
+/// island's "Open folder". Returns the file name.
+#[tauri::command]
+pub fn save_diagnostics(app: AppHandle, n: State<'_, Notch>) -> Res<String> {
+    not_in_demo()?; // demo writes nothing to disk
+    let (stamp, when) = notch_win::diagnostics::local_stamp();
+    let d = notch_core::diagnostics::Diag {
+        when,
+        version: app.package_info().version.to_string(),
+        windows: notch_win::diagnostics::windows_build(),
+        webview2: tauri::webview_version().unwrap_or_else(|_| "(unknown)".into()),
+        monitors: n.monitors.lock().clone(),
+        gpus: notch_win::diagnostics::gpus(),
+        pages: n.diag_pages(),
+    };
+    let env = |k| std::env::var(k).ok();
+    let text = notch_core::diagnostics::render(&d, &n.settings.lock());
+    let text = notch_core::diagnostics::scrub(&text, env("USERPROFILE").as_deref(), env("USERNAME").as_deref());
+    let dir = n.data_dir.join("diagnostics");
+    let name = format!("peeka-diag-{stamp}.txt");
+    let path = dir.join(&name);
+    std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&path, text)).map_err(|_| CmdError::Io)?;
+    *n.diag_last.lock() = Some(path);
+    let _ = app.emit("diagnostics_saved", &name);
+    Ok(name)
+}
+
+/// Explorer with the last diagnostics file selected (only that file; the page passes no path).
+#[tauri::command]
+pub fn diagnostics_open_folder(n: State<'_, Notch>) -> Res<()> {
+    let path = n.diag_last.lock().clone().ok_or(CmdError::Unknown)?;
+    notch_win::downloads::show_in_folder(&path).then_some(()).ok_or(CmdError::Refused)
 }
 
 /// The taskbar mode by hand (also lifts the emergency key's "off"): Settings' radio, `full` | `auto` | `off`
@@ -1546,20 +1668,51 @@ fn own_bridge(app: &AppHandle) -> Res<BridgeState> {
     Ok(BridgeState { installed: a.installed, healthy: a.healthy, last_event_ago_s: a.last_event_ago_s })
 }
 
-/// Settings' "Install", only from the owner's click: Peeka's hook for all twelve events into Claude Code's
-/// `settings.json`, merged (the owner's other hooks stay; a backup `settings.json.bak-peeka` first). A file
-/// of an unexpected shape is refused untouched; the reason goes out as a notice.
+/// Settings' "Install", only from the owner's confirm under the preview (`agent_bridge_preview`): Peeka's hook for all
+/// twelve events into Claude Code's `settings.json`, merged (the owner's other hooks stay; a one-time backup
+/// `settings.json.bak-peeka`). Refused untouched when the file changed since the preview (`fingerprint`) or has an
+/// unexpected shape; the reason goes out as a notice.
 #[tauri::command]
-pub fn claude_bridge_install(app: AppHandle) -> Res<BridgeState> {
-    agent_bridge_install(app.clone(), "claude".into())?;
+pub fn claude_bridge_install(app: AppHandle, fingerprint: String) -> Res<BridgeState> {
+    bridge_edit(&app, "claude", true, &fingerprint)?;
     own_bridge(&app)
 }
 
-/// "Remove": only Peeka's own entries go.
+/// "Remove": only Peeka's own entries go, with the same preview and fingerprint as Install.
 #[tauri::command]
-pub fn claude_bridge_remove(app: AppHandle) -> Res<BridgeState> {
-    agent_bridge_remove(app.clone(), "claude".into())?;
+pub fn claude_bridge_remove(app: AppHandle, fingerprint: String) -> Res<BridgeState> {
+    bridge_edit(&app, "claude", false, &fingerprint)?;
     own_bridge(&app)
+}
+
+/// What Install (`remove` false) or Remove would change in `agent`'s hook config, nothing written: the changed lines
+/// and the fingerprint the confirm sends back. A file Peeka would refuse is refused here already (with the notice).
+#[tauri::command]
+pub fn agent_bridge_preview(app: AppHandle, agent: String, remove: bool) -> Res<notch_core::plugins::cc_hooks::Preview> {
+    not_in_demo()?;
+    let a = agent_of(&agent)?;
+    let exe = this_exe()?;
+    notch_core::plugins::cc_hooks::preview(a, &agent_file(a.id)?, (!remove).then_some(exe.as_str())).map_err(|why| {
+        crate::app::notice(&app, &why);
+        CmdError::Refused
+    })
+}
+
+/// Install (`add`) or Remove for one agent; `expect` = the fingerprint of the preview the owner confirmed.
+fn bridge_edit(app: &AppHandle, agent: &str, add: bool, expect: &str) -> Res<()> {
+    if crate::app::demo() {
+        return Err(CmdError::Refused);
+    }
+    let a = agent_of(agent)?;
+    let path = agent_file(a.id)?;
+    let r = match add {
+        true => notch_core::plugins::cc_hooks::install(a, &path, &this_exe()?, Some(expect)),
+        false => notch_core::plugins::cc_hooks::uninstall(a, &path, Some(expect)),
+    };
+    r.map_err(|why| {
+        crate::app::notice(app, &why);
+        CmdError::Refused
+    })
 }
 
 /// One agent row under Settings › Plugins (`docs/plugin-api.md` "Other agents"). `file` is the config Install
@@ -1627,34 +1780,20 @@ pub fn agent_bridges(app: AppHandle) -> Res<Vec<AgentBridge>> {
     notch_core::plugins::cc_hooks::AGENTS.iter().skip(1).map(|a| agent_bridge(&app, a)).collect()
 }
 
-/// "Install" on an agent's row, only from the owner's click: Peeka's status-only hook merged into that agent's config
-/// (a backup `<file>.bak-peeka` first, the owner's own hooks stay); a file of an unexpected shape is refused untouched
-/// and the reason goes out as a notice.
+/// "Install" on an agent's row, only from the owner's confirm under the preview (`agent_bridge_preview`): Peeka's
+/// status-only hook merged into that agent's config (a one-time backup `<file>.bak-peeka`, the owner's own hooks stay);
+/// a file changed since the preview (`fingerprint`) or of an unexpected shape is refused untouched, the reason as a notice.
 #[tauri::command]
-pub fn agent_bridge_install(app: AppHandle, agent: String) -> Res<AgentBridge> {
-    if crate::app::demo() {
-        return Err(CmdError::Refused);
-    }
-    let a = agent_of(&agent)?;
-    notch_core::plugins::cc_hooks::install(a, &agent_file(a.id)?, &this_exe()?).map_err(|why| {
-        crate::app::notice(&app, &why);
-        CmdError::Refused
-    })?;
-    agent_bridge(&app, a)
+pub fn agent_bridge_install(app: AppHandle, agent: String, fingerprint: String) -> Res<AgentBridge> {
+    bridge_edit(&app, &agent, true, &fingerprint)?;
+    agent_bridge(&app, agent_of(&agent)?)
 }
 
 /// "Remove": only Peeka's own entries go.
 #[tauri::command]
-pub fn agent_bridge_remove(app: AppHandle, agent: String) -> Res<AgentBridge> {
-    if crate::app::demo() {
-        return Err(CmdError::Refused);
-    }
-    let a = agent_of(&agent)?;
-    notch_core::plugins::cc_hooks::uninstall(a, &agent_file(a.id)?).map_err(|why| {
-        crate::app::notice(&app, &why);
-        CmdError::Refused
-    })?;
-    agent_bridge(&app, a)
+pub fn agent_bridge_remove(app: AppHandle, agent: String, fingerprint: String) -> Res<AgentBridge> {
+    bridge_edit(&app, &agent, false, &fingerprint)?;
+    agent_bridge(&app, agent_of(&agent)?)
 }
 
 /// "Open terminal": the page names a session (a row's `session`), never a pid. Only a pid the main assistant announced

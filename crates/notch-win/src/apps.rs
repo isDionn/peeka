@@ -1,7 +1,7 @@
 //! Open windows (`EnumWindows`), grouped by AppUserModelID (`SHGetPropertyStoreForWindow` + `PKEY_AppUserModel_ID`)
 //! or exe path; the filter and the merge with pins are `notch_core::apps` (tested there). Also the owner's actions on
 //! them (`AppControl`) and "does the foreground window cover its monitor".
-//! shortcut: a fresh enumeration on each request; Wave 2 adds `SetWinEventHook` show/hide/name-change pushes.
+//! A fresh enumeration on each request; window events (`flash`, `foreground`) say when to ask again.
 
 #[cfg(windows)]
 use notch_core::apps::RawWindow;
@@ -77,13 +77,18 @@ mod sys {
 
     /// The window's own AppUserModelID, if it set one (Store apps, Chrome profiles, PWAs).
     pub fn aumid(h: HWND) -> Option<String> {
+        prop(h, &PKEY_AppUserModel_ID)
+    }
+
+    /// One string property of the window's shell property store; None = unset or empty.
+    pub fn prop(h: HWND, key: &windows::Win32::Foundation::PROPERTYKEY) -> Option<String> {
         // MTA on this thread; "already initialised" (S_FALSE / RPC_E_CHANGED_MODE) is fine either way.
         // SAFETY: plain COM init, no reserved pointer.
         let _ = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
         // SAFETY: a window handle; the store is a COM object released on drop.
         let store: IPropertyStore = unsafe { SHGetPropertyStoreForWindow(h) }.ok()?;
         // SAFETY: a valid store and a constant key.
-        let value = unsafe { store.GetValue(&PKEY_AppUserModel_ID) }.ok()?;
+        let value = unsafe { store.GetValue(key) }.ok()?;
         // SAFETY: the PROPVARIANT just returned; an empty one gives an error or an empty string.
         let s = unsafe { PropVariantToStringAlloc(&value) }.ok()?;
         // SAFETY: `s` is a CoTaskMem string we own; read, then freed.
@@ -141,6 +146,21 @@ mod sys {
             String::new()
         }
     }
+
+    /// The package app's AUMID of a process (Store / MSIX apps); None for a plain desktop app.
+    pub fn package_aumid(pid: u32) -> Option<String> {
+        use windows::Win32::Storage::Packaging::Appx::GetApplicationUserModelId;
+        // SAFETY: limited query rights on a plain pid; the handle is closed below.
+        let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }.ok()?;
+        let mut buf = [0u16; 512]; // APPLICATION_USER_MODEL_ID_MAX_LENGTH is 130
+        let mut len = buf.len() as u32;
+        // SAFETY: the buffer and its length are ours; the handle is valid until CloseHandle.
+        let err = unsafe { GetApplicationUserModelId(process, &mut len, Some(PWSTR(buf.as_mut_ptr()))) };
+        // SAFETY: we own the handle.
+        let _ = unsafe { CloseHandle(process) };
+        let s = String::from_utf16_lossy(&buf[..(len as usize).min(buf.len())]).trim_end_matches('\0').to_string();
+        (err.is_ok() && !s.is_empty()).then_some(s)
+    }
 }
 
 /// Is Notch itself elevated (then it reaches every window)? Read once.
@@ -156,6 +176,20 @@ pub fn exe_of_window(hwnd: isize) -> String {
     sys::exe_path(sys::pid(sys::hwnd(hwnd)))
 }
 
+/// The package app's AUMID of the window's process (a Store app window without its own AUMID, like Paint).
+#[cfg(windows)]
+pub fn package_aumid_of_window(hwnd: isize) -> Option<String> {
+    sys::package_aumid(sys::pid(sys::hwnd(hwnd)))
+}
+
+/// The window's relaunch command (`PKEY_AppUserModel_RelaunchCommand`: Chrome / Edge profiles, Steam); read only when
+/// launching, never per scan. Idea from new_win (MIT).
+#[cfg(windows)]
+pub fn relaunch_command(hwnd: isize) -> Option<String> {
+    use windows::Win32::Storage::EnhancedStorage::PKEY_AppUserModel_RelaunchCommand;
+    sys::prop(sys::hwnd(hwnd), &PKEY_AppUserModel_RelaunchCommand)
+}
+
 #[cfg(windows)]
 pub fn pid_of_window(hwnd: isize) -> u32 {
     sys::pid(sys::hwnd(hwnd))
@@ -166,12 +200,23 @@ pub fn title_of_window(hwnd: isize) -> String {
     sys::text(sys::hwnd(hwnd))
 }
 
-/// Top-level windows in Z-order. Hidden, un-minimised windows are skipped early (the filter drops them anyway) so the
-/// slower AUMID / exe lookups run only for candidates.
+#[cfg(windows)]
+pub fn class_of_window(hwnd: isize) -> String {
+    sys::class(sys::hwnd(hwnd))
+}
+
+#[cfg(windows)]
+pub fn ex_style_of_window(hwnd: isize) -> u32 {
+    sys::ex_style(sys::hwnd(hwnd))
+}
+
+/// Top-level windows in Z-order. Hidden windows are skipped early (the filter drops them anyway) so the slower AUMID /
+/// exe lookups run only for candidates.
 #[cfg(windows)]
 pub fn enumerate(monitors: &[Monitor]) -> Vec<RawWindow> {
     use windows::Win32::Foundation::{HWND, LPARAM};
-    use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindow, IsIconic, IsWindowVisible, GW_OWNER};
+    use windows::core::w;
+    use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetPropW, GetWindow, IsIconic, IsWindowVisible, GW_OWNER};
 
     unsafe extern "system" fn collect(h: HWND, out: LPARAM) -> windows::core::BOOL {
         // SAFETY: `out` is the &mut Vec below, alive for the whole EnumWindows call.
@@ -189,7 +234,7 @@ pub fn enumerate(monitors: &[Monitor]) -> Vec<RawWindow> {
             let h = sys::hwnd(raw);
             // SAFETY: handles from EnumWindows; a window that closed meanwhile only answers false / empty.
             let (visible, minimized) = unsafe { (IsWindowVisible(h).as_bool(), IsIconic(h).as_bool()) };
-            if !(visible || minimized) {
+            if !visible {
                 return None;
             }
             let title = sys::text(h);
@@ -212,6 +257,8 @@ pub fn enumerate(monitors: &[Monitor]) -> Vec<RawWindow> {
                 visible,
                 minimized,
                 cloaked: sys::cloaked(h),
+                // SAFETY: as above; a constant property name.
+                deleted: !unsafe { GetPropW(h, w!("ITaskList_Deleted")) }.is_invalid(),
                 owned,
                 aumid: sys::aumid(h),
                 exe_path,
@@ -259,14 +306,17 @@ pub struct Win32Control;
 #[cfg(windows)]
 impl notch_core::ports::AppControl for Win32Control {
     fn launch(&self, target: &str) -> bool {
+        self.run(target, "")
+    }
+
+    fn run(&self, target: &str, args: &str) -> bool {
         use windows::core::{w, PCWSTR};
         use windows::Win32::UI::Shell::ShellExecuteW;
         use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-        let file = crate::to_wide(target);
+        let (file, params) = (crate::to_wide(target), crate::to_wide(args));
+        let params = if args.is_empty() { PCWSTR::null() } else { PCWSTR(params.as_ptr()) };
         // SAFETY: NUL-terminated wide strings that outlive the call; > 32 = success (Microsoft Learn).
-        let r = unsafe {
-            ShellExecuteW(None, w!("open"), PCWSTR(file.as_ptr()), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL)
-        };
+        let r = unsafe { ShellExecuteW(None, w!("open"), PCWSTR(file.as_ptr()), params, PCWSTR::null(), SW_SHOWNORMAL) };
         r.0 as isize > 32
     }
 

@@ -121,7 +121,7 @@ pub fn pins_order(current: &[Pin], items: &[AppItem], ids: &[String]) -> Result<
             return Err(CmdError::Invalid);
         }
         let known = current.iter().find(|p| &p.app_id == id).cloned().or_else(|| {
-            items.iter().find(|i| &i.app_id == id).map(|i| Pin { app_id: i.app_id.clone(), name: i.name.clone() })
+            items.iter().find(|i| &i.app_id == id).map(|i| Pin { app_id: i.app_id.clone(), name: i.name.clone(), relaunch: None })
         });
         pins.push(known.ok_or(CmdError::Unknown)?);
     }
@@ -438,7 +438,7 @@ mod tests {
 
     #[test]
     fn pins_only_from_what_notch_knows_once_each_and_capped() {
-        let pin = |id: &str| Pin { app_id: id.into(), name: id.to_uppercase() };
+        let pin = |id: &str| Pin { app_id: id.into(), name: id.to_uppercase(), relaunch: None };
         let item = AppItem {
             app_id: "exe:c:\\b.exe".into(),
             name: "B".into(),
@@ -449,7 +449,7 @@ mod tests {
         let ids = |s: &[&str]| s.iter().map(|x| x.to_string()).collect::<Vec<_>>();
         let current = [pin("aumid:a")];
         let got = pins_order(&current, std::slice::from_ref(&item), &ids(&["exe:c:\\b.exe", "aumid:a"])).unwrap();
-        assert_eq!(got, [Pin { app_id: "exe:c:\\b.exe".into(), name: "B".into() }, pin("aumid:a")]);
+        assert_eq!(got, [Pin { app_id: "exe:c:\\b.exe".into(), name: "B".into(), relaunch: None }, pin("aumid:a")]);
         assert_eq!(pins_order(&current, &[], &ids(&[])), Ok(vec![]), "unpin all");
         assert_eq!(pins_order(&current, &[], &ids(&["exe:c:\\windows\\system32\\cmd.exe"])), Err(CmdError::Unknown));
         assert_eq!(pins_order(&current, &[], &ids(&["aumid:a", "aumid:a"])), Err(CmdError::Invalid), "a repeat");

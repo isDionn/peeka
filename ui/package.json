@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "e2e": "node --test --test-concurrency=1 e2e/*.test.mjs"
+    "e2e": "node --test --test-concurrency=1 e2e/*.test.mjs",
+    "e2e:smoke": "node --test --test-concurrency=1 e2e/mascot-three-states.test.mjs e2e/small-peeks.test.mjs e2e/side-bubble.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",

@@ -23,7 +23,7 @@ export interface MonitorInfo {
 }
 /** Monochrome icon: data URL (SVG or PNG). The UI paints it only as an alpha mask. */
 export interface AppRef { appId: string; name: string; icon: string; /** Wave 5: color icon; Rust sends it while `colorIcons` is on, or when the mask would be a blank shape (never for a nearly black icon). */ colorIcon?: string | null }
-export interface WindowInfo extends AppRef { hwnd: number; title: string; active: boolean; monitor: string; /** Elevated (admin) window: Peeka can't close it, the menu suggests Task Manager. */ elevated?: boolean }
+export interface WindowInfo extends AppRef { hwnd: number; title: string; active: boolean; monitor: string; /** Elevated (admin) window: Peeka can't close it, the menu suggests Task Manager. */ elevated?: boolean; /** Asking for attention (its taskbar button would flash); never the foreground window. */ attention?: boolean }
 export type PinnedApp = AppRef;
 /** On/off and what it's connected to. `name` (Wi-Fi network, Bluetooth device) isn't read yet: it comes as null and the UI shows "On". */
 export interface Radio { on: boolean; name: string | null }
@@ -177,6 +177,8 @@ export interface RecentItem { id: string; name: string; sub: string; kind: Recen
 export interface AssistantCounts { jobs: number; memory: number; approvals?: number }
 /** Claude Code hook bridge (as reported by the main assistant). `lastEventAgoS`: seconds since the last event, null if none yet. */
 export interface BridgeState { installed: boolean; healthy: boolean; lastEventAgoS: number | null }
+/** Rust `cc_hooks::Preview`: the file's changed lines (`+x` / `-x` / ` x` context, ` …` for skipped parts), at most 200 then `more`; `fingerprint` goes back with the confirm. */
+export interface BridgePreview { fingerprint: string; add: number; del: number; lines: string[]; more: number }
 /** One other coding agent's hook row (Rust `agent_bridges`): `file` is the config Install changes (`~` = user folder); `present` = the agent's own folder exists. */
 export interface AgentBridge extends BridgeState { id: string; name: string; file: string; present: boolean }
 /** Permission history row (newest first): who got or gave up which scope, and when. `at` is Unix ms. */
@@ -231,7 +233,12 @@ export interface Commands {
   get_settings: { args: void; ret: Settings };
   set_settings: { args: { patch: Partial<Settings> }; ret: { ok: boolean; error: string | null } };
   /** Clickable rectangles (CSS pixels inside the window). Clicks outside pass through to the window below. Shared by the strip and island pages. */
-  report_hit_rects: { args: { page: "strip" | "island"; monitor: string; rects: Rect[] }; ret: void };
+  /** `dpr` and `view` (the open panel or card, Peeka's own label) only go into "Save diagnostics". */
+  report_hit_rects: { args: { page: "strip" | "island"; monitor: string; rects: Rect[]; dpr?: number; view?: string }; ret: void };
+  /** Ctrl+Alt+Shift+D / Settings > About: writes one local text file (versions and geometry, no titles or text), returns its name and emits `diagnostics_saved`. `unsupported` in demo mode. */
+  save_diagnostics: { args: void; ret: string };
+  /** Explorer with the last diagnostics file selected; `unknown` before one was saved. */
+  diagnostics_open_folder: { args: void; ret: void };
   get_media: { args: void; ret: Media | null };
   /** `seek` needs `positionMs`. */
   media_control: { args: { action: "play_pause" | "next" | "previous" | "seek"; positionMs?: number }; ret: void };
@@ -336,15 +343,17 @@ export interface Commands {
   assistant_open: { args: { kind: "approval" | "jobs" | "memory" }; ret: void };
   calendar_next: { args: void; ret: CalendarNext };
   claude_bridge_state: { args: void; ret: BridgeState };
-  /** "Install" in Settings: Peeka's own Claude Code hook (`peeka.exe --cc-hook`) is merged into settings.json; only on a manual click, `refused` in demo mode. The failure reason arrives via `notch://notice`. */
-  claude_bridge_install: { args: void; ret: BridgeState };
-  /** "Remove": only Peeka's own entries go. */
-  claude_bridge_remove: { args: void; ret: BridgeState };
+  /** "Install" in Settings: Peeka's own Claude Code hook (`peeka.exe --cc-hook`) is merged into settings.json; only on the confirm under the preview (`agent_bridge_preview`), whose `fingerprint` it sends back: `refused` if the file changed since (or in demo mode). The failure reason arrives via `notch://notice`. */
+  claude_bridge_install: { args: { fingerprint: string }; ret: BridgeState };
+  /** "Remove": only Peeka's own entries go; same preview and fingerprint. */
+  claude_bridge_remove: { args: { fingerprint: string }; ret: BridgeState };
+  /** What Install (`remove` false) or Remove would change in that agent's file; nothing is written. */
+  agent_bridge_preview: { args: { agent: string; remove: boolean }; ret: BridgePreview };
   /** Codex CLI, Cursor, Gemini CLI, GitHub Copilot CLI: Peeka's status-only hook per agent (Claude Code has its own row). */
   agent_bridges: { args: void; ret: AgentBridge[] };
-  /** Same rules as `claude_bridge_install` (backup, merge, `refused` in demo mode), for one agent `id`. */
-  agent_bridge_install: { args: { agent: string }; ret: AgentBridge };
-  agent_bridge_remove: { args: { agent: string }; ret: AgentBridge };
+  /** Same rules as `claude_bridge_install` (preview fingerprint, backup, merge, `refused` in demo mode), for one agent `id`. */
+  agent_bridge_install: { args: { agent: string; fingerprint: string }; ret: AgentBridge };
+  agent_bridge_remove: { args: { agent: string; fingerprint: string }; ret: AgentBridge };
   permission_history: { args: void; ret: PermissionEvent[] };
   /** Whether the main assistant has connected for the first time (once ever); cleared by `first_connect_ack`. */
   first_connect_get: { args: void; ret: boolean };
@@ -468,12 +477,14 @@ export interface Events {
   meeting_changed: boolean;
   /** The main assistant's `cc.event`: a Claude Code hook event (drives the mascot state). `tool` is the tool name, `reason` the error class; no free text. */
   /** `agent`: claude | codex | cursor | gemini | copilot | opencode (absent = claude). */
-  cc_event: { agent?: string | null; kind: string; tool?: string | null; reason?: string | null; sid?: string | null };
+  cc_event: { agent?: string | null; kind: string; tool?: string | null; reason?: string | null; sid?: string | null; origin?: string | null };
   /** Peeka's own hook only: an Edit/Write inside the session folder. `file` is relative to it; `file`/`add`/`del` are null while locked or presenting (generic label only). The diff itself comes only from `cc_diff`. */
   cc_edit: CcEdit;
   /** Claude chat: reply text as it streams. */
   claude_chat_delta: { text: string };
   claude_chat_done: ClaudeChatDone;
+  /** The file name `save_diagnostics` just wrote. */
+  diagnostics_saved: string;
 }
 export type EventName = keyof Events;
 

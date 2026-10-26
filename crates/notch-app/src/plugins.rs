@@ -226,7 +226,7 @@ async fn cc_connection(app: AppHandle, pipe: NamedPipeServer) {
 
 /// `peeka.exe --cc-hook [agent [event]]`, run by a coding agent for each hook event (before Tauri starts; `main.rs`;
 /// no agent = Claude Code, an unknown one sends nothing; `event` only when the payload has no `hook_event_name`, as
-/// Copilot's camelCase one). Reads the hook's JSON on stdin and sends Peeka only `{agent, kind, tool, reason, sid}` (`cc_hooks::hook_params`; `sid` = salted 8-hex tag of the session id),
+/// Copilot's camelCase one). Reads the hook's JSON on stdin and sends Peeka only `{agent, kind, tool, reason, sid}` (`cc_hooks::hook_params`; `sid` = salted 8-hex tag of the session id), Claude Code adds `origin` (one word, `cc_hooks::origin`),
 /// plus `edit {file, add, del}` for an Edit/Write inside the session cwd; that edit's diff stays in a local cache file (`cc_hooks::hook_line`). Never holds Claude Code up
 /// and never answers: no stdout at all (a PermissionRequest keeps Claude Code's own prompt), every path ends in exit
 /// 0, a 2 s watchdog ends it whatever happens, and a closed or busy pipe (Peeka not running) is given up at once.
@@ -250,10 +250,20 @@ pub fn cc_hook_main() -> ! {
         if let (Some(ev), Some(o)) = (args.get(1), raw.as_object_mut()) {
             o.entry("hook_event_name").or_insert_with(|| ev.as_str().into());
         }
-        let line = notch_core::plugins::cc_hooks::hook_line(agent, &raw, salt.as_deref(), diffs.as_deref())?;
+        let mut line = notch_core::plugins::cc_hooks::hook_line(agent, &raw, salt.as_deref(), diffs.as_deref())?;
         drop(raw); // the prompt, the command, the output, the edit's text: gone before anything is sent
-        let name = pipe::cc_pipe_name(&win::user_sid()?)?;
+        if agent.id == "claude" {
+            // one word for where the session was started; the variables themselves stay here
+            line["origin"] = notch_core::plugins::cc_hooks::origin(|k| std::env::var(k).ok()).into();
+        }
+        let me = win::user_sid()?;
+        let name = pipe::cc_pipe_name(&me)?;
         let mut pipe = std::fs::OpenOptions::new().read(true).write(true).open(name).ok()?;
+        // the pipe's server must run as this user (a squatter that created the name first gets nothing)
+        let raw_pipe = std::os::windows::io::AsRawHandle::as_raw_handle(&pipe) as isize;
+        if win::server_sid(raw_pipe)? != me {
+            return None;
+        }
         pipe.write_all(format!("{line}\n").as_bytes()).ok()?;
         // Wait for Peeka to hang up (it has read the line), so exiting cannot race its read; the watchdog caps it.
         let _ = pipe.read(&mut [0u8; 1]);
@@ -407,9 +417,9 @@ pub fn run(app: &AppHandle, outs: Vec<Out>) {
                         app.emit("job_done", serde_json::json!({ "title": title, "took": took, "seconds": seconds }));
                 }
             }
-            Out::Ui(UiEvent::CcEvent { agent, kind, tool, reason, sid }) => {
+            Out::Ui(UiEvent::CcEvent { agent, kind, tool, reason, sid, origin }) => {
                 crate::recap::count(app, notch_core::recap::Ev::Agent { kind: &kind, sid: sid.as_deref() });
-                let _ = app.emit("cc_event", serde_json::json!({ "agent": agent, "kind": kind, "tool": tool, "reason": reason, "sid": sid }));
+                let _ = app.emit("cc_event", serde_json::json!({ "agent": agent, "kind": kind, "tool": tool, "reason": reason, "sid": sid, "origin": origin }));
             }
             Out::Ui(UiEvent::CcEdit { sid, file, add, del }) => {
                 crate::recap::count(app, notch_core::recap::Ev::Edit { sid: sid.as_deref(), file: &file });
@@ -524,18 +534,37 @@ mod win {
     use windows::Win32::Security::{
         GetTokenInformation, TokenUser, PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES, TOKEN_QUERY, TOKEN_USER,
     };
-    use windows::Win32::System::Pipes::GetNamedPipeClientProcessId;
+    use windows::Win32::System::Pipes::{GetNamedPipeClientProcessId, GetNamedPipeServerProcessId};
     use windows::Win32::System::Threading::{
         GetCurrentProcess, OpenProcess, OpenProcessToken, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
         PROCESS_QUERY_LIMITED_INFORMATION,
     };
 
     pub fn user_sid() -> Option<String> {
+        // SAFETY: the pseudo handle of the current process needs no closing.
+        sid_of(unsafe { GetCurrentProcess() })
+    }
+
+    /// The user SID of the process serving the pipe `pipe` (a live handle held by the caller). None = it cannot be
+    /// told (then the hook sends nothing).
+    pub fn server_sid(pipe: isize) -> Option<String> {
+        let mut pid = 0u32;
+        // SAFETY: `pipe` is a live pipe handle for the whole call; the process handle is closed before returning.
+        unsafe {
+            GetNamedPipeServerProcessId(HANDLE(pipe as *mut _), &mut pid).ok()?;
+            let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+            let sid = sid_of(h);
+            let _ = CloseHandle(h);
+            sid
+        }
+    }
+
+    fn sid_of(process: HANDLE) -> Option<String> {
         // SAFETY: every out-pointer points at a local that lives through the call; the token handle is closed and
         // the SID string freed with LocalFree as the API asks.
         unsafe {
             let mut token = HANDLE::default();
-            OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token).ok()?;
+            OpenProcessToken(process, TOKEN_QUERY, &mut token).ok()?;
             let mut len = 0u32;
             let _ = GetTokenInformation(token, TokenUser, None, 0, &mut len);
             let mut buf = vec![0u64; (len as usize).div_ceil(8)]; // u64: TOKEN_USER holds pointers

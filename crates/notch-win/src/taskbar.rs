@@ -248,6 +248,19 @@ pub fn spawn_self(_args: &[&str]) -> std::io::Result<std::process::Child> {
     Err(std::io::ErrorKind::Unsupported.into())
 }
 
+/// Ends this process at once, from any thread, like a crash: the alive file stays, so the guard restarts Notch within
+/// its budget. `TerminateProcess`, not `exit` (DLL detach could wait on the frozen main thread's locks) or a panic (a
+/// crash dialog). Idea from new_win (MIT): restart a hung shell.
+#[cfg(windows)]
+pub fn end_now() {
+    use windows::Win32::System::Threading::{GetCurrentProcess, TerminateProcess};
+    // SAFETY: the pseudo-handle of our own process.
+    let _ = unsafe { TerminateProcess(GetCurrentProcess(), 1) };
+}
+
+#[cfg(not(windows))]
+pub fn end_now() {}
+
 /// Keep a guard running while full hide is wanted (checked every worker tick; false = none could be kept).
 #[cfg(windows)]
 pub fn ensure_guard() -> bool {

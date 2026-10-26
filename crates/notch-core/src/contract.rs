@@ -124,6 +124,7 @@ pub const COMMANDS: &[&str] = &[
     "agent_bridges",
     "agent_bridge_install",
     "agent_bridge_remove",
+    "agent_bridge_preview",
     "cc_focus_terminal",
     "cc_diff",
     "cc_diff_open",
@@ -155,6 +156,9 @@ pub const COMMANDS: &[&str] = &[
     "claude_chat_send",
     "claude_chat_stop",
     "claude_chat_new",
+    // Ctrl+Alt+Shift+D / Settings > About: one local text file for bug reports (`notch_core::diagnostics`)
+    "save_diagnostics",
+    "diagnostics_open_folder",
 ];
 
 /// Every event Rust emits to the pages. Payloads: see the header of `crates/notch-app/src/app.rs`.
@@ -202,6 +206,7 @@ pub const EVENTS: &[&str] = &[
     "notch://island_leave",
     "claude_chat_delta",
     "claude_chat_done",
+    "diagnostics_saved",
 ];
 
 fn ts_list(out: &mut String, name: &str, items: &[&str]) {

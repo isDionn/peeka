@@ -24,7 +24,7 @@ const calls = (cmd: string) => fakeBridge.log.filter((l) => l.cmd === cmd).lengt
 const btn = (n: string) => screen.getByRole("button", { name: n });
 
 describe("Claude Code bridge: Install / Remove", () => {
-  it("Install when not installed; clicking installs, status and button become Remove; Remove undoes it", async () => {
+  it("Install first shows the change to settings.json; only the confirm installs (with the preview's fingerprint); Remove the same way", async () => {
     fakeBridge.setBridge({ installed: false, healthy: false, lastEventAgoS: null });
     render(<PluginExtras />);
     await screen.findByText("Claude Code bridge");
@@ -33,19 +33,47 @@ describe("Claude Code bridge: Install / Remove", () => {
     const w = btn("Install").getAttribute("style");
     fireEvent.click(btn("Install"));
     await settle();
-    expect(calls("claude_bridge_install")).toBe(1);
+    expect(calls("claude_bridge_install")).toBe(0); // the preview writes nothing
+    const diff = screen.getByLabelText("Changes");
+    expect(diff.querySelectorAll(".add").length).toBeGreaterThan(0);
+    expect(diff.textContent).toContain("--cc-hook");
+    expect(btn("Cancel").getAttribute("style")).toBe(w); // the clicked button stays in place, same width
+    fireEvent.click(btn("Install now"));
+    await settle();
+    expect(fakeBridge.log.filter((l) => l.cmd === "claude_bridge_install").map((l) => l.args)).toEqual([{ fingerprint: "fp" }]);
     expect(screen.getByText(/Installed · connected to this Peeka/)).toBeTruthy();
+    expect(screen.queryByLabelText("Changes")).toBeNull();
+    // the box keeps the space the change took (offsetHeight is 100 here) and only says the result: nothing below moves under the cursor
+    const done = screen.getByText("Done. settings.json updated.").parentElement!;
+    expect(done.style.minHeight).toBe("100px");
     expect(btn("Remove").getAttribute("style")).toBe(w); // fixed width: the row does not shift
     fireEvent.click(btn("Remove"));
     await settle();
+    expect(screen.getByLabelText("Changes").querySelectorAll(".del").length).toBeGreaterThan(0);
+    fireEvent.click(btn("Remove now"));
+    await settle();
     expect(calls("claude_bridge_remove")).toBe(1);
     expect(screen.getByText("Not installed")).toBeTruthy();
+  });
+  it("Cancel closes the preview and writes nothing", async () => {
+    fakeBridge.setBridge({ installed: false, healthy: false, lastEventAgoS: null });
+    render(<PluginExtras />);
+    await screen.findByText("Claude Code bridge");
+    fireEvent.click(btn("Install"));
+    await settle();
+    fireEvent.click(btn("Cancel"));
+    await settle();
+    expect(screen.queryByLabelText("Changes")).toBeNull();
+    expect(calls("claude_bridge_install")).toBe(0);
+    expect(btn("Install")).toBeTruthy();
   });
   it("if it points to another copy the status says so and the button becomes Reinstall", async () => {
     fakeBridge.setBridge({ installed: true, healthy: false, lastEventAgoS: 30 });
     render(<PluginExtras />);
     expect(await screen.findByText(/Installed · points to another copy/)).toBeTruthy();
     fireEvent.click(btn("Reinstall"));
+    await settle();
+    fireEvent.click(btn("Reinstall now"));
     await settle();
     expect(screen.getByText(/connected to this Peeka/)).toBeTruthy();
   });
@@ -56,6 +84,8 @@ describe("Claude Code bridge: Install / Remove", () => {
     render(<PluginExtras />);
     await screen.findByText("Claude Code bridge");
     fireEvent.click(btn("Install"));
+    await settle();
+    fireEvent.click(btn("Install now")); // e.g. settings.json changed since the preview: Rust refuses and says why
     await settle();
     expect(screen.getByText("Didn't work. See the notification for why")).toBeTruthy();
     expect(btn("Install")).toBeTruthy(); // status unchanged
@@ -71,7 +101,7 @@ describe("Claude Code bridge: Install / Remove", () => {
 });
 
 describe("Other coding agents: one row each", () => {
-  it("lists only agents present on this PC, says which file Install changes, and installs/removes one agent on a click", async () => {
+  it("lists only agents present on this PC, says which file Install changes, shows the change and installs/removes one agent only on the confirm", async () => {
     render(<PluginExtras />);
     await screen.findByText("Codex CLI bridge");
     expect(screen.getByText("Gemini CLI bridge")).toBeTruthy();
@@ -82,10 +112,18 @@ describe("Other coding agents: one row each", () => {
     const w = b.getAttribute("style");
     fireEvent.click(b);
     await settle();
-    expect(fakeBridge.log.filter((l) => l.cmd === "agent_bridge_install").map((l) => l.args)).toEqual([{ agent: "codex" }]);
-    expect(btn("Remove Codex CLI bridge").getAttribute("style")).toBe(w);
+    expect(calls("agent_bridge_install")).toBe(0); // the preview writes nothing
+    expect(screen.getByRole("group", { name: "Changes to hooks.json" }).querySelectorAll(".add").length).toBeGreaterThan(0);
+    expect(btn("Cancel Codex CLI bridge").getAttribute("style")).toBe(w);
     expect(btn("Install Gemini CLI bridge")).toBeTruthy(); // the other row is untouched
+    fireEvent.click(btn("Install now"));
+    await settle();
+    expect(fakeBridge.log.filter((l) => l.cmd === "agent_bridge_install").map((l) => l.args)).toEqual([{ agent: "codex" }]);
+    expect(screen.getByText("Done. hooks.json updated.").parentElement!.style.minHeight).toBe("100px"); // same space, nothing moves
+    expect(btn("Remove Codex CLI bridge").getAttribute("style")).toBe(w);
     fireEvent.click(btn("Remove Codex CLI bridge"));
+    await settle();
+    fireEvent.click(btn("Remove now"));
     await settle();
     expect(calls("agent_bridge_remove")).toBe(1);
     expect(btn("Install Codex CLI bridge")).toBeTruthy();

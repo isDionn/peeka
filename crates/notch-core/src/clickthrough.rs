@@ -33,7 +33,7 @@ pub struct CssRect {
     pub y: f64,
     pub w: f64,
     pub h: f64,
-    /// Painted but not clickable (shadow, bubble): it widens the window's region, never the click area.
+    /// Painted but not clickable (shadow, bubble): it widens a strip's window region, never the click area.
     #[serde(default)]
     pub paint: bool,
 }
@@ -54,10 +54,10 @@ pub fn captures(cursor: (i32, i32), origin: (i32, i32), scale: f64, rects: &[Css
     rects.iter().any(|r| !r.paint && x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h)
 }
 
-/// The window region ("the island window is clipped to the visible shape"): every reported rectangle, clickable or
-/// painted, as `(left, top, right, bottom)` physical px inside a `win` (w, h) window. The page already holds a
-/// rectangle at its target size while the island grows and until the close animation ends, so following the report
-/// never cuts an animation. Empty rectangles are dropped; nothing = an empty region (the window covers nothing).
+/// A strip's window region (with its bar, `strip_region_boxes`; the island has none) and the island's diagnostics:
+/// every reported rectangle, clickable or painted, as `(left, top, right, bottom)` physical px inside a `win` (w, h)
+/// window. The page already holds a rectangle at its target size while a panel grows and until the close animation
+/// ends, so following the report never cuts an animation. Empty rectangles are dropped; nothing = an empty region (the window covers nothing).
 pub fn region_boxes(rects: &[CssRect], scale: f64, win: (i32, i32)) -> Vec<(i32, i32, i32, i32)> {
     let scale = if scale.is_finite() && scale > 0.0 { scale } else { 1.0 };
     let clamp = |v: f64, max: i32| (v.clamp(0.0, f64::from(max))) as i32;

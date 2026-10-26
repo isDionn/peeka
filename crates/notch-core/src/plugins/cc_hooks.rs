@@ -1,7 +1,7 @@
 // Peeka — original implementation (MIT).
 //! Coding agents without a main assistant (`docs/plugin-api.md` "Claude Code" and "Other agents"): Peeka's own hook.
 //! `peeka.exe --cc-hook [agent [event]]` gets the hook's JSON on stdin and passes on only `{agent, kind, tool, reason,
-//! sid}` ([`hook_params`]); the receiver checks it again with the same rules as `cc.event`. [`install`] / [`uninstall`]
+//! sid}` ([`hook_params`]; Claude Code's line adds the one-word [`origin`]); the receiver checks it again with the same rules as `cc.event`. [`install`] / [`uninstall`]
 //! add or remove exactly Peeka's entries in the agent's hook config; the owner's other hooks stay. Status only: the
 //! hook never answers, so no agent waits on Peeka for a decision. Pure apart from the one file it is given.
 
@@ -189,6 +189,26 @@ pub fn hook_params(a: &Agent, raw: &Value, salt: Option<&[u8]>) -> Option<Value>
         "agent": a.id, "kind": kind, "tool": w(&["tool_name", "toolName"]), "reason": reason,
         "sid": sid.map(|(k, id)| session_tag(k, id)),
     }))
+}
+
+/// `origin` of `cc.event`: where a Claude Code session was started.
+pub const ORIGINS: [&str; 4] = ["terminal", "desktop", "cursor", "vscode"];
+
+/// The session's [`ORIGINS`] word from the hook's environment; only these three variables are looked at and only the
+/// word leaves. `VSCODE_GIT_ASKPASS_NODE` is set in VS Code and in its forks, so it means Cursor only when its path
+/// says so.
+pub fn origin(env: impl Fn(&str) -> Option<String>) -> &'static str {
+    let entry = env("CLAUDE_CODE_ENTRYPOINT").unwrap_or_default();
+    let askpass = env("VSCODE_GIT_ASKPASS_NODE").unwrap_or_default().to_ascii_lowercase();
+    if entry.contains("desktop") {
+        "desktop"
+    } else if env("CURSOR_TRACE_ID").is_some_and(|v| !v.is_empty()) || askpass.contains("cursor") {
+        "cursor"
+    } else if entry.contains("vscode") || !askpass.is_empty() {
+        "vscode"
+    } else {
+        "terminal"
+    }
 }
 
 /// The diff view shows at most this many lines; the rest is a count ("Open in editor").
@@ -465,48 +485,124 @@ pub fn status(a: &Agent, doc: &Value, exe: &str) -> (bool, bool) {
     (any, current)
 }
 
-fn read(a: &Agent, path: &Path) -> Result<Option<Value>, String> {
-    let name = a.name;
+/// The file's bytes (None = no file) and its fingerprint: SHA-256 of those bytes plus the mtime in ms, `absent` for no
+/// file. Taken from the same read the change is planned from, so a confirm refuses a file changed after the preview.
+fn load(a: &Agent, path: &Path) -> Result<(Option<Vec<u8>>, String), String> {
+    use sha2::{Digest, Sha256};
+    let mtime = std::fs::metadata(path).and_then(|m| m.modified()).ok();
     match std::fs::read(path) {
-        Ok(b) => serde_json::from_slice(&b)
-            .map(Some)
-            .map_err(|_| format!("The {name} settings file could not be read; leaving it alone until you fix it by hand.")),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(_) => Err(format!("The {name} settings file could not be opened; leaving it alone.")),
+        Ok(b) => {
+            let ms = mtime.and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_millis());
+            let hash: String = Sha256::digest(&b).iter().map(|x| format!("{x:02x}")).collect();
+            Ok((Some(b), format!("{hash}-{ms}")))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok((None, "absent".into())),
+        Err(_) => Err(format!("The {} settings file could not be opened; leaving it alone.", a.name)),
     }
 }
 
-/// Read, change, and (only if it changed) back up to `<file>.json.bak-peeka`, then tmp + rename.
-fn edit(a: &Agent, path: &Path, f: impl FnOnce(&mut Value) -> Result<(), String>) -> Result<(), String> {
-    let old = read(a, path)?;
-    let existed = old.is_some();
-    let mut doc = old.clone().unwrap_or_else(|| json!({}));
+fn parse(a: &Agent, bytes: Option<&[u8]>) -> Result<Option<Value>, String> {
+    bytes.map(serde_json::from_slice).transpose().map_err(|_| {
+        format!("The {} settings file could not be read; leaving it alone until you fix it by hand.", a.name)
+    })
+}
+
+fn read(a: &Agent, path: &Path) -> Result<Option<Value>, String> {
+    parse(a, load(a, path)?.0.as_deref())
+}
+
+/// A change to one hook config, worked out but not written: the fingerprint of the file it was read from, its old
+/// bytes and the new ones (None = nothing changes).
+struct Plan {
+    fingerprint: String,
+    old: Option<Vec<u8>>,
+    new: Option<Vec<u8>>,
+}
+
+fn plan(a: &Agent, path: &Path, f: impl FnOnce(&mut Value) -> Result<(), String>) -> Result<Plan, String> {
+    let (old, fingerprint) = load(a, path)?;
+    let before = parse(a, old.as_deref())?;
+    let mut doc = before.clone().unwrap_or_else(|| json!({}));
     f(&mut doc)?;
-    if Some(&doc) == old.as_ref() || (!existed && doc == json!({})) {
-        return Ok(());
+    let same = Some(&doc) == before.as_ref() || (before.is_none() && doc == json!({}));
+    let new = match same {
+        true => None,
+        false => Some(serde_json::to_vec_pretty(&doc).map_err(|_| format!("The {} settings file could not be written.", a.name))?),
+    };
+    Ok(Plan { fingerprint, old, new })
+}
+
+/// What Settings shows before Install / Remove: the file's line diff (changed lines with one line of context, ` …`
+/// for the parts left out, at most [`DIFF_MAX`]) and the fingerprint the confirm must bring back.
+#[derive(Debug, PartialEq, Eq, serde::Serialize)]
+pub struct Preview {
+    pub fingerprint: String,
+    pub add: usize,
+    pub del: usize,
+    pub lines: Vec<String>,
+    pub more: usize,
+}
+
+/// Install's (`exe` given) or Remove's (None) change to `path`; nothing is written.
+pub fn preview(a: &Agent, path: &Path, exe: Option<&str>) -> Result<Preview, String> {
+    let p = match exe {
+        Some(exe) => plan(a, path, |d| merge(a, d, exe))?,
+        None => plan(a, path, |d| remove(a, d))?,
+    };
+    let text = |b: &Option<Vec<u8>>| b.as_deref().map(String::from_utf8_lossy).unwrap_or_default().into_owned();
+    let (ops, add, del) = if p.new.is_some() { line_diff(&text(&p.old), &text(&p.new)) } else { (vec![], 0, 0) };
+    let near = |i: usize| ops[i.saturating_sub(1)..(i + 2).min(ops.len())].iter().any(|l| !l.starts_with(' '));
+    let mut lines: Vec<String> = Vec::new();
+    for (i, l) in ops.iter().enumerate() {
+        if near(i) {
+            lines.push(l.clone());
+        } else if lines.last().is_some_and(|l| l != " …") {
+            lines.push(" …".into());
+        }
     }
+    if lines.last().is_some_and(|l| l == " …") {
+        lines.pop();
+    }
+    let more = lines.len().saturating_sub(DIFF_MAX);
+    lines.truncate(DIFF_MAX);
+    Ok(Preview { fingerprint: p.fingerprint, add, del, lines, more })
+}
+
+/// Plan, check `expect` (the preview's fingerprint; None = no preview was shown), and only if something changes: a
+/// one-time backup `<file>.json.bak-peeka` (the file as it was before Peeka first changed it, never overwritten),
+/// then tmp + rename. shortcut: a write landing between the check and the rename (milliseconds) is still lost; a
+/// lock would need every writer of the file to take it.
+fn edit(a: &Agent, path: &Path, expect: Option<&str>, f: impl FnOnce(&mut Value) -> Result<(), String>) -> Result<(), String> {
+    let p = plan(a, path, f)?;
+    if expect.is_some_and(|e| e != p.fingerprint) {
+        return Err(format!(
+            "The {} settings file changed after you looked at the changes, so nothing was written. Click again to see the new changes.",
+            a.name
+        ));
+    }
+    let Some(bytes) = p.new else { return Ok(()) };
     let msg = format!("The {} settings file could not be written.", a.name);
     let fail = |_| msg.clone();
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(fail)?;
     }
-    if existed {
-        std::fs::copy(path, path.with_extension("json.bak-peeka")).map_err(fail)?;
+    let bak = path.with_extension("json.bak-peeka");
+    if p.old.is_some() && !bak.exists() {
+        std::fs::copy(path, &bak).map_err(fail)?;
     }
     let tmp = path.with_extension("json.tmp-peeka");
-    let bytes = serde_json::to_vec_pretty(&doc).map_err(|_| msg.clone())?;
     std::fs::write(&tmp, bytes).map_err(fail)?;
     std::fs::rename(&tmp, path).map_err(fail)
 }
 
-/// Settings › "Install": Peeka's hooks into `path` (`a`'s hook config), pointing at `exe`.
-pub fn install(a: &Agent, path: &Path, exe: &str) -> Result<(), String> {
-    edit(a, path, |d| merge(a, d, exe))
+/// Settings › "Install": Peeka's hooks into `path` (`a`'s hook config), pointing at `exe`. `expect`: see [`edit`].
+pub fn install(a: &Agent, path: &Path, exe: &str, expect: Option<&str>) -> Result<(), String> {
+    edit(a, path, expect, |d| merge(a, d, exe))
 }
 
 /// "Remove". Copilot's file is Peeka's own (`hooks/peeka.json`): left with no hooks, it goes (its backup stays).
-pub fn uninstall(a: &Agent, path: &Path) -> Result<(), String> {
-    edit(a, path, |d| remove(a, d))?;
+pub fn uninstall(a: &Agent, path: &Path, expect: Option<&str>) -> Result<(), String> {
+    edit(a, path, expect, |d| remove(a, d))?;
     let empty = |d: Value| d.get("hooks").and_then(Value::as_object).is_some_and(Map::is_empty);
     if a.id == "copilot" && read(a, path)?.is_some_and(empty) {
         std::fs::remove_file(path).map_err(|_| format!("The {} settings file could not be written.", a.name))?;
@@ -748,7 +844,7 @@ mod tests {
         }
         let tmp = Tmp::new();
         let path = tmp.write(".claude/settings.json", b"{nope");
-        assert!(install(&CLAUDE, &path, EXE).is_err() && uninstall(&CLAUDE, &path).is_err());
+        assert!(install(&CLAUDE, &path, EXE, None).is_err() && uninstall(&CLAUDE, &path, None).is_err());
         assert_eq!(std::fs::read(&path).unwrap(), b"{nope", "never overwritten");
     }
 
@@ -757,22 +853,94 @@ mod tests {
         let tmp = Tmp::new();
         let path = tmp.path().join(".claude").join("settings.json");
         assert_eq!(file_status(&CLAUDE, &path, EXE), (false, false));
-        uninstall(&CLAUDE, &path).unwrap();
+        uninstall(&CLAUDE, &path, None).unwrap();
         assert!(!path.exists(), "nothing to remove: no file made");
-        install(&CLAUDE, &path, EXE).unwrap();
+        install(&CLAUDE, &path, EXE, None).unwrap();
         assert_eq!(file_status(&CLAUDE, &path, EXE), (true, true));
         assert!(!path.with_extension("json.bak-peeka").exists(), "no backup of a file that did not exist");
 
         std::fs::write(&path, serde_json::to_vec(&owner_doc()).unwrap()).unwrap();
-        install(&CLAUDE, &path, EXE).unwrap();
+        install(&CLAUDE, &path, EXE, None).unwrap();
         let bak: Value =
             serde_json::from_slice(&std::fs::read(path.with_extension("json.bak-peeka")).unwrap()).unwrap();
         assert_eq!(bak, owner_doc(), "the backup is the file before the change");
-        uninstall(&CLAUDE, &path).unwrap();
+        uninstall(&CLAUDE, &path, None).unwrap();
         let back: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(back, owner_doc());
         assert_eq!(back.to_string(), owner_doc().to_string(), "the owner's key order too (preserve_order)");
         assert!(!path.with_extension("json.tmp-peeka").exists());
+    }
+
+    #[test]
+    fn the_preview_shows_the_change_and_a_confirm_refuses_a_file_changed_since() {
+        let tmp = Tmp::new();
+        let owner = serde_json::to_vec_pretty(&owner_doc()).unwrap();
+        let path = tmp.write(".claude/settings.json", &owner);
+        let p = preview(&CLAUDE, &path, Some(EXE)).unwrap();
+        assert!(p.add > 0 && p.del == 0, "{p:?}");
+        assert!(p.lines.iter().any(|l| l.starts_with('+') && l.contains(HOOK_ARG)));
+        assert!(p.lines.iter().any(|l| l.starts_with(' ')), "context around the change");
+        assert_eq!(std::fs::read(&path).unwrap(), owner, "a preview writes nothing");
+
+        // the owner (or Claude Code) saves the file after the preview: the confirm writes nothing
+        let mut edited = owner_doc();
+        edited["model"] = json!("opus");
+        let edited = serde_json::to_vec_pretty(&edited).unwrap();
+        std::fs::write(&path, &edited).unwrap();
+        let e = install(&CLAUDE, &path, EXE, Some(&p.fingerprint)).unwrap_err();
+        assert!(e.contains("changed after you looked"), "{e}");
+        assert_eq!(std::fs::read(&path).unwrap(), edited);
+        assert!(!path.with_extension("json.bak-peeka").exists());
+
+        // a fresh preview of the same bytes confirms
+        let p = preview(&CLAUDE, &path, Some(EXE)).unwrap();
+        install(&CLAUDE, &path, EXE, Some(&p.fingerprint)).unwrap();
+        assert_eq!(file_status(&CLAUDE, &path, EXE), (true, true));
+        assert_eq!(std::fs::read(path.with_extension("json.bak-peeka")).unwrap(), edited, "backup of the file before");
+
+        // Remove previews only Peeka's lines going; the backup is one-time, never overwritten
+        let r = preview(&CLAUDE, &path, None).unwrap();
+        assert!(r.add == 0 && r.del > 0 && r.lines.iter().filter(|l| l.starts_with('-')).all(|l| !l.contains("opus")));
+        uninstall(&CLAUDE, &path, Some(&r.fingerprint)).unwrap();
+        assert_eq!(serde_json::from_slice::<Value>(&std::fs::read(&path).unwrap()).unwrap()["model"], "opus");
+        assert_eq!(std::fs::read(path.with_extension("json.bak-peeka")).unwrap(), edited);
+
+        // nothing to change: an empty preview, and the file is not touched
+        let n = preview(&CLAUDE, &path, None).unwrap();
+        assert!(n.lines.is_empty() && n.add == 0 && n.del == 0);
+        let before = std::fs::read(&path).unwrap();
+        uninstall(&CLAUDE, &path, Some(&n.fingerprint)).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+
+    #[test]
+    fn a_file_that_appears_or_goes_after_the_preview_is_refused() {
+        let tmp = Tmp::new();
+        let path = tmp.path().join(".claude").join("settings.json");
+        let p = preview(&CLAUDE, &path, Some(EXE)).unwrap();
+        assert_eq!(p.fingerprint, "absent");
+        let path = tmp.write(".claude/settings.json", b"{}");
+        assert!(install(&CLAUDE, &path, EXE, Some(&p.fingerprint)).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"{}");
+        let p = preview(&CLAUDE, &path, Some(EXE)).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        assert!(install(&CLAUDE, &path, EXE, Some(&p.fingerprint)).is_err());
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn the_origin_is_one_word_from_the_environment() {
+        let env = |pairs: &'static [(&'static str, &'static str)]| move |k: &str| pairs.iter().find(|(n, _)| *n == k).map(|(_, v)| v.to_string());
+        assert_eq!(origin(env(&[])), "terminal");
+        assert_eq!(origin(env(&[("CLAUDE_CODE_ENTRYPOINT", "cli")])), "terminal");
+        assert_eq!(origin(env(&[("CLAUDE_CODE_ENTRYPOINT", "claude-desktop")])), "desktop");
+        assert_eq!(origin(env(&[("CURSOR_TRACE_ID", "abc")])), "cursor");
+        assert_eq!(origin(env(&[("VSCODE_GIT_ASKPASS_NODE", r"C:\Users\me\AppData\Local\Programs\cursor\Cursor.exe")])), "cursor");
+        assert_eq!(origin(env(&[("VSCODE_GIT_ASKPASS_NODE", r"C:\Program Files\Microsoft VS Code\Code.exe")])), "vscode", "VS Code is not Cursor");
+        assert_eq!(origin(env(&[("CLAUDE_CODE_ENTRYPOINT", "claude-vscode")])), "vscode");
+        assert_eq!(origin(env(&[("CLAUDE_CODE_ENTRYPOINT", "claude-vscode"), ("CURSOR_TRACE_ID", "x")])), "cursor", "the extension inside Cursor");
+        assert_eq!(origin(env(&[("CURSOR_TRACE_ID", "")])), "terminal");
+        assert!(ORIGINS.iter().all(|o| word(o)));
     }
 
     // Payload fixtures: the fields each agent's official hook docs list for that event (values made up).
@@ -886,28 +1054,28 @@ mod tests {
     fn copilots_own_file_is_written_backed_up_and_removed() {
         let tmp = Tmp::new();
         let path = tmp.path().join(".copilot").join("hooks").join("peeka.json");
-        install(by("copilot"), &path, EXE).unwrap();
+        install(by("copilot"), &path, EXE, None).unwrap();
         assert_eq!(file_status(by("copilot"), &path, EXE), (true, true));
-        uninstall(by("copilot"), &path).unwrap();
+        uninstall(by("copilot"), &path, None).unwrap();
         assert!(!path.exists(), "nothing of the owner's left in it: the file goes");
         // the owner added a hook of their own to it: that stays, with a backup of the file before
-        install(by("copilot"), &path, EXE).unwrap();
+        install(by("copilot"), &path, EXE, None).unwrap();
         let mut d: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         d["hooks"]["Stop"].as_array_mut().unwrap().push(json!({"type": "command", "bash": "./mine.sh"}));
         std::fs::write(&path, serde_json::to_vec(&d).unwrap()).unwrap();
-        uninstall(by("copilot"), &path).unwrap();
+        uninstall(by("copilot"), &path, None).unwrap();
         let left: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(left, json!({"version": 1, "hooks": {"Stop": [{"type": "command", "bash": "./mine.sh"}]}}));
         assert!(path.with_extension("json.bak-peeka").exists());
         // Cursor's shared file: backup first, refused untouched when it is not JSON
         let cur = tmp.write(".cursor/hooks.json", serde_json::to_vec(&other_doc()).unwrap().as_slice());
-        install(by("cursor"), &cur, EXE).unwrap();
+        install(by("cursor"), &cur, EXE, None).unwrap();
         let bak: Value = serde_json::from_slice(&std::fs::read(cur.with_extension("json.bak-peeka")).unwrap()).unwrap();
         assert_eq!(bak, other_doc());
-        uninstall(by("cursor"), &cur).unwrap();
+        uninstall(by("cursor"), &cur, None).unwrap();
         assert_eq!(serde_json::from_slice::<Value>(&std::fs::read(&cur).unwrap()).unwrap(), other_doc());
         let bad = tmp.write(".gemini/settings.json", b"{nope");
-        let e = install(by("gemini"), &bad, EXE).unwrap_err();
+        let e = install(by("gemini"), &bad, EXE, None).unwrap_err();
         assert!(e.contains("Gemini CLI"), "{e}");
         assert_eq!(std::fs::read(&bad).unwrap(), b"{nope");
     }

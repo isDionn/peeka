@@ -10,7 +10,7 @@ import { ApprovalCard, ApprovalCenter, ComposerCard, ProtrusionBump, ProtrusionC
 import { shortApprovalTitle } from "../lib/cardsText";
 import { resetMascotRegistry } from "../mascot/useSingleMascot";
 import { onX, type XMsg } from "../lib/xwin";
-import { APPROVAL_CHOICE, APPROVAL_HIGH, APPROVAL_LOW, COMPASS, OTHER } from "../plugin.fixtures";
+import { APPROVAL_CHOICE, APPROVAL_HIGH, APPROVAL_LOW, COMPASS, OTHER, PLUGINS } from "../plugin.fixtures";
 
 const proto = HTMLElement.prototype;
 const saved = { h: Object.getOwnPropertyDescriptor(proto, "offsetHeight"), w: Object.getOwnPropertyDescriptor(proto, "offsetWidth") };
@@ -200,6 +200,20 @@ describe("Modules (j)", () => {
     expect([...container.querySelectorAll(".mascot")].map((m) => m.getAttribute("data-size"))).toEqual(["56"]);
     expect(container.querySelector(".genHome .genGhost .mascot")).toBeTruthy();
   });
+  it.each([
+    ["installed but not connected", () => PLUGINS.map((p) => (p.main ? { ...p, connected: false } : p))],
+    ["no assistant at all", () => []],
+  ])("General always shows the 56 px ghost (%s) and the strip's rest ghost yields", async (_, list) => {
+    fakeBridge.setPlugins(list());
+    const rest = render(<Island monitor="m1" init={{ view: null }} />);
+    await settle();
+    expect([...rest.container.querySelectorAll(".mascot")].map((m) => m.getAttribute("data-size"))).toEqual(["40"]);
+    rest.unmount(); resetMascotRegistry();
+    const { container } = render(<Island monitor="m1" init={{ view: "modules" }} />);
+    await settle();
+    expect(container.querySelector(".genHome .genGhost .mascot[data-size='56']")).toBeTruthy();
+    expect([...container.querySelectorAll(".mascot")].map((m) => m.getAttribute("data-size"))).toEqual(["56"]);
+  });
   it("Music and Timer on their own tabs", async () => {
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
@@ -237,13 +251,20 @@ describe("Modules card width follows the tab", () => {
     const narrow = ["music", "clipboard", "shelf", "calendar", "timer", "system", "notifications", "plugin"].map(w);
     expect(new Set(narrow)).toEqual(new Set([620])); // every tab except General has the same width
     expect(modulesKw("general", 1366)).toBe(751);
+    // the island window (760 css) can't draw a card wider than 760 - 2 x 72 shadow: General stays at the others' width, never narrower (0.3.4 drew it 418 wide, cut)
+    expect(modulesKw("general", 1920, 760 - 144)).toBe(620);
+    expect(modulesKw("general", 1920, 1200 - 144)).toBe(1056);
   });
   it("the card width changes with the tab; on a narrow card an inactive tab is icon-only", async () => {
     fakeBridge.setSurfaces(SURFACES_J); // with plugin boxes General is wide (3 columns); without boxes General is 620
+    // a 1920 screen and a window with room for the wide card (jsdom: screen 0, window 1024)
+    vi.spyOn(window.screen, "width", "get").mockReturnValue(1920);
+    vi.spyOn(window, "innerWidth", "get").mockReturnValue(1920);
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
     const kart = () => (document.querySelector(".islandInner.mockCard, .islandInner") as HTMLElement).style.width;
     const genel = kart();
+    vi.restoreAllMocks();
     fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
     expect(kart()).toBe("620px");
     expect(kart()).not.toBe(genel);

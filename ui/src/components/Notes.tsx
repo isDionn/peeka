@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Bell, Cpu, Download, FilePen, Gauge, Headphones } from "lucide-react";
 import { bridge, type CcDiff, type CcEdit } from "../bridge";
-import { agentOf, burstLabel, type Burst, type CcSession } from "../lib/notes";
+import { agentOf, burstLabel, originLabel, type Burst, type CcSession } from "../lib/notes";
 import { flat } from "../lib/plugin";
 
 export const BurstCenter = ({ b, generic }: { b: Burst; generic: boolean }) =>
@@ -58,7 +58,7 @@ export function SessionChip({ n, list, edge, last, locked, limited = false }: { 
         <div className="sideList sessionList" data-hit role="group" aria-label={mixed ? "Agent sessions" : "Claude Code sessions"}>
           <div className="sideRow"><span className="b6 sideName">{n} {what} open</span></div>
           {limited && <div className="sideRow"><Gauge aria-hidden="true" /><span className="l2 sideName">Usage limit reached</span></div>}
-          {list.map((x, i) => <div className="sideRow" key={x.sid}>{mixed && !locked && <span className="agentDot" style={{ background: agentOf(x.agent).color }} aria-hidden="true" />}<span className="l3 sideName">{mixed && !locked && `${agentOf(x.agent).name} · `}Session {i + 1}{!locked && `: ${x.tool ? flat(x.tool, 24) : "event"}, ${Math.max(0, Math.round((Date.now() - x.at) / 1000))}s ago`}</span></div>)}
+          {list.map((x, i) => <div className="sideRow" key={x.sid}>{mixed && !locked && <span className="agentDot" style={{ background: agentOf(x.agent).color }} aria-hidden="true" />}<span className="l3 sideName">{mixed && !locked && `${agentOf(x.agent).name} · `}Session {i + 1}{!locked && `: ${x.tool ? flat(x.tool, 24) : "event"}, ${Math.max(0, Math.round((Date.now() - x.at) / 1000))}s ago`}</span>{!locked && originLabel(x.origin) && <span className="t12 l3">{originLabel(x.origin)}</span>}</div>)}
           {list.length === 0 && !locked && last && <div className="sideRow"><span className="l3 sideName">Last activity: {last.tool ? flat(last.tool, 24) : "event"}, {ago}s ago</span></div>}
           {n > list.length && <div className="sideRow"><span className="l3 sideName">{list.length ? `${n - list.length} more can't be told apart` : "Sessions can't be told apart"}</span></div>}
         </div>

@@ -22,14 +22,42 @@ const panel = (k: string) => document.querySelector(`[data-panel=${k}]`)!;
 const trigger = (k: string) => k === "notif" ? act(() => announceNotif()) : fireEvent.click(document.querySelector(`[data-panel-trigger="${k}"]`)!);
 
 describe("strip pins", () => {
-  it("O1: every pin is icon + name (fixed slot); the name is there both closed and open, the full name is in title and aria-label", async () => {
+  it("logos only (owner, after RC1): no visible names; the name stays in aria-label, no native title tooltip", async () => {
     render(<Shell monitor="m1" />);
     await settle();
-    const pins = [...document.querySelectorAll(".pin")];
-    expect(pins.length).toBeGreaterThan(0);
-    expect(pins.every((p) => p.querySelector(".pinName")?.textContent)).toBe(true);
-    expect(pins.every((p) => p.getAttribute("title") && p.getAttribute("aria-label"))).toBe(true);
-    expect(pins.some((p) => p.classList.contains("openPinned"))).toBe(true);
+    const items = [...document.querySelectorAll(".pin, .tabA")];
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((p) => p.textContent?.replace(/\d/g, "") === "")).toBe(true); // only a window count, never a name
+    expect(items.every((p) => p.getAttribute("aria-label") && !p.hasAttribute("title"))).toBe(true);
+    expect(document.querySelector('.pin[data-app="chrome"]')!.getAttribute("aria-label")).toBe("Chrome, 2 windows");
+    expect(document.querySelector('.pin[data-app="chrome"] .count')!.textContent).toBe("2");
+    expect(items.some((p) => p.classList.contains("openPinned"))).toBe(true);
+  });
+
+  it("no logo from Windows: the name's first letter in a circle; a window asking for attention marks its app", async () => {
+    render(<Shell monitor="m1" />);
+    await settle();
+    act(() => fakeBridge.setWindows([
+      { appId: "exe:blitz", name: "Blitz", icon: "", hwnd: 50, title: "Blitz", active: false, monitor: "m1", attention: true },
+      { appId: "exe:x", name: "Xcalc", icon: "", hwnd: 51, title: "x", active: true, monitor: "m1" },
+    ]));
+    await settle();
+    const blitz = document.querySelector('.tabA[data-app="exe:blitz"]')!;
+    expect(blitz.querySelector(".appLetter")!.textContent).toBe("B");
+    expect(blitz.classList.contains("attn")).toBe(true);
+    expect(document.querySelector('.tabA[data-app="exe:x"]')!.classList.contains("attn")).toBe(false);
+  });
+
+  it("hover shows the name: a bubble for an app without windows, the preview's header for one with windows", async () => {
+    render(<Shell monitor="m1" />);
+    await settle();
+    fireEvent.pointerEnter(document.querySelector('.pin[data-app="steam"]')!);
+    await settle(300);
+    expect(document.querySelector(".stripTip")!.textContent).toBe("Steam");
+    fireEvent.pointerEnter(document.querySelector('.pin[data-app="chrome"]')!);
+    await settle(60);
+    expect(document.querySelector(".stripTip")).toBeNull();
+    expect(document.querySelector(".preview .pvName")!.textContent).toBe("Chrome");
   });
 });
 

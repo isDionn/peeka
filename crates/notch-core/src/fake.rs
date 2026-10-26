@@ -83,6 +83,10 @@ impl AppControl for FakeAppControl {
         self.log.borrow_mut().push(format!("launch {target}"));
         true
     }
+    fn run(&self, file: &str, args: &str) -> bool {
+        self.log.borrow_mut().push(format!("run {file} {args}"));
+        true
+    }
     fn focus(&self, hwnd: isize) -> bool {
         self.log.borrow_mut().push(format!("focus {hwnd}"));
         true

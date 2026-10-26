@@ -12,9 +12,12 @@ pub mod capture;
 pub mod clip_image;
 pub mod clipboard;
 pub mod cpu;
+#[cfg(windows)]
+pub mod diagnostics;
 pub mod downloads;
 pub mod dpapi;
 pub mod drag;
+pub mod flash;
 pub mod foreground;
 pub mod icons;
 pub mod input;

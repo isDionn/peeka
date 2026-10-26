@@ -3,7 +3,7 @@ import { bridge, type Alert, type CalendarNext, type Media, type MonitorInfo, ty
 import { liveAlerts, nextExpiry, sortAlerts } from "./lib/alerts";
 import { livePosition } from "./lib/media";
 import { meetingReminder, type ReminderItem } from "./lib/meetingReminder";
-import { collectHitRects, sameRects } from "./lib/hitRects";
+import { collectHitRects, grows, repaintAll, sameRects } from "./lib/hitRects";
 
 /** The strip draws nothing until its monitor is known: a failed query is asked again, 3 tries in all (250, 500 ms apart). */
 export function useMonitor(monitor: string) {
@@ -73,15 +73,20 @@ export function useNow() {
   return now;
 }
 
-/** Reports `[data-hit]` rectangles to Rust (on change, at most once per frame). */
-export function useHitRects(page: "strip" | "island", monitor: string) {
+/** Reports `[data-hit]` rectangles to Rust (on change, at most once per frame). `view` (the open panel or card) and the devicePixelRatio ride along for "Save diagnostics". */
+export function useHitRects(page: "strip" | "island", monitor: string, view = "") {
   const last = useRef<Rect[]>([]);
+  const lastView = useRef("");
   const send = useCallback(() => {
     const rects = collectHitRects();
-    if (sameRects(rects, last.current)) return;
+    if (sameRects(rects, last.current) && lastView.current === view) return;
+    const more = grows(last.current, rects);
     last.current = rects;
-    bridge.call("report_hit_rects", { page, monitor, rects });
-  }, [page, monitor]);
+    lastView.current = view;
+    const sent = bridge.call("report_hit_rects", { page, monitor, rects, dpr: window.devicePixelRatio, view });
+    // a strip's region grew: once Rust has applied it (the call returned; again a little later), draw the whole page again (the island has no region)
+    if (more && page === "strip") sent.then(() => { repaintAll(); setTimeout(repaintAll, 150); }).catch(() => undefined);
+  }, [page, monitor, view]);
   useEffect(() => {
     let raf = 0;
     const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(send); };

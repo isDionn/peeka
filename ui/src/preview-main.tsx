@@ -109,6 +109,8 @@ if (param("mic", "") !== "") fakeBridge.setPrivacy({ mic: ["Chrome"], camera: []
 if (state === "pr") setTimeout(() => fakeBridge.emit("input_tick", { lastInputAgoMs: 60_000, cursor: null, presentation: true }), 1500);
 if (param("share", "") !== "") { fakeBridge.setPrivacy({ mic: [], camera: [], screen: true }); setTimeout(() => fakeBridge.emit("input_tick", { lastInputAgoMs: 0, cursor: null, presentation: true }), 0); }
 if (param("previewDelay", "") !== "") fakeBridge.setPreviewDelay(+param("previewDelay", "0"));
+// ap: the logos-only strip's states: Discord asks for attention (amber pulsing dot), "Blitz" has no logo from Windows (letter circle)
+if (state === "ap") void fakeBridge.call("list_windows", { monitor: "m1" }).then((ws) => fakeBridge.setWindows([...ws.map((w) => (w.appId === "discord" ? { ...w, attention: true } : w)), { appId: "exe:blitz", name: "Blitz", icon: "", hwnd: 90, title: "Blitz", active: false, monitor: "m1" }]));
 if (state === "u") fakeBridge.pushAlert({ id: "cpu", title: "Chrome is maxing out the CPU", subtitle: "100% for 30 s", icon: "attention", action: "task_manager", priority: 70 });
 if (state === "q1") fakeBridge.pushAlert({ id: "q1", title: "Daily budget at 80%", subtitle: "Automatic jobs paused, your requests still run", icon: "tired", progress: 0.8, priority: 70 });
 if (state === "q2") fakeBridge.pushAlert({ id: "q2", title: "Claude quota reached", subtitle: "Available again in 1h 10m", icon: "tired", progress: 1, priority: 70 });

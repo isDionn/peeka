@@ -17,7 +17,8 @@ use parking_lot::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 
 /// When Explorer last announced a new taskbar (`TaskbarCreated`), ms on `CLOCK` + 1; 0 = never. The worker checks
-/// every 100 ms for two seconds after it (`logic::rehide_wait`), else every 250 ms (Explorer restart seen by polling, Win-key peek, new monitor).
+/// every 100 ms for two seconds after it (`logic::rehide_wait`), else every 2 s as a backstop: a bar Explorer shows again
+/// (Win-key peek, new monitor) wakes it at once (`taskbar_shown`).
 static CREATED: AtomicU64 = AtomicU64::new(0);
 
 /// What the settings say (UNKNOWN until read).
@@ -50,6 +51,19 @@ fn wake() {
 pub fn taskbar_created() {
     CREATED.store(now_ms() + 1, Ordering::SeqCst);
     wake();
+}
+
+/// When a taskbar-shown event last woke the worker (ms on `CLOCK`).
+static SHOWN: AtomicU64 = AtomicU64::new(0);
+
+/// Explorer showed a taskbar window (`notch_win::foreground`): re-hide now. At most every 250 ms (the old poll's pace),
+/// so an Explorer that keeps showing it cannot spin the worker; the 2 s backstop catches the rest.
+pub fn taskbar_shown() {
+    let now = now_ms();
+    if now.saturating_sub(SHOWN.load(Ordering::SeqCst)) >= 250 {
+        SHOWN.store(now, Ordering::SeqCst);
+        wake();
+    }
 }
 
 /// When Explorer last (re)created the taskbar (0 = not since launch). A new Explorer forgets every AppBar, so the
@@ -131,6 +145,7 @@ pub fn emergency(app: &AppHandle) {
 pub fn init(app: &AppHandle, data_dir: &std::path::Path, emergency_key: bool) {
     let marker = logic::marker_path(data_dir);
     let _ = MARKER.set(marker.clone());
+    notch_win::foreground::on_taskbar_shown(taskbar_shown);
     // `layout` made the strips before this ran: their handles go into the strips file now.
     let strips = APPBARS.lock().clone();
     set_appbars(strips);
@@ -150,6 +165,7 @@ pub fn init(app: &AppHandle, data_dir: &std::path::Path, emergency_key: bool) {
         let body = || {
             let mut applied = UNKNOWN;
             let mut warned = false;
+            let mut frozen_since: Option<u64> = None;
             loop {
                 let asked = WANT.load(Ordering::SeqCst);
                 if asked == FULL {
@@ -185,6 +201,13 @@ pub fn init(app: &AppHandle, data_dir: &std::path::Path, emergency_key: bool) {
                             eprintln!("[taskbar] {error}");
                         }
                     }
+                }
+                // Still frozen after the bars came back: end, so the guard starts a fresh Notch (its crash budget applies).
+                // Release only: dev builds are never relaunched.
+                frozen_since = (applied == FROZEN).then(|| frozen_since.unwrap_or_else(now_ms));
+                if logic::restart_frozen(frozen_since, now_ms()) && !cfg!(debug_assertions) {
+                    eprintln!("[taskbar] main thread frozen; ending so the guard restarts Notch");
+                    notch_win::taskbar::end_now();
                 }
                 // Full ticks (re-hide, heartbeat, guard); a failed change retries; otherwise sleep until woken.
                 if asked == FULL || (target != UNKNOWN && target != applied) {

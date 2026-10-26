@@ -14,6 +14,7 @@
   --l1:#F5F5F7; --l2:rgba(235,235,245,.74); --l3:rgba(235,235,245,.60); --l4:rgba(235,235,245,.18);   /* l3 ≥ 4.5:1 on the worst background (glass + ambient peak); l4 is decoration only */
   --edge:rgba(255,255,255,.085); --divider:rgba(255,255,255,.11);
   --mint:#63E6E2; --crimson:#F2555A; --orange:#FF9F0A; --yellow:#FFD60A; --green:#30D158; --blue:#0A84FF; --cyan:#64D2FF; --red:#FF453A; --indigo:#5E5CE6; --purple:#BF5AF2;
+  --dotRun:var(--l3); --dotActive:var(--purple); --dotAttn:var(--orange); --countText:var(--l1); --countBg:var(--e3);   /* strip app dots (running / foreground / asking for attention) and the window-count badge */
   --BAR:30px;
   --rCard:34px; --rPlat:18px; --rInner:12px; --rPeek:15px;   /* concentric: card 34 - padding 16 = 18; group 18 - 6 = 12; small peek 15 (rounded square, not a capsule) */
   --ambA1:20%; --ambA2:16%; --glass:rgba(255,255,255,.06);   /* ambient and glass, light enough that text on top stays 4.5:1 */
@@ -419,8 +420,9 @@ body[data-color="1"] :is(.tabA,.pin,.appCell,.favTray .key):is(:hover,.hovered) 
 .controlGrid .boxBtn.on svg.lucide{color:var(--cyan)}
 /* 1366: with names hidden, a dot under an open pin (like the Dock) */
 /* open pin: a dot under the icon (like the Dock), at every width */
-.pin.openPinned::after,.tabA::after{content:"";position:absolute;bottom:1px;left:50%;width:3px;height:3px;margin-left:-1.5px;border-radius:50%;background:var(--l3)}
-.pin.openPinned.active::after,.tabA.active::after{background:var(--l1)}
+/* running: a short dot; foreground: longer, accent; asking for attention: amber, pulsing (strip-items.css) */
+.pin.openPinned::after,.tabA::after{content:"";position:absolute;bottom:0;left:50%;width:4px;height:3px;border-radius:2px;background:var(--dotRun);transform:translateX(-50%);transition:width .22s var(--ease),background-color .22s ease}
+.pin.openPinned.active::after,.tabA.active::after{width:12px;background:var(--dotActive)}
 .pin.grabbing .count{display:none}
 .tabA .appIcon{width:17px;height:17px}
 /* clipboard: time on the right; on hover the time fades and actions appear */

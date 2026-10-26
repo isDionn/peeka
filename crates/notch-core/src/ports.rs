@@ -22,6 +22,8 @@ pub trait Desktop {
 pub trait AppControl {
     /// `ShellExecute` of `apps::launch_target`; false = Windows refused.
     fn launch(&self, target: &str) -> bool;
+    /// `ShellExecute` of a file with arguments (`apps::split_command` of a relaunch command); false = Windows refused.
+    fn run(&self, file: &str, args: &str) -> bool;
     /// Restore if minimised, then bring to front.
     fn focus(&self, hwnd: isize) -> bool;
     /// `WM_CLOSE` (the app may still ask to save).

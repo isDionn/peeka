@@ -46,7 +46,7 @@ export const burstLabel = (count: number, apps: readonly string[], generic = fal
 export const ccLimit = (on: boolean, e: { kind: string; reason?: string | null }) =>
   e.kind === "stop_failure" && e.reason === "rate_limit" ? true : e.kind === "stop" || (e.kind === "notification" && e.reason === "quota_auto_resume_fired") ? false : on;
 
-export interface CcSession { sid: string; agent: string; tool: string | null; at: number }
+export interface CcSession { sid: string; agent: string; tool: string | null; at: number; /** `cc_event` `origin`; the last one seen is kept. */ origin?: string | null }
 
 /** Each coding agent's name and accent (a dot in the sessions list; the mascot stays one ghost). Unknown ids fall back to Claude Code's. */
 export const AGENTS: Record<string, { name: string; color: string }> = {
@@ -58,6 +58,8 @@ export const AGENTS: Record<string, { name: string; color: string }> = {
   opencode: { name: "OpenCode", color: "#e5c07b" },
 };
 export const agentOf = (id?: string | null) => AGENTS[id ?? "claude"] ?? AGENTS.claude;
+/** A session's subtle origin label; a terminal (the usual case) and anything unknown show none. */
+export const originLabel = (o?: string | null) => ({ desktop: "Desktop", cursor: "Cursor", vscode: "VS Code" } as Record<string, string>)[o ?? ""] ?? null;
 
 /**
  * Open Claude Code sessions, from Peeka's own hook (`cc_event`). The hook sends not the session id but a salted 8-character hash
@@ -77,7 +79,7 @@ export function createCcSessions(staleMs = 3_600_000, quietMs = 1_800_000) {
       prune(now);
       if (e.sid) {
         if (e.kind === "session_end") known.delete(e.sid);
-        else known.set(e.sid, { sid: e.sid, agent: e.agent ?? "claude", tool: e.tool ?? known.get(e.sid)?.tool ?? null, at: now }); // re-setting keeps the order: "Session 1" stays in place
+        else known.set(e.sid, { sid: e.sid, agent: e.agent ?? "claude", tool: e.tool ?? known.get(e.sid)?.tool ?? null, at: now, origin: e.origin ?? known.get(e.sid)?.origin ?? null }); // re-setting keeps the order: "Session 1" stays in place
       } else {
         last = now;
         if (e.kind === "session_start") anon++;

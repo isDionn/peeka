@@ -4,6 +4,7 @@ import { fakeBridge } from "../bridge.fake";
 import { Island } from "../components/Island";
 import { Shell } from "../components/Shell";
 import { useHitRects } from "../hooks";
+import { grows, rectOf as hitRect } from "../lib/hitRects";
 import { announceNotif } from "../lib/lineChan";
 
 // jsdom gives no measurements: getBoundingClientRect that sizes [data-hit] elements from the inline style (else 100x30)
@@ -55,13 +56,40 @@ describe("island: clickable rects", () => {
     await settle();
     expect(spy.mock.calls.filter((c) => c[0] === "report_hit_rects").length).toBe(n + 1);
   });
-  it("no shadow rect is reported without a card, the button stays clickable", async () => {
+  it("when the region grows the whole page is drawn again (0.3.4: stale pieces in newly clipped-in areas); a shrink doesn't", async () => {
+    expect(hitRect({ left: 10.4, top: 29.6, width: 100.2, height: 0.8 })).toEqual({ x: 10, y: 29, w: 101, h: 2 }); // covers every partial px
+    const R = (x: number, w: number) => ({ x, y: 0, w, h: 30 });
+    expect(grows([R(0, 100)], [R(10, 50)])).toBe(false);
+    expect(grows([R(0, 100)], [R(0, 100), R(0, 101)])).toBe(true);
+    expect(grows([], [R(0, 1)])).toBe(true);
+    let w = 100;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) { return { ...rectOf(this), width: this.hasAttribute("data-hit") ? w : 0 } as DOMRect; });
+    function Page() { useHitRects("strip", "m1"); return <div data-hit style={{ width: 100, height: 30 }} />; }
+    const seen: string[] = [];
+    const mo = new MutationObserver(() => seen.push(document.documentElement.style.opacity));
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+    render(<Page />);
+    await vi.waitFor(() => expect(seen.at(-1)).toBe(""), { timeout: 1000 }); // the first report grows from nothing
+    await new Promise((r) => setTimeout(r, 300));
+    seen.length = 0;
+    w = 300;
+    fireEvent.animationEnd(document.body);
+    await vi.waitFor(() => expect(seen.filter((o) => o === "0.999").length).toBe(2), { timeout: 1000 }); // right away and once more 150 ms later
+    await vi.waitFor(() => expect(document.documentElement.style.opacity).toBe(""));
+    seen.length = 0;
+    w = 200;
+    fireEvent.animationEnd(document.body);
+    await new Promise((r) => setTimeout(r, 300));
+    mo.disconnect();
+    expect(seen).toEqual([]);
+  });
+  it("at rest only the hover peek's footprint is reported as paint (so hovering never grows the region), the button stays clickable", async () => {
     const spy = vi.spyOn(fakeBridge, "call");
     render(<Island monitor="m1" init={{ view: null }} />);
     await vi.waitFor(async () => { await settle(); expect(spy.mock.calls.some((c) => c[0] === "report_hit_rects")).toBe(true); }, { timeout: 3000 });
-    const rects = spy.mock.calls.filter((c) => c[0] === "report_hit_rects").at(-1)![1] as { rects: { paint?: boolean }[] };
-    expect(rects.rects.some((r) => r.paint)).toBe(false);
-    expect(rects.rects.length).toBeGreaterThanOrEqual(1);
+    const rects = spy.mock.calls.filter((c) => c[0] === "report_hit_rects").at(-1)![1] as { rects: { paint?: boolean; h: number }[] };
+    expect(rects.rects.filter((r) => r.paint).map((r) => r.h)).toEqual([14 + 110]); // the "hov" peek (14 px) and its shadow
+    expect(rects.rects.some((r) => !r.paint)).toBe(true);
   });
 });
 

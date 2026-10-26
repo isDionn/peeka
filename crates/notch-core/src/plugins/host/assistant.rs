@@ -59,7 +59,11 @@ fn cc_event(p: &Value) -> Result<UiEvent, RpcErr> {
         None | Some(Value::Null) => "claude",
         Some(v) => v.as_str().filter(|a| cc_hooks::AGENT_IDS.contains(a)).ok_or_else(|| bad("agent: must be a known agent"))?,
     };
-    Ok(UiEvent::CcEvent { agent: agent.into(), kind: kind.into(), tool: cc_word(p, "tool")?, reason: cc_word(p, "reason")?, sid })
+    let origin = match p.get("origin") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(v.as_str().filter(|o| cc_hooks::ORIGINS.contains(o)).ok_or_else(|| bad("origin: terminal, desktop, cursor or vscode"))?.to_string()),
+    };
+    Ok(UiEvent::CcEvent { agent: agent.into(), kind: kind.into(), tool: cc_word(p, "tool")?, reason: cc_word(p, "reason")?, sid, origin })
 }
 
 /// fidelity-api.ts `AssistantCounts`.

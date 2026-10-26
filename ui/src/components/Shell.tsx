@@ -32,7 +32,7 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
   const [toast, setToast] = useState<{ n: Notice; turn?: number } | null>(null);
   const [hoverToast, setHoverToast] = useState(false);
   const [trayRight, setTrayRight] = useState(8);
-  useHitRects("strip", monitorId);
+  useHitRects("strip", monitorId, panel ?? (menu ? "menu" : "none"));
   // a Windows notification opens the top-right card by itself: only on the main strip, and not when quiet (do not disturb / full screen / presenting), locked, or another panel is open
   const mirror = useMirror();
   const seenNotices = useRef<Set<string> | null>(null);

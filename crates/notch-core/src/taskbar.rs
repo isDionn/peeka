@@ -201,11 +201,19 @@ pub fn effective(want: u8, safe: bool, frozen: bool) -> u8 {
 
 /// How long the full-hide worker sleeps between checks: fast for `BURST_MS` after Explorer announced a new taskbar
 /// (`created_ms` = when, on the worker's clock; Explorer shows its bar again a moment after the announcement), the
-/// normal pace (250 ms: a bar that came back is seen within a quarter second) otherwise.
+/// slow backstop otherwise: a bar that comes back wakes the worker at once (`EVENT_OBJECT_SHOW` on `Shell_TrayWnd`).
+/// Also the heartbeat's pace: well under `FROZEN_AFTER_MS`.
 pub const BURST_MS: u64 = 2000;
 pub fn rehide_wait(created_ms: Option<u64>, now_ms: u64) -> std::time::Duration {
     let burst = created_ms.is_some_and(|t| now_ms.saturating_sub(t) < BURST_MS);
-    std::time::Duration::from_millis(if burst { 100 } else { 250 })
+    std::time::Duration::from_millis(if burst { 100 } else { 2000 })
+}
+
+/// Frozen this long (the bars already back) and still not answering: Notch ends itself so the guard starts it again,
+/// within the guard's crash budget (`supervise`). A shorter stall heals on its own (FROZEN -> FULL).
+pub const FROZEN_RESTART_MS: u64 = 15_000;
+pub fn restart_frozen(frozen_since_ms: Option<u64>, now_ms: u64) -> bool {
+    frozen_since_ms.is_some_and(|t| now_ms.saturating_sub(t) >= FROZEN_RESTART_MS)
 }
 
 pub fn stale(beat_ms: u64, now_ms: u64) -> bool {
@@ -266,11 +274,20 @@ mod tests {
     #[test]
     fn rehide_checks_fast_for_two_seconds_after_taskbar_created() {
         let ms = |c, n| rehide_wait(c, n).as_millis();
-        assert_eq!(ms(None, 50_000), 250);
+        assert_eq!(ms(None, 50_000), 2000);
         assert_eq!(ms(Some(10_000), 10_000), 100);
         assert_eq!(ms(Some(10_000), 11_999), 100);
-        assert_eq!(ms(Some(10_000), 12_000), 250);
+        assert_eq!(ms(Some(10_000), 12_000), 2000);
         assert_eq!(ms(Some(10_000), 5), 100, "a clock that went back is not a reason to stall");
+        assert!(rehide_wait(None, 0).as_millis() * 2 < FROZEN_AFTER_MS as u128, "the heartbeat still sees a freeze");
+    }
+
+    #[test]
+    fn a_freeze_that_lasts_restarts_notch_once_a_short_one_heals() {
+        assert!(!restart_frozen(None, 99_000), "not frozen");
+        assert!(!restart_frozen(Some(10_000), 24_999));
+        assert!(restart_frozen(Some(10_000), 25_000));
+        assert!(!restart_frozen(Some(10_000), 5), "a clock that went back");
     }
 
     use super::*;

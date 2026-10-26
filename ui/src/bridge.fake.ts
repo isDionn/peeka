@@ -34,11 +34,11 @@ const TRACKS = [
 
 type W4Names = "search_index_state" | "search_open" | "search_ask" | "clip_list" | "clip_copy" | "clip_pin" | "clip_delete" | "clip_clear" | "clip_reveal" | "clip_share" | "clip_edit" | "clip_drag" | "clip_visible" | "lock_state" | "lock_now" | "lock_release";
 type W5Names = "window_preview" | "share_open" | "shelf_list" | "shelf_ask" | "timer_get" | "timer_start" | "timer_control" | "privacy_get" | "tray_open" | "mirror_state" | "mirror_enable" | "mirror_disable" | "mirror_list" | "mirror_dismiss" | "mirror_open_app" | "mirror_ask";
-type W7Names = "recent_files" | "open_recent" | "start_pins" | "open_start_menu" | "open_calendar" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "agent_bridges" | "agent_bridge_install" | "agent_bridge_remove" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "window_pick" | "cc_focus_terminal" | "cc_diff" | "cc_diff_open" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus";
+type W7Names = "recent_files" | "open_recent" | "start_pins" | "open_start_menu" | "open_calendar" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "agent_bridges" | "agent_bridge_install" | "agent_bridge_remove" | "agent_bridge_preview" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "window_pick" | "cc_focus_terminal" | "cc_diff" | "cc_diff_open" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus";
 /** Peeka Phase C: clipboard, download and copy-code commands; Settings > About demo restart. */
 /** The Modules card's Claude chat. */
 type W9Names = "claude_chat_state" | "claude_chat_send" | "claude_chat_stop" | "claude_chat_new";
-type W8Names = "demo_restart" | "notif_copy_code" | "clip_open" | "clip_to_shelf" | "clip_preview" | "clip_ocr" | "download_open" | "download_show_in_folder";
+type W8Names = "save_diagnostics" | "diagnostics_open_folder" | "demo_restart" | "notif_copy_code" | "clip_open" | "clip_to_shelf" | "clip_preview" | "clip_ocr" | "download_open" | "download_show_in_folder";
 const svg = (inner: string) => "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${inner}</g></svg>`);
 const GLYPH = {
   bluetooth: svg('<path d="m7 7 10 10-5 5V2l5 5L7 17"/>'),
@@ -412,6 +412,8 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   };
   const w8: { [K in W8Names]: (a: Commands[K]["args"]) => Commands[K]["ret"] } = {
     // The real app restarts; the fake just flips the mode so the preview shows the other state.
+    save_diagnostics: () => { log.push({ cmd: "save_diagnostics", args: undefined }); const name = "peeka-diag-2026-10-26_12-00-00.txt"; emit("diagnostics_saved", name); return name; },
+    diagnostics_open_folder: () => { log.push({ cmd: "diagnostics_open_folder", args: undefined }); },
     demo_restart: (a) => { log.push({ cmd: "demo_restart", args: a }); settings = { ...settings, demo: a.on }; emit("settings_changed", structuredClone(settings)); },
     notif_copy_code: (a) => { if (lock.locked) throw "denied"; if (!notices.some((n) => n.id === a.id && n.hasCode)) throw "missing"; log.push({ cmd: "notif_copy_code", args: a }); },
     clip_open: (a) => { const c = find(a.id); if (!c || lock.locked || c.kind === "password") throw "denied"; if (c.kind === "text") throw "invalid"; log.push({ cmd: "clip_open", args: a }); },
@@ -439,11 +441,17 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     calendar_next: () => structuredClone(calendar),
     claude_bridge_state: () => ({ ...bridgeState }),
     // Like Rust: `refused` in demo mode; install on a manual click points at this Peeka, remove deletes only Peeka's own entries.
-    claude_bridge_install: () => { if (settings.demo) throw "refused"; log.push({ cmd: "claude_bridge_install", args: null }); bridgeState = { ...bridgeState, installed: true, healthy: true }; return { ...bridgeState }; },
-    claude_bridge_remove: () => { if (settings.demo) throw "refused"; log.push({ cmd: "claude_bridge_remove", args: null }); bridgeState = { ...bridgeState, installed: false, healthy: false }; return { ...bridgeState }; },
+    // The confirm must bring back the preview's fingerprint (Rust refuses a file changed since); the fake file never changes.
+    claude_bridge_install: ({ fingerprint }) => { if (settings.demo || fingerprint !== "fp") throw "refused"; log.push({ cmd: "claude_bridge_install", args: { fingerprint } }); bridgeState = { ...bridgeState, installed: true, healthy: true }; return { ...bridgeState }; },
+    claude_bridge_remove: ({ fingerprint }) => { if (settings.demo || fingerprint !== "fp") throw "refused"; log.push({ cmd: "claude_bridge_remove", args: { fingerprint } }); bridgeState = { ...bridgeState, installed: false, healthy: false }; return { ...bridgeState }; },
+    agent_bridge_preview: ({ remove }) => {
+      const hook = ['      "Stop": [', '        {', '          "hooks": [', '            {', '              "type": "command",', '              "command": "C:\Users\me\AppData\Local\Peeka\peeka.exe",', '              "args": ["--cc-hook"]', '            }', '          ]', '        }', '      ]'];
+      const lines = [' {', ' "model": "opus",', ...hook.map((l) => (remove ? "-" : "+") + l), ' }'];
+      return { fingerprint: "fp", add: remove ? 0 : hook.length, del: remove ? hook.length : 0, lines, more: 0 };
+    },
     agent_bridges: () => structuredClone(agents),
-    agent_bridge_install: ({ agent }) => { if (settings.demo) throw "refused"; log.push({ cmd: "agent_bridge_install", args: { agent } }); return setAgent(agent, true); },
-    agent_bridge_remove: ({ agent }) => { if (settings.demo) throw "refused"; log.push({ cmd: "agent_bridge_remove", args: { agent } }); return setAgent(agent, false); },
+    agent_bridge_install: ({ agent, fingerprint }) => { if (settings.demo || fingerprint !== "fp") throw "refused"; log.push({ cmd: "agent_bridge_install", args: { agent } }); return setAgent(agent, true); },
+    agent_bridge_remove: ({ agent, fingerprint }) => { if (settings.demo || fingerprint !== "fp") throw "refused"; log.push({ cmd: "agent_bridge_remove", args: { agent } }); return setAgent(agent, false); },
     permission_history: (): PermissionEvent[] => {
       const now = Date.now();
       return [

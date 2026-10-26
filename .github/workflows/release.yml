@@ -30,10 +30,12 @@ jobs:
           cache: pnpm
           cache-dependency-path: ui/pnpm-lock.yaml
 
-      - name: Check tag matches app version
+      # Cargo.toml (workspace), tauri.conf.json and ui/package.json must all equal the tag (tested in ui/scripts).
+      - name: Check tag matches every version file
         run: |
+          node ui/scripts/check-version.mjs $env:TAG
+          if ($LASTEXITCODE -ne 0) { exit 1 }
           $version = (Get-Content crates/notch-app/tauri.conf.json -Raw | ConvertFrom-Json).version
-          if ("v$version" -ne $env:TAG) { throw "Tag $env:TAG does not match tauri.conf.json version $version" }
           "VERSION=$version" >> $env:GITHUB_ENV
 
       - name: Build UI
