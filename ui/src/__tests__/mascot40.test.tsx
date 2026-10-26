@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeBridge } from "../bridge.fake";
 import { Island } from "../components/Island";
@@ -34,8 +34,7 @@ describe("strip mascot 40 px", () => {
     expect(document.querySelector(".mkBubble")).toBeNull();
     fireEvent.pointerDown(hit);
     fireEvent.click(hit);
-    await settle(200);
-    expect(document.querySelector("[data-composer]")).not.toBeNull(); // the composer, not Modules
+    await waitFor(() => expect(document.querySelector("[data-composer]")).not.toBeNull()); // the composer, not Modules (slow CI runners need more than 200 ms)
   });
   it("F7: dragging the mascot onto a window opens the composer with that window attached; a cancelled drag opens nothing", async () => {
     fakeBridge.setSurfaces({ composer: { ...COMPASS, voice: true } });
