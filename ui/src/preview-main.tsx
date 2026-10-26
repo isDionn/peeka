@@ -28,7 +28,7 @@ const ISLAND_STATES: Record<string, IslandInit> = {
   x1: { view: "noassistant" }, ilk2: {}, ky: { view: "clipboard", card: "ky" }, kh: { view: "clipboard", card: "kh" }, kb: { view: "clipboard", card: "kb" }, h: { view: "clipboard" }, h2: { view: "clipboard" }, h3: { view: "clipboard" }, h1: { shot: true, pin: true }, kl: { view: "modules" }, ilk: { view: "welcome" }, j: { view: "modules" },
   c2: { view: "approval-card" }, c2r: { view: "approval-card" }, c3: { view: "approval-card" }, s: { view: "composer" },
   d2: { view: "composer", ask: "Remind me about tomorrow morning's meeting, and get the notes ready." },
-  // Wave 5: charging, low battery, Bluetooth, timer, dictation, ticket, recording, meeting, shelf (while dragging / card), Search label
+  // Wave 5: charging, low battery, Bluetooth, timer, dictation, ticket, recording, meeting, shelf (while dragging / card with 6 files, one pinned / g1 empty card), Search label
   mz: { prank: true }, e0: { osd: { percent: 0, muted: true, device: null }, pin: true }, f: { view: "meeting" }, bit: { done: { title: "Weekly summary ready", took: "Took 4 min" }, pin: true }, cev: { offline: true }, x0: {},
   // copy strip: k1 image, k1b image + cursor on it (large preview), k2 file, k3 link (a fake copy event on load)
   k1: { pin: true }, k1b: { pin: true, hover: true }, k2: { pin: true }, k3: { pin: true },
@@ -51,7 +51,7 @@ const ISLAND_STATES: Record<string, IslandInit> = {
   // pr presentation mode turns on 1.5 s after load (the strip ghost covers its eyes for 1.2 s, then stays neutral). Idle tuft/tail fidgets, the sly prank face
   // and the 96 px ground light: mascot-demo.html?view=fidget. Pin daytime with &time=2026-10-19T14:00.
   cpu: { cpu: { app: "Chrome" }, pin: true }, pr: {},
-  sarj: { charge: true, pin: true }, pil: {}, bt: { bt: { name: "Buds Pro", battery: 80 }, pin: true }, zam: {}, dik: {}, tik: {}, kay: {}, f0: {}, g0: { shelfDrag: true, pin: true }, g: { view: "shelf" },
+  sarj: { charge: true, pin: true }, pil: {}, bt: { bt: { name: "Buds Pro", battery: 80 }, pin: true }, zam: {}, dik: {}, tik: {}, kay: {}, f0: {}, g0: { shelfDrag: true, pin: true }, g: { view: "shelf" }, g1: { view: "shelf" },
 };
 // Claude chat tab (ClaudeChat.tsx): its own page, claude-chat-demo.html?state=empty|chat|thinking|streaming|long|missing|signin|error (&still for a still ghost).
 const state = param("state", "a");
@@ -71,7 +71,7 @@ if (state === "s" || state === "d2") fakeBridge.setSurfaces({ composer: { ...COM
 if (state === "j") fakeBridge.setSurfaces(SURFACES_FULL);
 // Fidelity 2 (addition): j General = assistant | Claude Code | System data, c3 recommended choice, d1/d3 voice peek and live transcript (You, then the assistant)
 if (state === "j") fakeBridge.setSurfaces(SURFACES_J);
-if (state === "s" || state === "d2") fakeBridge.setShelf([{ id: "f1", name: "presentation-draft.pdf", sub: "2.4 MB, just now", kind: "pdf" }, { id: "f2", name: "screen-recording.mp4", sub: "38 MB, 2m ago", kind: "video" }]); // "2 files on the shelf" chip
+if (state === "s" || state === "d2") fakeBridge.setShelf([{ id: "f1", name: "presentation-draft.pdf", sub: "2.4 MB, just now", kind: "pdf", pinned: false }, { id: "f2", name: "screen-recording.mp4", sub: "38 MB, 2m ago", kind: "video", pinned: false }]); // "2 files on the shelf" chip
 if (state === "c3") fakeBridge.setSurfaces({ approvals: [withRecommended(APPROVAL_CHOICE)], approvalTop: APPROVAL_CHOICE.id });
 if (state === "d1" || state === "d3") {
   fakeBridge.setSurfaces({ protrusion: state === "d1" ? VOICE_THINKING : VOICE_SPEAKING });
@@ -104,7 +104,7 @@ if (state === "dik") { fakeBridge.setSurfaces({ protrusion: DICTATION }); setTim
 if (state === "tik") fakeBridge.setSurfaces({ protrusion: TICKET });
 if (state === "kay") fakeBridge.setSurfaces({ protrusion: { ...RECORDING, timer: { startedAt: new Date(Date.now() - 134_000).toISOString() } } });
 if (state === "f0" || state === "f") fakeBridge.setSurfaces({ protrusion: PROTRUSION });
-if (state === "g0" || state === "g") fakeBridge.setShelf([{ id: "f1", name: "presentation-draft.pdf", sub: "2.4 MB, just now", kind: "pdf" }, { id: "f2", name: "screen-recording.mp4", sub: "38 MB, 2m ago", kind: "video" }]);
+if (state === "g0" || state === "g") fakeBridge.setShelf([{ id: "f0", name: "contract-signed.pdf", sub: "640 KB", kind: "pdf", pinned: true }, { id: "f1", name: "presentation-draft.pdf", sub: "2.4 MB", kind: "pdf", pinned: false }, { id: "f2", name: "screen-recording.mp4", sub: "38 MB", kind: "video", pinned: false }, { id: "f3", name: "budget-2027.xlsx", sub: "86 KB", kind: "sheet", pinned: false }, { id: "f4", name: "Screenshot 2026-10-26 141203.png", sub: "1.1 MB", kind: "image", pinned: false }, { id: "f5", name: "Site photos", sub: "Folder", kind: "other", pinned: false }]);
 if (param("mic", "") !== "") fakeBridge.setPrivacy({ mic: ["Chrome"], camera: [] });
 // ?share: B1 screen share shield (the dot says "Screen is being shared"; Rust's input_tick turns presentation on, generic labels)
 if (state === "pr") setTimeout(() => fakeBridge.emit("input_tick", { lastInputAgoMs: 60_000, cursor: null, presentation: true }), 1500);

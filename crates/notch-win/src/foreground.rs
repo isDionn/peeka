@@ -44,6 +44,22 @@ pub fn on_taskbar_shown(f: fn()) {
     let _ = ON_TASKBAR_SHOWN.set(f);
 }
 
+/// Runs when the front window may have gone or left fullscreen: a foreground change, the foreground window moved or
+/// resized (Chrome F11, a video's fullscreen button), an AppBar `ABN_FULLSCREENAPP`. Must be cheap: it only wakes
+/// the app's fullscreen check.
+static ON_FRONT_CHANGED: std::sync::OnceLock<fn()> = std::sync::OnceLock::new();
+
+/// `f` hears that the front window may have entered or left fullscreen.
+pub fn on_front_changed(f: fn()) {
+    let _ = ON_FRONT_CHANGED.set(f);
+}
+
+pub(crate) fn front_changed() {
+    if let Some(f) = ON_FRONT_CHANGED.get() {
+        f();
+    }
+}
+
 /// The taskbar's own window classes.
 pub fn is_taskbar_class(class: &str) -> bool {
     class.eq_ignore_ascii_case("Shell_TrayWnd") || class.eq_ignore_ascii_case("Shell_SecondaryTrayWnd")
@@ -63,7 +79,7 @@ pub fn watch(sink: impl Fn(String) + Send + Sync + 'static) -> bool {
     use windows::Win32::Foundation::HWND;
     use windows::Win32::UI::Accessibility::{SetWinEventHook, HWINEVENTHOOK};
     use windows::Win32::UI::WindowsAndMessaging::{
-        DispatchMessageW, GetMessageW, EVENT_OBJECT_CLOAKED, EVENT_OBJECT_HIDE, EVENT_OBJECT_SHOW, EVENT_OBJECT_UNCLOAKED,
+        DispatchMessageW, GetMessageW, EVENT_OBJECT_CLOAKED, EVENT_OBJECT_HIDE, EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_SHOW, EVENT_OBJECT_UNCLOAKED,
         EVENT_SYSTEM_FOREGROUND, MSG, WINEVENT_OUTOFCONTEXT, WINEVENT_SKIPOWNPROCESS,
     };
 
@@ -77,6 +93,7 @@ pub fn watch(sink: impl Fn(String) + Send + Sync + 'static) -> bool {
         _time: u32,
     ) {
         LAST_OTHER.store(hwnd.0 as isize, std::sync::atomic::Ordering::SeqCst);
+        front_changed();
         // The strip's foreground dot follows at once.
         crate::flash::poke(crate::flash::Relist::Soon);
         // Paint / Terminal climb over Notch a moment after they come to the front (`style::keep_on_top`).
@@ -129,6 +146,24 @@ pub fn watch(sink: impl Fn(String) + Send + Sync + 'static) -> bool {
         }
     }
 
+    /// The foreground window moved or resized (cursor, caret and child-object moves are dropped first: this event
+    /// fires for all of them).
+    unsafe extern "system" fn on_moved(
+        _hook: HWINEVENTHOOK,
+        _event: u32,
+        hwnd: HWND,
+        object: i32,
+        child: i32,
+        _thread: u32,
+        _time: u32,
+    ) {
+        use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, OBJID_WINDOW};
+        // SAFETY: no arguments.
+        if object == OBJID_WINDOW.0 && child == 0 && !hwnd.is_invalid() && hwnd == unsafe { GetForegroundWindow() } {
+            front_changed();
+        }
+    }
+
     if SINK.set(Box::new(sink)).is_err() {
         return false;
     }
@@ -158,6 +193,13 @@ pub fn watch(sink: impl Fn(String) + Send + Sync + 'static) -> bool {
             if h.is_invalid() {
                 eprintln!("[foreground] window events {from:#x}-{to:#x} not hooked");
             }
+        }
+        // SAFETY: as above. A failed hook leaves fullscreen to the foreground event and the 1 s re-check.
+        let moved = unsafe {
+            SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE, None, Some(on_moved), 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS)
+        };
+        if moved.is_invalid() {
+            eprintln!("[foreground] location changes not hooked");
         }
         let mut msg = MSG::default();
         // SAFETY: a plain message loop on the thread that owns the hook; ends only with the process.

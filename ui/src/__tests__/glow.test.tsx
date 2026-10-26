@@ -33,6 +33,16 @@ describe("Drift glow", () => {
     expect(copies()[0].style.getPropertyValue("--c1")).toBe(""); // --glow-color
   });
 
+  it("a field mounted later (a panel opening) starts with the last colours: no fallback first frame, no cross-fade", () => {
+    const strip = render(<GlowField monitor="m7" />);
+    act(() => fakeBridge.emit("screen_tint", { monitor: "m7", colors: ["#ff0000", "#00ff00", "#0000ff"] }));
+    strip.unmount(); // LAST outlives the field that heard the colours
+    const { container } = render(<GlowField monitor="m7" />);
+    const copies = [...container.querySelectorAll<HTMLElement>(".glowCopy")];
+    expect(copies.map((c) => c.style.opacity)).toEqual(["1", "0"]);
+    expect(copies[0].style.getPropertyValue("--c1")).toBe("#ff0000");
+  });
+
   it("the island follows its own tint copy (Rust sends the primary monitor's tint again as monitor \"island\")", async () => {
     const { Island, ISLAND_TINT } = await import("../components/Island");
     const { container } = render(<Island monitor="m1" init={{ view: null }} />);

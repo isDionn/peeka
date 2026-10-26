@@ -24,6 +24,8 @@ parking_lot.workspace = true
 tauri = { version = "2", features = [] }
 tauri-plugin-single-instance = "2.4.4"
 tauri-plugin-global-shortcut = "2.3.2"
+# WebView2 settings Tauri doesn't expose (context menu, browser keys): Tauri's own copy, already in Cargo.lock.
+webview2-com = "0.38"
 # Plugin pipe server (Wave 3). Both already in Cargo.lock (Tauri's own tokio, the workspace windows): no download.
 tokio = { version = "1.53.1", features = ["net", "io-util", "rt", "sync"] }
 windows = { workspace = true, features = [

@@ -10,4 +10,7 @@ const narrow = () => document.documentElement.toggleAttribute("data-narrow", win
 narrow();
 window.addEventListener("resize", narrow);
 
+// No browser menu on right-click (Rust also turns WebView2's off). Peeka's own menus open first: React handles the event on the root, below document.
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+
 export const param = (k: string, d: string) => new URLSearchParams(location.search).get(k) ?? d;

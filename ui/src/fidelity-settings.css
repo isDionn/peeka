@@ -75,4 +75,5 @@ html .pg .action .ask, html .mini.ask { color: #fff; }
 .audioOut .row[aria-pressed="true"] > svg.lucide { color: var(--cyan); }
 .audioOut .row .tickSlot { width: 16px; height: 16px; flex: none; }
 .row .micMute { width: 26px; padding: 0; flex: none; }
+.mixRow input.hud { flex: none; width: 112px; } /* fixed: every app's slider lines up, a long name ellipsizes */
 .row .micMute[aria-pressed="true"] { color: var(--red); }

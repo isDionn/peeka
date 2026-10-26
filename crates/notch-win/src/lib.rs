@@ -26,6 +26,7 @@ pub mod media;
 pub mod monitors;
 pub mod notifications;
 pub mod wpn;
+pub mod zip;
 pub mod ocr;
 pub mod outline;
 pub mod picker;

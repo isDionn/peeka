@@ -94,6 +94,8 @@ describe("island motion (RC4 real-PC bugs)", () => {
   it("the whole hover peek opens the card, not only its handle; the peek is in a clickable rect", T, async () => {
     const p = await page("/preview.html?state=a", FULL);
     try {
+      // no music: since RC7 a hover with music playing shows the music controls (a 38 px bump), not this plain hover peek
+      await p.evaluate(() => window.fakeBridge.setMedia(null));
       await p.mouse.move(960, 15);
       await p.clock.runFor(800);
       const b = await islandBox(p);
@@ -130,6 +132,8 @@ describe("island motion (RC4 real-PC bugs)", () => {
     const p = await page("/preview.html?state=a", FULL);
     const ghosts = () => p.evaluate(() => [...document.querySelectorAll(".islandWindow .mascot")].map((m) => { const r = (m.querySelector(".g") ?? m).getBoundingClientRect(); return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height), vis: getComputedStyle(m).visibility }; }));
     try {
+      await p.evaluate(() => window.fakeBridge.setMedia(null)); // with music, the pointer left on the island would show the music hover peek (its 24 px ghost)
+      await p.clock.runFor(1000);
       const before = await ghosts();
       assert.equal(before.length, 1);
       for (let i = 0; i < 10; i++) { await p.mouse.click(960, 15); await p.clock.runFor(50); }
@@ -155,5 +159,42 @@ describe("island motion (RC4 real-PC bugs)", () => {
         }
       } finally { await p.close2(); }
     }
+  });
+  it("RC7: the opening card's clickable rect reaches Rust from its first frames, tab bar included (not only after the spring ends)", T, async () => {
+    const p = await page("/preview.html?state=a", FULL);
+    try {
+      await p.evaluate(() => { const o = window.fakeBridge.call; window.fakeBridge.call = (c, a) => { if (c === "report_hit_rects") window.__rects = a.rects; return o.call(window.fakeBridge, c, a); }; });
+      await p.mouse.click(960, 15);
+      for (let f = 0; f < 50; f++) {
+        await p.clock.runFor(16);
+        if (f < 2) continue; // one frame for the card to mount, one for the report
+        const out = await p.evaluate(() => {
+          const rects = (window.__rects ?? []).filter((r) => !r.paint);
+          return [...document.querySelectorAll('#island [role="tab"]')].filter((e) => {
+            const b = e.getBoundingClientRect(), x = b.left + b.width / 2, y = b.top + b.height / 2;
+            return !rects.some((r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
+          }).map((e) => e.getAttribute("aria-label"));
+        });
+        assert.deepEqual(out, [], `frame ${f}: tabs outside every clickable rect sent to Rust`);
+      }
+    } finally { await p.close2(); }
+  });
+
+  it("RC7: a strip panel's glow has the screen colour in its first frames (no purple fallback that fades over)", T, async () => {
+    const p = await page("/preview.html?state=a", FULL);
+    try {
+      await p.addStyleTag({ content: '[data-panel="start"] .inner { visibility: hidden }' }); // only the surface and the glow are sampled
+      await p.evaluate(() => { for (const monitor of ["m1", "island"]) window.fakeBridge.emit("screen_tint", { monitor, colors: ["#e01010", "#e01010", "#e01010"] }); });
+      await p.clock.runFor(100);
+      /** Mean red minus blue inside the Start panel, under the strip. */
+      const redness = async () => { const px = await p.pixels({ x: 40, y: 34, width: 240, height: 14 }); let s = 0; for (let i = 0; i < px.d.length; i += 4) s += px.d[i] - px.d[i + 2]; return s / (px.d.length / 4); };
+      await p.mouse.click(20, 15);
+      await p.clock.runFor(48);
+      const first = await redness();
+      await p.clock.runFor(4000); // past any cross-fade (2.5 s)
+      const settled = await redness();
+      assert.ok(settled > 4, `settled panel is not red-tinted (${settled.toFixed(1)})`);
+      assert.ok(first > settled * 0.5, `first frames ${first.toFixed(1)} vs settled ${settled.toFixed(1)}: the panel opened in another colour`);
+    } finally { await p.close2(); }
   });
 });

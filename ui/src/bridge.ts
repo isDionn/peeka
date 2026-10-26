@@ -46,6 +46,8 @@ export interface Status {
 export interface AudioOutput { id: string; name: string; default: boolean }
 /** `audio_get` (Rust `Audio`): outputs in Windows's order; `micMuted` null = no microphone. */
 export interface Audio { outputs: AudioOutput[]; micMuted: boolean | null }
+/** `audio_sessions` (Rust `AudioSession`): one app on the default output. `id` is an opaque hash, sent back to `audio_session_set`; `icon` "" = none (draw the letter). */
+export interface AudioSession { id: string; app: string; icon: string; colorIcon: string | null; volume: number; muted: boolean }
 /** Shortcut names (Rust `ShortcutId`). */
 export type ShortcutId = "search" | "ask" | "focus_island" | "hide_island" | "emergency";
 /** Command error (Rust `CmdError`): in Tauri, `call` rejects with this string. */
@@ -144,7 +146,7 @@ export interface TimerState {
 export type TimerAction = "pause" | "resume" | "add5" | "stop";
 
 /* ---------- shelf (mockup g0, g) ---------- */
-export interface ShelfItem { id: string; name: string; sub: string; kind: "pdf" | "video" | "sheet" | "image" | "other" }
+export interface ShelfItem { id: string; name: string; sub: string; kind: "pdf" | "video" | "sheet" | "image" | "other"; /** Kept at the top. */ pinned: boolean }
 
 /* ---------- Bluetooth earbuds (mockup bt): no case battery ---------- */
 export interface CcEdit { sid: string | null; file: string | null; add: number | null; del: number | null }
@@ -234,6 +236,10 @@ export interface Commands {
   /** `unknown`: not an active output any more; `refused`: Windows (the undocumented IPolicyConfig) said no. */
   set_audio_output: { args: { id: string }; ret: void };
   set_mic_muted: { args: { muted: boolean }; ret: void };
+  /** Per-app mixer rows; `denied` while Peeka is locked. */
+  audio_sessions: { args: void; ret: AudioSession[] };
+  /** `volume` 0..1; at least one field. `refused`: the app's sessions are gone or Windows said no. */
+  audio_session_set: { args: { id: string; volume?: number; muted?: boolean }; ret: void };
   /** Access refusal returns a `denied` error: the UI then opens the ms-settings page. */
   set_radio: { args: { kind: "wifi" | "bluetooth"; on: boolean }; ret: void };
   set_dnd: { args: { on: boolean }; ret: void };
@@ -326,8 +332,25 @@ export interface Commands {
   /** Open the Windows share sheet (no separate Nearby Share). With a file id on the shelf. */
   share_open: { args: { id: string }; ret: void };
   shelf_list: { args: void; ret: ShelfItem[] };
-  /** Ask the main assistant about a shelf file (one-time share); `not_connected` if not connected. */
-  shelf_ask: { args: { id: string }; ret: void };
+  /** Ask the main assistant about shelf files (one-time share); `not_connected` if not connected. */
+  shelf_ask: { args: { ids: string[] }; ret: void };
+  /** Shelf card (direction A). Every action takes ids from `shelf_list`; `unknown` for any other id, `denied` while locked. */
+  /** "Add files": Windows' Open dialog, several files; cancelling is not an error. */
+  shelf_add: { args: void; ret: void };
+  /** Open with the default app; `denied` for a file Windows would run. */
+  shelf_open: { args: { id: string }; ret: void };
+  shelf_pin: { args: { id: string; on: boolean }; ret: void };
+  /** Off the shelf (Peeka's own copies are deleted, the owner's files never). */
+  shelf_remove: { args: { ids: string[] }; ret: void };
+  /** The files onto the clipboard as files. */
+  shelf_copy_files: { args: { ids: string[] }; ret: void };
+  /** The Windows share sheet with every file. */
+  shelf_share: { args: { ids: string[] }; ret: void };
+  shelf_show_in_folder: { args: { id: string }; ret: void };
+  /** One zip of the files, added to the top of the shelf (`shelf_changed`). */
+  shelf_zip: { args: { ids: string[] }; ret: void };
+  /** Windows' drag out (call on pointer move with the button down); the files stay. `refused` = nothing dropped. */
+  shelf_drag: { args: { ids: string[] }; ret: void };
   timer_get: { args: void; ret: TimerState | null };
   timer_control: { args: { action: TimerAction }; ret: void };
   privacy_get: { args: void; ret: PrivacyState };

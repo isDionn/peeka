@@ -112,7 +112,7 @@ describe("voice cards", () => {
 describe("Ctrl+Space box", () => {
   const owner = { ...COMPASS, voice: true };
   it("placeholder 'Ask Compass anything: ...', scan + paperclip + highlighted microphone, chips and attachment", async () => {
-    fakeBridge.setShelf([{ id: "a", name: "a.pdf", sub: "", kind: "pdf" }, { id: "b", name: "b.pdf", sub: "", kind: "pdf" }]);
+    fakeBridge.setShelf([{ id: "a", name: "a.pdf", sub: "", kind: "pdf", pinned: false }, { id: "b", name: "b.pdf", sub: "", kind: "pdf", pinned: false }]);
     fakeBridge.addClip({ id: "k1", createdAt: Date.now(), pinned: false, source: "Chrome", kind: "text", text: "https://example.com/x", hint: "link", sub: null, thumb: null, screenshot: false });
     const send = vi.fn();
     const { container } = render(<ComposerCard owner={owner} turns={[]} send={send} />);
@@ -149,7 +149,7 @@ describe("Ctrl+Space box", () => {
   });
   it("when Rust reports no attachment kinds there are no chips or attach buttons (no out-of-contract kind is sent)", async () => {
     { const real = fakeBridge.call.bind(fakeBridge) as (c: string, ...a: unknown[]) => Promise<unknown>; vi.spyOn(fakeBridge, "call").mockImplementation(((c: string, ...a: unknown[]) => (c === "composer_kinds" ? Promise.reject("unknown") : real(c, ...a))) as never); }
-    fakeBridge.setShelf([{ id: "a", name: "a.pdf", sub: "", kind: "pdf" }]);
+    fakeBridge.setShelf([{ id: "a", name: "a.pdf", sub: "", kind: "pdf", pinned: false }]);
     render(<ComposerCard owner={owner} turns={[]} send={() => undefined} />);
     await settle();
     expect(screen.queryByText(/Raftaki/)).toBeNull();

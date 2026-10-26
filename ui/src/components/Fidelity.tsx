@@ -168,7 +168,7 @@ export function ShelfSuggestRow({ items, main }: { items: ShelfItem[]; main: Plu
         <div style={{ flex: 1 }}>
           <div className="b4">{plain(sug.text, 200)}</div>
           <div className="buttons" style={{ marginTop: 10 }}>
-            <button className="btn kk assistant" onClick={() => bridge.call("shelf_ask", { id: sug.id }).catch(noop)}><Sparkles />{askLabel(main)}</button>
+            <button className="btn kk assistant" onClick={() => bridge.call("shelf_ask", { ids: [sug.id] }).catch(noop)}><Sparkles />{askLabel(main)}</button>
             <button className="btn kk glass" onClick={() => bridge.call("shelf_memory", { id: sug.id }).catch(noop)}>Add to Notes</button>
             <button className="btn kk glass" onClick={() => bridge.call("share_open", { id: sug.id }).catch(noop)}><Share />Share</button>
           </div>

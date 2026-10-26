@@ -167,7 +167,7 @@ describe("island: meeting, Compass not connected, shelf suggestion", () => {
     expect(screen.getByRole("dialog", { name: "Compass isn't connected" })).toBeTruthy();
   });
   it("shelf card: Compass suggestion for a PDF and three buttons; only Shelf in the center", async () => {
-    fakeBridge.setShelf([{ id: "f1", name: "presentation-draft.pdf", sub: "2,4 MB", kind: "pdf" }, { id: "f2", name: "screen-recording.mp4", sub: "38 MB", kind: "video" }]);
+    fakeBridge.setShelf([{ id: "f1", name: "presentation-draft.pdf", sub: "2.4 MB", kind: "pdf", pinned: false }, { id: "f2", name: "screen-recording.mp4", sub: "38 MB", kind: "video", pinned: false }]);
     render(<Island monitor="m1" init={{ view: "shelf" }} />);
     await settle();
     expect(screen.getByText(/summarize it into Notes/)).toBeTruthy();

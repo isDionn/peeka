@@ -16,6 +16,14 @@
 /* hover on the center / a peek: brightness as a CSS transition (was a JS spring writing a 0.5 px drop per frame, which softened the text at 1x; polish audit #7) */
 .islandCenter { transition: filter var(--d-fast) var(--ease-move); }
 .islandCenter[data-hv] { filter: brightness(1.2); }
+/* a fullscreen app on this screen: only a small handle at the top centre; the rest of the island is folded away (not painted, not clickable).
+   The hot zone (96 x 8) is a little bigger than the 40 x 4 pill it draws. Opened, the island brings its own strip-coloured band (no strip behind it). */
+.islandStage[data-handle] > :not(.fsHandle, .srOnly) { visibility: hidden; }
+.fsHandle { position: absolute; left: 50%; top: 0; width: 96px; height: 8px; padding: 0; border: 0; background: none; transform: translateX(-50%); cursor: pointer; pointer-events: auto; }
+.fsHandle::before { content: ""; position: absolute; left: 50%; top: 0; width: 40px; height: 4px; border-radius: 0 0 3px 3px; background: var(--l1); opacity: .45; box-shadow: 0 0 0 1px rgb(0 0 0 / .3); transform: translateX(-50%); transition: opacity var(--d-fast) var(--ease-move); animation: islandIn var(--d-move) var(--ease) backwards; }
+.fsHandle:hover::before, .fsHandle:focus-visible::before { opacity: .85; }
+.fsHandle:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: 0 0 6px 6px; }
+.fsBand { position: absolute; left: 50%; top: 0; z-index: 5; height: var(--BAR); border-radius: 0 0 14px 14px; background: var(--strip); transform: translateX(-50%); pointer-events: auto; }
 /* no staggered entry on a card carrying a flying item: the flight measurement mustn't start from a shifted spot */
 .body:has([data-share]) { animation: none; }
 .islandHit { position: absolute; left: 50%; top: var(--BAR); transform: translateX(-50%); opacity: 0; pointer-events: none; }

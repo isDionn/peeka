@@ -146,6 +146,49 @@ pub struct Audio {
     pub mic_muted: Option<bool>,
 }
 
+/// One app's row in the Status panel's mixer (`audio_sessions`). `id` is `session_key` of the app id, so no exe path
+/// reaches the page; `icon` "" = none (the page draws the name's letter).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AudioSession {
+    pub id: String,
+    pub app: String,
+    pub icon: String,
+    #[serde(rename = "colorIcon")]
+    pub color_icon: Option<String>,
+    /// 0..1, Windows's own session scalar.
+    pub volume: f32,
+    pub muted: bool,
+}
+
+/// The mixer row id the page sends back: a hash of the app id (same app, same id, for this build).
+pub fn session_key(app_id: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    app_id.hash(&mut h);
+    format!("{:016x}", h.finish())
+}
+
+/// One row per app in first-seen order (Windows lists sessions oldest first, so rows don't jump): an app with several
+/// sessions (Chrome's processes) shows its loudest one and counts as muted only when all are.
+pub fn group_sessions(items: impl IntoIterator<Item = (String, f32, bool)>) -> Vec<(String, f32, bool)> {
+    let mut out: Vec<(String, f32, bool)> = Vec::new();
+    for (app, volume, muted) in items {
+        match out.iter_mut().find(|r| r.0 == app) {
+            Some(r) => {
+                r.1 = r.1.max(volume);
+                r.2 &= muted;
+            }
+            None => out.push((app, volume, muted)),
+        }
+    }
+    out
+}
+
+/// A volume from the page: clamped to 0..1; NaN / infinity refused.
+pub fn clamp_volume(v: f64) -> Option<f32> {
+    v.is_finite().then(|| v.clamp(0.0, 1.0) as f32)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -188,5 +231,21 @@ mod tests {
         assert_eq!(volume_from_scalar(3.0, false).percent, 100);
         assert_eq!(network_from_level(3), Network::Internet);
         assert_eq!(network_from_level(5), Network::Unknown);
+    }
+
+    #[test]
+    fn mixer_groups_per_app_and_clamps_page_volumes() {
+        let s = |a: &str, v: f32, m: bool| (a.to_string(), v, m);
+        let rows = group_sessions([s("exe:chrome", 0.2, true), s("exe:spotify", 0.5, false), s("exe:chrome", 0.8, false)]);
+        assert_eq!(rows, vec![s("exe:chrome", 0.8, false), s("exe:spotify", 0.5, false)], "first-seen order, loudest, muted only if all");
+        assert!(group_sessions([s("a", 0.1, true), s("a", 0.3, true)])[0].2, "all muted");
+        assert_eq!(clamp_volume(1.7), Some(1.0));
+        assert_eq!(clamp_volume(-0.2), Some(0.0));
+        assert_eq!(clamp_volume(0.25), Some(0.25));
+        assert_eq!(clamp_volume(f64::NAN), None);
+        assert_eq!(clamp_volume(f64::INFINITY), None);
+        assert_eq!(session_key("exe:c:/x/a.exe"), session_key("exe:c:/x/a.exe"));
+        assert_ne!(session_key("exe:a"), session_key("exe:b"));
+        assert!(!session_key("exe:c:/secret/a.exe").contains("secret"), "no path in the id");
     }
 }

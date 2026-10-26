@@ -1,9 +1,9 @@
 // Wave 5 small peeks (FPV §0i item 12; mockup sarj, pil, bt, zam, g0, g): charging, low battery, Bluetooth headphones, timer, shelf.
 // Each has two parts: the strip center (`*Center`) and the peek or card below it (`*Bump`, `ShelfCard`). Data comes from Rust (bridge.ts, status_changed).
-import type { CSSProperties } from "react";
-import { BatteryCharging, BatteryLow, Download, File, FileImage, FileSpreadsheet, FileText, FileVideo, Headphones, Inbox, Pause, Play, Share, Sparkles, Square, Bell, Timer, TimerOff, Wifi, WifiOff } from "lucide-react";
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { BatteryCharging, BatteryLow, Check, Clipboard, Copy, Download, ExternalLink, File, FileArchive, FileImage, FileSpreadsheet, FileText, FileVideo, FolderOpen, Headphones, Inbox, Pause, Pin, PinOff, Play, Plus, Share, Sparkles, Square, Bell, Timer, TimerOff, Trash2, Wifi, WifiOff, X } from "lucide-react";
 import { bridge, type PluginInfo, type ShelfItem, type Status, type TimerState } from "../bridge";
-import { askLabel, timerLeft, useSecond } from "../hooks";
+import { askLabel, timerLeft, useClips, useSecond, useShelfDrag } from "../hooks";
 import { fmtTime } from "../lib/media";
 import { flat } from "../lib/plugin";
 import { Lead } from "./Plugin";
@@ -111,30 +111,126 @@ export const ShelfBump = ({ main }: { main: PluginInfo | null }) => (
   </div>
 );
 
-export function ShelfCard({ items, main }: { items: ShelfItem[]; main: PluginInfo | null }) {
+/** The empty shelf's buttons. Paste = the newest image or file you copied (none: no button); `useClips` only runs here. */
+function ShelfAdd({ add }: { add: () => void }) {
+  const pasteable = useClips().find((c) => c.kind === "image" || (c.kind === "file" && !c.missing));
   return (
-    <div className="body">
-      <div className="shelf">
-        {items.slice(0, 2).map((f) => {
-          const I = FILE_ICON[f.kind];
-          return (
-            <div className="file plat glass" key={f.id} data-shelf={f.id}>
-              <span className="tip" style={{ background: `color-mix(in srgb, ${FILE_TONE[f.kind]} 18%, transparent)`, color: FILE_TONE[f.kind] }}><I /></span>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div className="b6" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{flat(f.name, 60)}</div>
-                <div className="t12 l3" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{flat(f.sub, 60)}</div>
-                <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
-                  <button className="mini" title="Share" aria-label={`${flat(f.name, 60)}, share`} onClick={() => bridge.call("share_open", { id: f.id }).catch(noop)}><Share /></button>
-                  {main && <button className="mini ask" title={askLabel(main)} aria-label={`${flat(f.name, 60)}, ${askLabel(main)}`} onClick={() => bridge.call("shelf_ask", { id: f.id }).catch(noop)}><Sparkles /></button>}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-        <div className="drop"><Download />Drop here</div>
+    <div className="row">
+      <button className="btn kk gray" onClick={add}><Plus />Add files</button>
+      {pasteable && <button className="btn kk gray" title="The newest image or file you copied" onClick={() => bridge.call("clip_to_shelf", { id: pasteable.id }).catch(noop)}><Clipboard />Paste</button>}
+    </div>
+  );
+}
+
+const KIND_LABEL = { pdf: "PDF", video: "Video", sheet: "Spreadsheet", image: "Image", other: "File" } as const;
+const files = (n: number) => (n === 1 ? "1 file" : `${n} files`);
+
+/** Direction A (owner, 2026-10-26): every shelf file in a 4-column grid; click selects, Ctrl toggles, Shift selects a range,
+ *  Esc clears; one action row for the selection; drag a tile out to any app (the files stay). The same component is the
+ *  island's Shelf card and the Modules Shelf tab. `generic` (locked, presenting, screen shared): no names and no actions. */
+export function ShelfCard({ items, main, generic = false }: { items: ShelfItem[]; main: PluginInfo | null; generic?: boolean }) {
+  const [picked, setPicked] = useState<string[]>([]);
+  const [anchor, setAnchor] = useState<string | null>(null);
+  const [lifted, setLifted] = useState<string[]>([]);
+  const [zipping, setZipping] = useState(false);
+  const over = useShelfDrag();
+  const seen = useRef(new Set(items.map((f) => f.id))); // ids already on screen: only newer tiles play the drop-in
+  const fresh = new Set(items.filter((f) => !seen.current.has(f.id)).map((f) => f.id));
+  useEffect(() => { items.forEach((f) => seen.current.add(f.id)); }, [items]);
+  const sel = generic ? [] : items.filter((f) => picked.includes(f.id)).map((f) => f.id); // in shelf order; a removed file drops out
+  const n = items.length;
+
+  const pick = (id: string, e: ReactMouseEvent) => {
+    if (e.shiftKey && anchor) {
+      const ids = items.map((f) => f.id), [a, b] = [ids.indexOf(anchor), ids.indexOf(id)].sort((x, y) => x - y);
+      setPicked(a < 0 ? [id] : ids.slice(a, b + 1));
+      return;
+    }
+    setAnchor(id);
+    // Enter / Space (detail 0) toggle like Ctrl-click: the keyboard has no Ctrl-click
+    if (e.ctrlKey || e.metaKey || e.detail === 0) setPicked(sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]);
+    else setPicked(sel.length === 1 && sel[0] === id ? [] : [id]);
+  };
+  // 6 px with the button down starts Windows' drag: the selection if this tile is in it, else just this tile
+  const start = useRef<{ id: string; x: number; y: number } | null>(null);
+  const drag = (id: string) => ({
+    onPointerDown: (e: ReactPointerEvent) => { if (e.button === 0 && !(e.target as HTMLElement).closest(".shMinis")) start.current = { id, x: e.clientX, y: e.clientY }; },
+    onPointerMove: (e: ReactPointerEvent) => {
+      const s = start.current;
+      if (!s) return;
+      if (e.buttons === 0) { start.current = null; return; }
+      if (Math.hypot(e.clientX - s.x, e.clientY - s.y) <= 6) return;
+      start.current = null;
+      const ids = sel.includes(s.id) ? sel : [s.id];
+      setLifted(ids);
+      bridge.call("shelf_drag", { ids }).catch(noop).finally(() => setLifted([]));
+    },
+    onPointerUp: () => { start.current = null; },
+  });
+  // refusals (locked, a file Windows would run) are silent
+  const zip = () => { setZipping(true); bridge.call("shelf_zip", { ids: sel }).catch(noop).finally(() => setZipping(false)); };
+  const remove = (ids: string[]) => { bridge.call("shelf_remove", { ids }).catch(noop); setPicked((p) => p.filter((x) => !ids.includes(x))); };
+  const add = () => bridge.call("shelf_add").catch(noop);
+  const onKey = (e: ReactKeyboardEvent) => { if (e.key === "Escape" && sel.length) { e.preventDefault(); e.stopPropagation(); setPicked([]); } }; // capture: the card's focus trap would close the card first
+
+  const drop = <div className="shDrop" aria-hidden="true"><Download />Release to add<small>Files stay where they are; the Shelf keeps a link.</small></div>;
+  if (n === 0) return (
+    <div className="body shBody">
+      <div className={"shWell" + (over ? " over" : "")}>
+        <div className="shEmpty">
+          <Inbox aria-hidden="true" />
+          <div><b>Park files here</b>Drag a file to the top of the screen, then drag it out into any app.</div>
+          {!generic && <ShelfAdd add={add} />}
+        </div>
+        {drop}
       </div>
-      {items.length === 0 && <div className="t13 l2 b4">Shelf is empty. Drag a file onto the island to keep it here.</div>}
-      {items.length > 0 && !main && <div className="t12 l3 b4" role="note">Connect an assistant to ask about these files.</div>}
+    </div>
+  );
+  return (
+    <div className="body shBody" onKeyDownCapture={onKey}>
+      <div className={"shWell" + (over ? " over" : "")}>
+        <div className={"shGrid" + (sel.length ? " any" : "")} role="group" aria-label={"Shelf, " + files(n)}>
+          {items.map((f) => {
+            const I = FILE_ICON[f.kind], name = generic ? KIND_LABEL[f.kind] : flat(f.name, 80), on = sel.includes(f.id);
+            return (
+              <div className={"shTile" + (on ? " sel" : "") + (fresh.has(f.id) ? " new" : "") + (lifted.includes(f.id) ? " lifted" : "")} key={f.id} data-shelf={f.id} {...(generic ? {} : drag(f.id))}>
+                <button className="shPick" aria-pressed={on} aria-label={`${name}, ${f.sub}${f.pinned ? ", pinned" : ""}`} disabled={generic} onClick={(e) => pick(f.id, e)}>
+                  <span className="shThumb" style={{ color: FILE_TONE[f.kind] }}><I aria-hidden="true" /></span>
+                  <span className="shName">{name}</span>
+                  <span className="shMeta">{f.pinned && <Pin aria-hidden="true" />}{f.sub}</span>
+                </button>
+                {!generic && <>
+                  <span className="shCheck" aria-hidden="true"><Check /></span>
+                  <span className="shMinis">
+                    <button className="mini" title="Open" aria-label={`Open ${name}`} onClick={() => bridge.call("shelf_open", { id: f.id }).catch(noop)}><ExternalLink /></button>
+                    <button className="mini" title={f.pinned ? "Unpin" : "Pin to the top"} aria-label={`${f.pinned ? "Unpin" : "Pin"} ${name}`} onClick={() => bridge.call("shelf_pin", { id: f.id, on: !f.pinned }).catch(noop)}>{f.pinned ? <PinOff /> : <Pin />}</button>
+                    <button className="mini" title="Remove from Shelf" aria-label={`Remove ${name} from Shelf`} onClick={() => remove([f.id])}><X /></button>
+                  </span>
+                </>}
+              </div>
+            );
+          })}
+        </div>
+        {drop}
+      </div>
+      <div className="shBar">
+        {generic ? <span className="hint">{files(n)}. Names are hidden right now.</span>
+          : sel.length === 0 ? <>
+            <span className="hint">{files(n)}. Click to select, Ctrl or Shift for more, drag out to any app.</span>
+            <span className="sp" />
+            <button className="btn kk gray" onClick={add}><Plus />Add</button>
+            {n > 1 && <button className="btn kk gray" onClick={() => setPicked(items.map((f) => f.id))}>Select all</button>}
+          </> : <>
+            <span className="n" aria-live="polite">{sel.length} selected</span>
+            <button className="btn kk gray" onClick={() => bridge.call("shelf_copy_files", { ids: sel }).catch(noop)}><Copy />Copy</button>
+            <button className="btn kk gray" onClick={() => bridge.call("shelf_share", { ids: sel }).catch(noop)}><Share />Share</button>
+            <button className="btn kk gray" disabled={zipping} onClick={zip}><FileArchive />{zipping ? "Zipping" : "Zip"}</button>
+            <button className="btn kk gray ic" title="Show in folder" aria-label="Show in folder" onClick={() => bridge.call("shelf_show_in_folder", { id: sel[0] }).catch(noop)}><FolderOpen /></button>
+            <button className="btn kk gray ic" title="Remove from Shelf" aria-label="Remove from Shelf" onClick={() => remove(sel)}><Trash2 /></button>
+            <span className="sp" />
+            {main && <button className="btn kk assistant" onClick={() => bridge.call("shelf_ask", { ids: sel }).catch(noop)}><Sparkles />{askLabel(main)}</button>}
+          </>}
+      </div>
     </div>
   );
 }

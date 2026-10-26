@@ -219,6 +219,8 @@ pub fn run() {
             crate::commands::audio_get,
             crate::commands::set_audio_output,
             crate::commands::set_mic_muted,
+            crate::commands::audio_sessions,
+            crate::commands::audio_session_set,
             crate::commands::set_radio,
             crate::commands::set_dnd,
             crate::commands::open_windows_settings,
@@ -296,6 +298,15 @@ pub fn run() {
             crate::commands::share_open,
             crate::commands::shelf_list,
             crate::commands::shelf_ask,
+            crate::commands::shelf_add,
+            crate::commands::shelf_open,
+            crate::commands::shelf_pin,
+            crate::commands::shelf_remove,
+            crate::commands::shelf_copy_files,
+            crate::commands::shelf_share,
+            crate::commands::shelf_show_in_folder,
+            crate::commands::shelf_zip,
+            crate::commands::shelf_drag,
             crate::commands::timer_get,
             crate::commands::timer_start,
             crate::commands::timer_control,
@@ -487,6 +498,7 @@ fn setup(app: &AppHandle) -> Result<(), String> {
     crate::recap::start(app, &data_dir);
     crate::clip_history::start(app, data_dir);
     ticks(app.clone());
+    fullscreen_watch(app.clone());
     click_through(app.clone());
     Ok(())
 }
@@ -569,6 +581,7 @@ fn build(app: &AppHandle, label: &str, url: &str) -> Option<WebviewWindow> {
         .build()
         .map_err(|e| eprintln!("[notch] {label}: {e}"))
         .ok()?;
+    no_browser_ui(&w);
     if let Ok(hwnd) = w.hwnd() {
         notch_win::style::no_activate(hwnd.0 as isize);
         notch_win::style::no_frame_line(hwnd.0 as isize);
@@ -584,6 +597,26 @@ fn build(app: &AppHandle, label: &str, url: &str) -> Option<WebviewWindow> {
         }
     });
     Some(w)
+}
+
+/// No browser leftovers in a Peeka page (RC7 owner): WebView2's own right-click menu (Back, Refresh, Save as, Print) and
+/// its browser keys (F5, Ctrl+R, Ctrl+P, Ctrl+F, F12, ...) are off; editing keys (Ctrl+C/V/X/A/Z) still work. Zoom is
+/// already off (`zoom_hotkeys_enabled`). Tauri doesn't expose these two settings, so they go on the live WebView2.
+pub fn no_browser_ui(w: &WebviewWindow) {
+    let _ = w.with_webview(|pw| {
+        use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
+        use windows::core::Interface;
+        // SAFETY: COM calls on this webview's own settings object, on the main thread (`with_webview` runs there).
+        unsafe {
+            let off = pw.controller().CoreWebView2().and_then(|c| c.Settings()).and_then(|s| {
+                s.SetAreDefaultContextMenusEnabled(false)?;
+                s.cast::<ICoreWebView2Settings3>()?.SetAreBrowserAcceleratorKeysEnabled(false)
+            });
+            if let Err(e) = off {
+                eprintln!("[notch] browser ui: {e}");
+            }
+        }
+    });
 }
 
 fn place(w: &WebviewWindow, r: Rect) {
@@ -629,7 +662,9 @@ pub fn layout(app: &AppHandle) {
             let s = strips.entry(label.clone()).or_default();
             *s = StripPlace { hwnd, scale: m.scale, origin: (rect.left, rect.top), size: (rect.width(), rect.height()), bar: bar.height(), ..std::mem::take(s) };
         }
-        let _ = w.show();
+        if !FS_HIDDEN.lock().contains(&label) {
+            let _ = w.show(); // a monitor / Explorer change during fullscreen must not bring a hidden strip back
+        }
     }
     for (label, w) in app.webview_windows() {
         let gone = label.strip_prefix("strip-").and_then(|i| i.parse::<usize>().ok()).is_some_and(|i| !wanted(i));
@@ -655,10 +690,13 @@ pub fn layout(app: &AppHandle) {
             let _ = w.set_ignore_cursor_events(true); // nothing is clickable until the page reports rectangles
             notch_win::style::set_island(w.hwnd().map_or(0, |h| h.0 as isize));
             *n.island.lock() = Some(IslandPlace { rect, scale: spot.scale, hwnd: w.hwnd().map_or(0, |h| h.0 as isize), hz: spot.hz });
-            let _ = w.show();
+            if !FS_HIDDEN.lock().iter().any(|l| l == "island") {
+                let _ = w.show();
+            }
         }
     }
     crate::taskbar::set_appbars(n.appbar.handles());
+    fullscreen_poke(); // a strip built during fullscreen (monitor plugged in) hides at once, not after the 1 s re-check
 }
 
 pub fn shortcut_of(keys: &str) -> Option<Shortcut> {
@@ -795,19 +833,114 @@ fn on_foreground(app: &AppHandle, exe: &str) {
     }
 }
 
-/// One thread for the slow things: status, fullscreen and monitors every 2 s, windows every 12 s; alert expiry every 1 s.
+/// The windows the fullscreen check hid (labels); `layout` leaves them hidden.
+static FS_HIDDEN: Mutex<Vec<String>> = Mutex::new(Vec::new());
+/// Wakes `fullscreen_watch` (window events, `ABN_FULLSCREENAPP`); a full channel = a check is already due.
+static FS_WAKE: std::sync::OnceLock<std::sync::mpsc::SyncSender<()>> = std::sync::OnceLock::new();
+
+fn fullscreen_poke() {
+    if let Some(tx) = FS_WAKE.get() {
+        let _ = tx.try_send(());
+    }
+}
+
+/// Fullscreen on its own thread, so a slow status read never holds it: woken by the front window's events
+/// (`notch_win::foreground::on_front_changed`), else every 1 s. A fullscreen app hides the strips on its monitor; on
+/// the island's monitor the island folds to its handle (the page, from `notch://fullscreen`), or hides for
+/// presentation / exclusive games (`screens::screen_plan`). Never lifts or focuses anything over the app.
+fn fullscreen_watch(app: AppHandle) {
+    let (tx, rx) = std::sync::mpsc::sync_channel(1);
+    let _ = FS_WAKE.set(tx);
+    notch_win::foreground::on_front_changed(fullscreen_poke);
+    thread::spawn(move || {
+        notch_win::com();
+        let mut hidden = false;
+        // Scenarios 39 / 40: the strips hidden by a fullscreen app (per monitor), the last badge.
+        let mut hidden_strips: Vec<usize> = vec![];
+        let mut badge: Option<(usize, usize)> = None;
+        // An approval over a fullscreen app drops the strips once, for 4 s (owner decision 16).
+        let (mut dropped_for, mut drop_until): (Option<String>, Option<Instant>) = (None, None);
+        loop {
+            if rx.recv_timeout(Duration::from_secs(1)).is_ok() {
+                thread::sleep(Duration::from_millis(40)); // a drag or an F11 animation sends a burst: one check
+                while rx.try_recv().is_ok() {}
+            }
+            let Some(n) = app.try_state::<Notch>() else { continue };
+            let presence = notch_win::presence::read();
+            let strips = strip_monitors(&n);
+            let island_monitor = n.monitors.lock().iter().find(|m| m.primary).map_or(0, |m| m.index);
+            // Which screen the fullscreen app is on decides what hides (scenario 39, `screens::screen_plan`).
+            let plan = notch_core::screens::screen_plan(
+                presence,
+                notch_win::apps::foreground_cover_monitor(),
+                island_monitor,
+                &strips,
+            );
+            let (full, handle) = (plan.island_hidden, plan.island_handle);
+            let changed = {
+                let mut a = n.attention.lock();
+                let next = notch_core::alerts::Attention { fullscreen: full, presence: plan.island_presence, ..*a };
+                std::mem::replace(&mut *a, next) != next
+            };
+            if changed {
+                crate::live::emit_alerts(&app);
+                // The attention budget also gates the plugins' protrusion and the approval drop.
+                crate::plugins::emit_surfaces(&app);
+            }
+            if full != hidden || plan.hidden_strips != hidden_strips {
+                hidden = full;
+                hidden_strips = plan.hidden_strips.clone();
+                let _ = app.emit("notch://fullscreen", full);
+                let strips_out: Vec<String> = hidden_strips.iter().map(usize::to_string).collect();
+                let _ = app.emit("fullscreen_screens", serde_json::json!({ "island": full, "strips": strips_out }));
+            }
+            let view = crate::live::alerts_view(&n);
+            if hidden && view.drop_strip_ms.is_some() && view.top != dropped_for {
+                dropped_for = view.top.clone();
+                drop_until = view.drop_strip_ms.map(|ms| Instant::now() + Duration::from_millis(ms));
+            }
+            if drop_until.is_some_and(|t| t <= Instant::now()) {
+                drop_until = None;
+            }
+            // The island and each strip window follow their own monitor; during an approval's drop all show.
+            let want: std::collections::HashSet<String> = if drop_until.is_some() {
+                Default::default()
+            } else {
+                hidden_strips.iter().map(|i| format!("strip-{i}")).chain((hidden && !handle).then(|| "island".to_string())).collect()
+            };
+            for label in &want {
+                if let Some(w) = app.get_webview_window(label).filter(|w| w.is_visible().unwrap_or(false)) {
+                    let _ = w.hide();
+                }
+            }
+            let mut was = FS_HIDDEN.lock();
+            for label in was.iter().filter(|l| !want.contains(*l)) {
+                if let Some(w) = app.get_webview_window(label) {
+                    let _ = w.show();
+                }
+            }
+            *was = want.into_iter().collect();
+            drop(was);
+            // Scenario 40: an approval waits while the cursor is on another monitor: a badge on that strip.
+            let approvals = view.items.iter().filter(|a| a.kind == notch_core::alerts::Kind::Approval).count();
+            let next_badge =
+                notch_core::screens::approval_badge(cursor_monitor(&n), island_monitor, &strips, &hidden_strips, approvals);
+            if next_badge != badge {
+                badge = next_badge;
+                let body = badge.map(|(monitor, count)| serde_json::json!({ "monitor": monitor.to_string(), "count": count }));
+                let _ = app.emit("approval_badge", body);
+            }
+        }
+    });
+}
+
+/// One thread for the slow things: status and monitors every 2 s, windows every 12 s; alert expiry every 1 s.
 /// shortcut: polled; volume is an event now (`live.rs`), network / power / windows still wait for theirs
 ///. Charger and low-battery alerts are judged from these status readings.
 fn ticks(app: AppHandle) {
     thread::spawn(move || {
         notch_win::com();
-        let (mut status, mut hidden): (Option<Status>, bool) = (None, false);
-        // Scenarios 39 / 40: the strips hidden by a fullscreen app (per monitor), the windows we hid, the last badge.
-        let mut hidden_strips: Vec<usize> = vec![];
-        let mut hidden_labels: std::collections::HashSet<String> = std::collections::HashSet::new();
-        let mut badge: Option<(usize, usize)> = None;
-        // An approval over a fullscreen app drops the strips once, for 4 s (owner decision 16).
-        let (mut dropped_for, mut drop_until): (Option<String>, Option<Instant>) = (None, None);
+        let mut status: Option<Status> = None;
         let mut taskbar_seen = crate::taskbar::created_at();
         for tick in 0u64.. {
             if let Some(n) = app.try_state::<Notch>() {
@@ -842,68 +975,6 @@ fn ticks(app: AppHandle) {
                         }
                     }
                 }
-                let presence = notch_win::presence::read();
-                let strips = strip_monitors(&n);
-                let island_monitor = n.monitors.lock().iter().find(|m| m.primary).map_or(0, |m| m.index);
-                // Which screen the fullscreen app is on decides what hides (scenario 39, `screens::screen_plan`).
-                let plan = notch_core::screens::screen_plan(
-                    presence,
-                    notch_win::apps::foreground_cover_monitor(),
-                    island_monitor,
-                    &strips,
-                );
-                let full = plan.island_hidden;
-                let changed = {
-                    let mut a = n.attention.lock();
-                    let next = notch_core::alerts::Attention { fullscreen: full, presence: plan.island_presence, ..*a };
-                    std::mem::replace(&mut *a, next) != next
-                };
-                if changed {
-                    crate::live::emit_alerts(&app);
-                    // The attention budget also gates the plugins' protrusion and the approval drop.
-                    crate::plugins::emit_surfaces(&app);
-                }
-                if full != hidden || plan.hidden_strips != hidden_strips {
-                    hidden = full;
-                    hidden_strips = plan.hidden_strips.clone();
-                    let _ = app.emit("notch://fullscreen", full);
-                    let strips_out: Vec<String> = hidden_strips.iter().map(usize::to_string).collect();
-                    let _ = app.emit("fullscreen_screens", serde_json::json!({ "island": full, "strips": strips_out }));
-                }
-                let view = crate::live::alerts_view(&n);
-                if hidden && view.drop_strip_ms.is_some() && view.top != dropped_for {
-                    dropped_for = view.top.clone();
-                    drop_until = view.drop_strip_ms.map(|ms| Instant::now() + Duration::from_millis(ms));
-                }
-                if drop_until.is_some_and(|t| t <= Instant::now()) {
-                    drop_until = None;
-                }
-                // The island and each strip window follow their own monitor; during an approval's drop all show.
-                let want: std::collections::HashSet<String> = if drop_until.is_some() {
-                    Default::default()
-                } else {
-                    hidden_strips.iter().map(|i| format!("strip-{i}")).chain(hidden.then(|| "island".to_string())).collect()
-                };
-                for label in &want {
-                    if let Some(w) = app.get_webview_window(label).filter(|w| w.is_visible().unwrap_or(false)) {
-                        let _ = w.hide();
-                    }
-                }
-                for label in hidden_labels.difference(&want) {
-                    if let Some(w) = app.get_webview_window(label) {
-                        let _ = w.show();
-                    }
-                }
-                hidden_labels = want;
-                // Scenario 40: an approval waits while the cursor is on another monitor: a badge on that strip.
-                let approvals = view.items.iter().filter(|a| a.kind == notch_core::alerts::Kind::Approval).count();
-                let next_badge =
-                    notch_core::screens::approval_badge(cursor_monitor(&n), island_monitor, &strips, &hidden_strips, approvals);
-                if next_badge != badge {
-                    badge = next_badge;
-                    let body = badge.map(|(monitor, count)| serde_json::json!({ "monitor": monitor.to_string(), "count": count }));
-                    let _ = app.emit("approval_badge", body);
-                }
                 let created = crate::taskbar::created_at();
                 if created != taskbar_seen {
                     taskbar_seen = created;
@@ -930,6 +1001,7 @@ fn ticks(app: AppHandle) {
 fn click_through(app: AppHandle) {
     static IGNORING: AtomicBool = AtomicBool::new(true);
     let mut was_down = false;
+    let mut held = false; // a press that started on the island, until its release
     let mut strip_ignoring: HashMap<isize, bool> = HashMap::new(); // per strip window: what was last set
     thread::spawn(move || loop {
         let place = app.try_state::<Notch>().and_then(|n| *n.island.lock());
@@ -954,10 +1026,16 @@ fn click_through(app: AppHandle) {
             let on = notch_core::clickthrough::press_target(root, place.hwnd, n.strips.lock().iter().map(|(l, s)| (l.as_str(), s.hwnd)));
             let _ = app.emit("notch://outside_press", on);
         }
+        // a drag that starts on the island (the music scrubber) keeps the mouse until release: going click-through
+        // mid-drag would lose the pointerup and the hover, and the progress row would fold away under the cursor
+        if down && !was_down {
+            held = !IGNORING.load(Ordering::SeqCst);
+        }
+        held &= down;
         was_down = down;
         let inside = place.rect.contains(cursor.0, cursor.1)
             && captures(cursor, (place.rect.left, place.rect.top), place.scale, &n.rects.lock());
-        let ignore = !inside;
+        let ignore = !inside && !held;
         if IGNORING.swap(ignore, Ordering::SeqCst) != ignore {
             if let Some(w) = app.get_webview_window("island") {
                 let _ = w.set_ignore_cursor_events(ignore);

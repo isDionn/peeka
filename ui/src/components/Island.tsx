@@ -14,8 +14,6 @@ import { ambientMood } from "../mascot/ambient";
 import { eventMood, newIds, REACT_MS, withReaction } from "../mascot/react";
 import { createCcMood } from "../mascot/ccMood";
 import { BtBump, BtCenter, ChargeBump, ChargeCenter, LowBatteryBump, LowBatteryCenter, ShelfBump, ShelfCard, ShelfCenter, TimerBump, TimerCenter, TimerDoneBump, TimerDoneCenter, NetBump, NetCenter, AwayBump, AwayCenter } from "./Extras";
-import { announceCenterClock } from "../lib/centerClock";
-import { clockParts } from "../lib/clock";
 import { fly } from "../lib/flight";
 import { trackTitle } from "../lib/media";
 import { focusables, useFocusTrap } from "../lib/useFocusTrap";
@@ -160,9 +158,9 @@ function useSize(): [HTMLElement | null, (el: HTMLElement | null) => void, { w: 
 }
 
 interface CenterOpts {
-  time: string; media: Media | null; alert: Alert | null; osd: VolumeOsd | null; approval: ApprovalItem | null; plug: ProtrusionItem | null; composerLabel: string | null;
+  media: Media | null; alert: Alert | null; osd: VolumeOsd | null; approval: ApprovalItem | null; plug: ProtrusionItem | null; composerLabel: string | null;
   net: NetNote | null; shot: ClipPlain | null; timerDone: string | null; main: ReturnType<typeof useMainAssistant>; locked: boolean; alertsN: number; done: { title: string; took: string } | null; meeting: ProtrusionItem | null; burst: Burst | null; stopped: MusicStopped | null; dl: DownloadDone | null; cpu: CpuHigh | null; edit: CcEdit | null;
-  /** Resting center (mascot, "Compass ready", counts or the clock); Island picks which piece shows for which card. */
+  /** Resting center (mascot, "Compass ready", counts or music); Island picks which piece shows for which card. */
   rest: ReactNode;
   /** The 40 px strip ghost in an event's mood (download, copy catch, task done, CPU busy); null = no ghost there. */
   ghost: (kind: Kind) => ReactNode;
@@ -170,8 +168,6 @@ interface CenterOpts {
   /** The island is hidden or a fullscreen app is up: the music bars hold still and don't ask for the speaker level. */
   quiet: boolean;
 }
-/** Short device peeks (volume, screenshot, Bluetooth, charger) leave the clock where it was: no hand-over to the strip and back. */
-const KEEPS_CLOCK = new Set<Kind>(["osd", "shot", "bt", "charge"]);
 /* While locked, the strip and bubble show generic labels instead of content: LOCK_MUSIC, LOCK_ALERT (SideBubble.tsx). */
 const centerOf = (kind: Kind, o: CenterOpts): ReactNode => {
   const { media, alert, osd, approval, plug, composerLabel, main, rest } = o;
@@ -228,7 +224,7 @@ const centerOf = (kind: Kind, o: CenterOpts): ReactNode => {
 /**
  * Island window (760x620, transparent, fixed size; the window never resizes): the strip's center content, the peek below it, and cards.
  * The shape springs in CSS; clickable areas are reported to Rust with `data-hit`. With no assistant connected (always so until Wave 3, decision 10):
- * clock and any playing music in the center, no assistant line.
+ * the ghost and any playing music in the center, no assistant line.
  */
 export function Island({ monitor, init }: { monitor: string; init?: IslandInit }) {
   const now = useNow();
@@ -408,6 +404,12 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   useEffect(() => { if (pinned !== null && !pinnedLive) setPinned(null); }, [pinned, pinnedLive]); // the brought-forward activity ended: the order returns on its own
   // while Search / Settings is open on the strip page, a short label in the center (say it once); if something else is in the peek, it stays
   const kind: Kind = (panelLabel === "search" || panelLabel === "settings" || panelLabel === "cleanup") && (base === "rest" || base === "hov") ? "panel" : base;
+  // A fullscreen app on this screen (Rust `notch://fullscreen`; its strip is gone): the island folds to a small handle at the top. Hovering the handle opens
+  // the card, leaving closes it again. Approvals, alerts and plugin peeks (Rust's attention budget already gates them) still peek as usual.
+  const fsHandle = fullscreen && user === null && !hold && kind !== "approval" && kind !== "alert" && kind !== "plugin";
+  const byHandle = useRef(false);
+  const openByHandle = () => { clearTimeout(hoverTimer.current); hoverTimer.current = setTimeout(() => { byHandle.current = true; setHover(true); setUser("modules"); }, 120); };
+  useEffect(() => { if (!hold && byHandle.current) { byHandle.current = false; setUser((u) => (u === "modules" ? null : u)); } }, [hold]);
   useHitRects("island", monitor, kind === "panel" ? "panel:" + panelLabel : kind);
   const plainPanel = panelLabel === "status" || panelLabel === "start"; // while Status / Start is open the counts live in the panel (say it once); the ghost stays
   // the strip window's own ghost (the empty Notifications board; the one-mascot registry can't see across windows) is on screen: the strip ghost steps aside
@@ -699,7 +701,6 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   }, [back]);
 
   /* ---- content ---- */
-  const { time, label } = clockParts(now);
   const pos = Math.floor(position()); // seconds: so the card's props don't change on spring frames
   const musicCard = useMemo(() => media && <MusicCard media={media} pos={pos} calm={priv} />, [media, pos, priv]);
   const editSid = !priv && edit?.file ? edit.sid : null;
@@ -729,7 +730,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       case "net": return { key: "net:" + netNote, mode: "bump", label: netNote === "back" ? "Back online" : "Connection lost", node: <NetBump lost={netNote !== "back"} /> };
       case "timerdone": return timerDone && { key: "timerdone", mode: "bump", label: "Time's up", node: <TimerDoneBump label={priv ? "" : timerDone.label} onDone={closeTimerDone} /> };
       case "shelfdrag": return { key: "shelfdrag", mode: "bump", label: "Shelf", node: <ShelfBump main={main} /> };
-      case "shelf": return { key: "shelf", mode: "card", kw: 620, label: "Shelf", node: <><ShelfCard items={shelf} main={main} /><ShelfSuggestRow items={shelf} main={main} /></> };
+      case "shelf": return { key: "shelf", mode: "card", kw: 620, label: "Shelf", node: <><ShelfCard items={shelf} main={main} generic={priv} />{!priv && <ShelfSuggestRow items={shelf} main={main} />}</> };
       case "clipboard": return { key: "clipboard", mode: "card", kw: 620, label: "Clipboard", node: <ClipboardView /> };
       case "lock": return { key: "lock", mode: "card", kw: 520, label: "Peeka locked", node: <LockCard lock={lock} /> };
       case "approval": return approvalTop && { key: "approval:" + approvalTop.id, mode: "bump", label: approvalTop.title, node: <ApprovalBump a={approvalTop} dropMs={surf.dropStripMs} onlyDetail={surf.dropStripMs !== null} generic={priv} onDetail={() => { setDetailId(approvalTop.id); setUser("approval-card"); }} /> };
@@ -752,7 +753,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     }
   })();
   const centerKey = kind === "alert" ? "alert:" + alert?.id : kind === "approval" ? "approval:" + approvalTop?.id : kind === "plugin" ? "plugin:" + surf.protrusion?.title : kind === "rest" || kind === "hov" || kind === "modules" || kind === "noassistant" ? "rest" + (consent ? "-consent" : "") + (hidden ? "-hidden" : offline ? "-offline" : status?.dnd ? "-dnd" : "") : kind === "panel" ? "panel:" + panelLabel : kind;
-  // resting center: with an assistant connected, mascot + "Compass ready" + counts (a); otherwise clock and music (x0), with a sleeping mascot if the assistant is installed but not connected
+  // resting center: with an assistant connected, mascot + "Compass ready" + counts (a); otherwise the ghost and music (x0; no clock: the strip's right side has it, RC7 owner), with a sleeping mascot if the assistant is installed but not connected
   const approvalsN = surf.approvals.length;
   const rest = ((): ReactNode => {
     const lockIcon = lock.locked && <Lock aria-label="Peeka locked" />;
@@ -772,7 +773,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     }
     return (
       <>
-        <span className="ms keep">{lockIcon}<Mascot ref={keepMascot} size={40} mood={moodShown} isMainAssistant cursor={input.cursor} hide={!restShown || mkAside} /><span className="b6 num">{time}</span></span>
+        <span className="ms keep">{lockIcon}<Mascot ref={keepMascot} size={40} mood={moodShown} isMainAssistant cursor={input.cursor} hide={!restShown || mkAside} /></span>
         {approvalsN > 0 && <span className="t12 b6 approvalCount num">{cap99(approvalsN)} {approvalsN === 1 ? "approval" : "approvals"}</span>}{/* pending approvals are counted on the strip even when the connection is lost */}
         {media && (priv
           ? <span className="ms"><span className="l2">{LOCK_MUSIC}</span>{media.playing && <Bars still={hidden || fullscreen} />}</span>
@@ -780,7 +781,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       </>
     );
   })();
-  const centerNode = centerOf(kind, { time, media, alert, osd, approval: kind === "approval" ? approvalTop : null, plug: surf.protrusion, composerLabel: composerLabel, net: netNote, shot: shotNow, timerDone: timerDone?.label ?? null, main, locked: priv, alertsN: alerts.length, done, meeting: meetingItem, burst, stopped, dl, cpu: cpuHigh, edit, rest, ghost: (k) => { const m = eventMood(k, priv); return m && <Mascot size={40} mood={m} isMainAssistant cursor={input.cursor} />; }, battery: batt, bt, timer, shelfCount: shelf.length, panel: panelLabel, quiet: hidden || fullscreen });
+  const centerNode = centerOf(kind, { media, alert, osd, approval: kind === "approval" ? approvalTop : null, plug: surf.protrusion, composerLabel: composerLabel, net: netNote, shot: shotNow, timerDone: timerDone?.label ?? null, main, locked: priv, alertsN: alerts.length, done, meeting: meetingItem, burst, stopped, dl, cpu: cpuHigh, edit, rest, ghost: (k) => { const m = eventMood(k, priv); return m && <Mascot size={40} mood={m} isMainAssistant cursor={input.cursor} />; }, battery: batt, bt, timer, shelfCount: shelf.length, panel: panelLabel, quiet: hidden || fullscreen });
 
   const centerOld = useOld(centerKey, centerNode);
   const shapeOld = useOld(spec?.key ?? "none", spec?.node ?? null, spec?.mode === "card" ? spec.kw : undefined);
@@ -871,8 +872,6 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     });
   }, [centerKey, spec?.key]);
 
-  // device peeks are short blips: the clock stays where it was instead of jumping next to the strip's date and back
-  useEffect(() => { if (!KEEPS_CLOCK.has(kind)) announceCenterClock(kind === "noassistant" || ((kind === "rest" || kind === "hov" || kind === "modules") && !assistantUp)); }, [kind, assistantUp]);
 
   const openMod = (tab?: string) => { setModStart(tab); setUser("modules"); };
   /** One rule (Y1/Y3/O11): clicking a peek opens Modules on its own tab; clicking the center with a card open closes the card. */
@@ -902,7 +901,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const assistantRest = assistantUp && mainP && (kind === "rest" || kind === "hov" || kind === "modules");
   const ariaOverride = hidden && restShown ? "Island hidden. Press Ctrl+Shift+A to show it" : asleep && restShown ? `${mainP ? pluginName(mainP) : "Assistant"} isn't connected. Open to launch it` : null;
   const parts = assistantRest ? [`${pluginName(mainP)} ready`, approvalsN ? `${cap99(approvalsN)} ${approvalsN === 1 ? "approval" : "approvals"}` : null, alerts.length ? `${cap99(alerts.length)} ${alerts.length === 1 ? "notification" : "notifications"}` : null].filter(Boolean)
-    : [label.split(",")[1]?.trim(), media?.playing ? (priv ? LOCK_MUSIC : `Playing ${trackTitle(media)}`) : null].filter(Boolean);
+    : ["Peeka", media?.playing ? (priv ? LOCK_MUSIC : `Playing ${trackTitle(media)}`) : null].filter(Boolean);
   // a shown peek is announced to screen readers (approval: immediately, others: in turn) and the island button's name carries the peek (F-01, F-28)
   const bump = mode === "bump" && !!spec;
   useEffect(() => { if (!stage.current?.contains(document.activeElement)) setKbIn(false); }, [kind, spec?.key]); // blur may not fire when the focused element unmounts
@@ -914,10 +913,13 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const centerMax = Math.max(360, Math.min(424, Math.round(innerWidth * 0.4))); // center content is never wider than ~40% of the screen or 424 px (R2-Y1; Strip.tsx ISLAND_HALF keeps the tabs left of its widest center); overflow gets an ellipsis
 
   return (
-    <div className="islandStage" ref={stage} onKeyDown={crossKey} data-spring={box.moving ? "" : undefined}
+    <div className="islandStage" ref={stage} onKeyDown={crossKey} data-spring={box.moving ? "" : undefined} data-handle={fsHandle ? "" : undefined}
       onFocus={() => { if (document.documentElement.hasAttribute("data-kb")) setKbIn(true); }} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setKbIn(false); }}>
       <div className="srOnly" role="status" aria-live="polite" aria-atomic="true">{kind === "approval" ? "" : say}</div>
       <div className="srOnly" role="alert" aria-live="assertive" aria-atomic="true">{kind === "approval" ? say : ""}</div>
+      {fullscreen && (fsHandle
+        ? <button className="fsHandle" data-hit aria-label="Open island" onPointerEnter={openByHandle} onPointerLeave={() => hoverIntent(false)} onClick={() => { byHandle.current = true; setUser("modules"); }} />
+        : <div className="fsBand" data-hit style={{ width: Math.max(mw + 24, 2 * lineGap) }} onPointerEnter={() => hoverIntent(true)} />)}{/* no strip behind the island: its own strip-coloured band under the centre */}
       <button ref={center} className="islandCenter" data-hit aria-expanded={mode === "card" ? true : bump ? undefined : false} aria-label={ariaOverride ?? (bump ? `${say}. Open Modules` : `${parts.join(", ")}${mode === "card" ? "" : ". Open card"}`)}
         style={{ width: mw + 24, transform: "translateX(-50%)" }} data-hv={kind === "hov" || bumpHover ? "" : undefined}
         title={bumpHover ? "Open Modules" : undefined} onClick={(e) => { if (!(e.target as Element).closest?.(".mascot")) return afterPick(onCenter); const act = moodShown === "error" && restShown ? () => setUser("error") : card?.takesAsk ? () => openAsk("ext") : owner.current ? () => openAsk("composer") : onCenter; setTimeout(() => afterPick(act), SLAP_OPEN_MS); }}

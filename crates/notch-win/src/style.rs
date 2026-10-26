@@ -246,7 +246,7 @@ pub fn after_press(before: isize, fg: isize, hwnd: isize, typing: bool, before_a
 pub fn strip_no_activate(hwnd: isize) {
     use std::sync::atomic::Ordering::SeqCst;
     use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
-    use windows::Win32::UI::Shell::{DefSubclassProc, SetWindowSubclass};
+    use windows::Win32::UI::Shell::{DefSubclassProc, SetWindowSubclass, ABN_FULLSCREENAPP};
     use windows::Win32::UI::WindowsAndMessaging::{
         GetForegroundWindow, GetShellWindow, IsWindow, KillTimer, SetForegroundWindow, SetTimer, SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE,
         SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, WINDOWPOS, WM_ACTIVATE, WM_TIMER, WM_WINDOWPOSCHANGED,
@@ -258,6 +258,9 @@ pub fn strip_no_activate(hwnd: isize) {
         unsafe {
             if msg == WM_ACTIVATE && wparam.0 & 0xFFFF == 0 {
                 let _ = TYPING.compare_exchange(h.0 as isize, 0, SeqCst, SeqCst); // focus left: the typing session is over
+            }
+            if msg == crate::appbar::CALLBACK_MSG && wparam.0 as u32 == ABN_FULLSCREENAPP {
+                crate::foreground::front_changed(); // a strip's AppBar heard a fullscreen app open or close
             }
             if msg == WM_WINDOWPOSCHANGED {
                 // SAFETY: for WM_WINDOWPOSCHANGED, lParam points at a WINDOWPOS owned by Windows for this call.

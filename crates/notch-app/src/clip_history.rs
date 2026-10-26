@@ -15,20 +15,16 @@ pub struct ClipState {
     pub clip_history: Mutex<ClipHistory>,
 }
 
-/// Where `clip_open` / `clip_to_shelf` copy an image (a screenshot may be private: both are emptied at every start,
-/// the shelf is session-only anyway).
+/// Where `clip_open` copies an image (a screenshot may be private: emptied at every start). `clip_to_shelf` copies into
+/// the data folder instead (`notch_core::shelf::copies_dir`): the shelf is kept until the owner removes a file.
 pub fn temp_open() -> std::path::PathBuf {
     std::env::temp_dir().join("notch-open")
 }
 
-pub fn temp_shelf() -> std::path::PathBuf {
-    std::env::temp_dir().join("notch-shelf")
-}
-
 pub fn start(app: &AppHandle, data_dir: std::path::PathBuf) {
     let _ = std::fs::remove_dir_all(temp_open());
-    let _ = std::fs::remove_dir_all(temp_shelf());
-    let _ = std::fs::remove_dir_all(std::env::temp_dir().join("notch-raf")); // the old (Turkish) name of temp_shelf
+    let _ = std::fs::remove_dir_all(std::env::temp_dir().join("notch-shelf")); // where shelf copies went before they were kept
+    let _ = std::fs::remove_dir_all(std::env::temp_dir().join("notch-raf")); // the old (Turkish) name of that folder
     let cfg = app.try_state::<Notch>().map(|n| n.settings.lock().clip_config()).unwrap_or_default();
     // Demo: an empty in-memory clipboard (the owner's pinned items are not even read).
     let clip_history =

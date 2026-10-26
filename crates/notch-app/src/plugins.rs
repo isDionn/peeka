@@ -516,6 +516,7 @@ fn open_consent(app: &AppHandle) {
             .build();
         match built {
             Ok(win) => {
+                crate::app::no_browser_ui(&win);
                 if let Ok(hwnd) = win.hwnd() {
                     notch_win::style::tool_window(hwnd.0 as isize); // still hidden: no taskbar button, no Alt+Tab entry
                 }

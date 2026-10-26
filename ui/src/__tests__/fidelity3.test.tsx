@@ -75,7 +75,7 @@ describe("status card (o)", () => {
   });
   it("audio switcher: one row naming the default output, opens in place, a click sets the default and rows keep their order", async () => {
     await card();
-    const head = screen.getByRole("button", { expanded: false });
+    const head = screen.getByRole("button", { name: /^Audio output/ });
     expect(head.textContent).toContain("Speakers (Realtek Audio)");
     expect(screen.queryByRole("button", { name: "Buds Pro" })).toBeNull(); // collapsed: only the header row
     fireEvent.click(head);
@@ -92,7 +92,7 @@ describe("status card (o)", () => {
   it("audio switcher: a refused switch shows a short notice in the header, no new row, no crash", async () => {
     fakeBridge.setAudioRefuse(true);
     await card();
-    fireEvent.click(screen.getByRole("button", { expanded: false }));
+    fireEvent.click(screen.getByRole("button", { name: /^Audio output/ }));
     await settle();
     const rows = document.querySelectorAll(".audioOut .row").length;
     fireEvent.click(screen.getByRole("button", { name: "LG Monitor (HDMI)" }));

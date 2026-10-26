@@ -23,6 +23,10 @@ pub struct ScreenPlan {
     /// The presence the island's attention budget reads: a fullscreen app on ANOTHER monitor does not make the
     /// island "busy".
     pub island_presence: Presence,
+    /// The island window stays and its page folds to the small top handle (a covering window on the island's
+    /// monitor). False with `island_hidden` = the window hides (presentation, an exclusive D3D game, "busy" with no
+    /// window to blame: a topmost window over exclusive fullscreen would flicker the mode).
+    pub island_handle: bool,
 }
 
 /// `presence` = `SHQueryUserNotificationState` (session-wide: it says "busy" whichever monitor the fullscreen app is
@@ -38,17 +42,47 @@ pub fn screen_plan(presence: Presence, covered: Option<usize>, primary: usize, s
     let busy = matches!(presence, Presence::Busy | Presence::D3dFullscreen | Presence::App);
     let everywhere = presence == Presence::Presentation || (busy && covered.is_none());
     if everywhere {
-        return ScreenPlan { island_hidden: true, hidden_strips: strips.to_vec(), island_presence: presence };
+        return ScreenPlan { island_hidden: true, hidden_strips: strips.to_vec(), island_presence: presence, island_handle: false };
     }
     let Some(m) = covered else {
-        return ScreenPlan { island_hidden: false, hidden_strips: vec![], island_presence: presence };
+        return ScreenPlan { island_hidden: false, hidden_strips: vec![], island_presence: presence, island_handle: false };
     };
     let elsewhere = m != primary && busy;
     ScreenPlan {
         island_hidden: m == primary,
         hidden_strips: strips.iter().copied().filter(|s| *s == m).collect(),
         island_presence: if elsewhere { Presence::Normal } else { presence },
+        island_handle: m == primary && presence != Presence::D3dFullscreen,
     }
+}
+
+/// The foreground window as `covering_monitor` reads it.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FgWindow<'a> {
+    pub rect: Rect,
+    pub class: &'a str,
+    /// Peeka's own window.
+    pub ours: bool,
+    pub visible: bool,
+    pub cloaked: bool,
+    pub maximized: bool,
+}
+
+/// Shell furniture that covers a monitor without being a fullscreen app: the desktop, the taskbars, and the hosts of
+/// Start / Win+Tab / Alt+Tab (idea from YASB's exclusion list, MIT).
+const NOT_APPS: [&str; 6] =
+    ["progman", "workerw", "shell_traywnd", "shell_secondarytraywnd", "xamlexplorerhostislandwindow", "multitaskingviewframe"];
+
+/// The monitor (`index`) the foreground window covers completely, i.e. a fullscreen app there (Chrome F11, a video's
+/// fullscreen button, a borderless game, a slideshow). The monitor rect counts, not the work area. A maximized window
+/// only counts when it sits exactly on the monitor: a normal maximized window overhangs its work area by its frame,
+/// which covers the monitor whenever nothing reserves an edge (brand `reserve_appbar` off).
+pub fn covering_monitor(w: &FgWindow, monitors: &[Monitor]) -> Option<usize> {
+    let skip = w.ours || !w.visible || w.cloaked || NOT_APPS.contains(&w.class.to_ascii_lowercase().as_str());
+    if skip {
+        return None;
+    }
+    monitors.iter().find(|m| w.rect.covers(&m.rect) && (!w.maximized || w.rect == m.rect)).map(|m| m.index)
 }
 
 /// The badge on a secondary strip: `(monitor, approvals)`. Only for a monitor that is not the island's, has a strip,
@@ -137,6 +171,50 @@ mod tests {
             assert!(plan.island_hidden && plan.hidden_strips == [0, 1], "{p:?} {covered:?}");
         }
         assert!(!screen_plan(Presence::QuietTime, None, 0, &[0, 1]).island_hidden, "quiet time is not fullscreen");
+    }
+
+    #[test]
+    fn a_covering_window_on_the_main_screen_folds_the_island_to_its_handle_and_exclusive_games_hide_it() {
+        for p in [Presence::Busy, Presence::App, Presence::Normal] {
+            let plan = screen_plan(p, Some(0), 0, &[0, 1]);
+            assert!(plan.island_hidden && plan.island_handle, "{p:?}");
+        }
+        assert!(!screen_plan(Presence::D3dFullscreen, Some(0), 0, &[0]).island_handle, "exclusive D3D: the window hides");
+        assert!(!screen_plan(Presence::Busy, Some(1), 0, &[0, 1]).island_handle, "the video is on the other screen");
+        assert!(!screen_plan(Presence::Presentation, Some(0), 0, &[0]).island_handle);
+        assert!(!screen_plan(Presence::Busy, None, 0, &[0]).island_handle);
+    }
+
+    #[test]
+    fn only_a_real_app_covering_the_whole_monitor_is_fullscreen() {
+        let ms = [mon(0, 1920, 1080, 1.0, true), mon(1920, 2560, 1440, 1.0, false)];
+        let ms: Vec<Monitor> = ms.into_iter().enumerate().map(|(i, m)| Monitor { index: i, ..m }).collect();
+        let app = |l, t, r, b| FgWindow { rect: Rect { left: l, top: t, right: r, bottom: b }, class: "Chrome_WidgetWin_1", visible: true, ..Default::default() };
+        assert_eq!(covering_monitor(&app(0, 0, 1920, 1080), &ms), Some(0), "Chrome F11 / a video's fullscreen");
+        assert_eq!(covering_monitor(&app(1920, 0, 4480, 1440), &ms), Some(1), "on the second screen");
+        assert_eq!(covering_monitor(&app(-8, -8, 1928, 1088), &ms), Some(0), "a borderless game overhanging");
+        assert_eq!(covering_monitor(&app(0, 0, 1920, 1079), &ms), None, "1 px short (Peeka's own strip window)");
+        assert_eq!(covering_monitor(&app(0, 30, 1920, 1080), &ms), None, "the work area under the strip");
+        let max = |r| FgWindow { maximized: true, ..app(0, 0, 0, 0) }.with(r);
+        assert_eq!(covering_monitor(&max(Rect { left: -8, top: -8, right: 1928, bottom: 1088 }), &ms), None, "maximized, nothing reserved");
+        assert_eq!(covering_monitor(&max(Rect { left: 0, top: 0, right: 1920, bottom: 1080 }), &ms), Some(0), "a player that maximizes to the monitor");
+        let full = app(0, 0, 1920, 1080);
+        for w in [
+            FgWindow { ours: true, ..full },
+            FgWindow { visible: false, ..full },
+            FgWindow { cloaked: true, ..full },
+            FgWindow { class: "WorkerW", ..full },
+            FgWindow { class: "Shell_TrayWnd", ..full },
+            FgWindow { class: "XamlExplorerHostIslandWindow", ..full },
+        ] {
+            assert_eq!(covering_monitor(&w, &ms), None, "{w:?}");
+        }
+    }
+
+    impl FgWindow<'_> {
+        fn with(self, rect: Rect) -> Self {
+            Self { rect, ..self }
+        }
     }
 
     // ---- 40

@@ -62,7 +62,7 @@ pub fn show_in_folder(path: &Path) -> bool {
 
 /// `C:\Windows` from `GetWindowsDirectoryW` (not `%SystemRoot%`, which any parent process can set).
 #[cfg(windows)]
-fn windows_dir() -> Option<String> {
+pub(crate) fn windows_dir() -> Option<String> {
     use windows::Win32::System::SystemInformation::GetWindowsDirectoryW;
     let mut buf = [0u16; 260];
     // SAFETY: the buffer is ours; the call writes at most its length.

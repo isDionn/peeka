@@ -158,7 +158,7 @@ describe("mascot", () => {
     const a = render(<Island monitor="m1" init={{ view: null }} />);
     await settle();
     const none = sig();
-    expect(center().textContent).toMatch(/\d{1,2}:\d\d/);
+    expect(center().textContent).not.toMatch(/\d{1,2}:\d\d/); // no clock in the island: the strip's right side has it (RC7 owner)
     expect(center().textContent).not.toContain("Compass ready");
     a.unmount(); resetMascotRegistry();
     fakeBridge.setPlugins(PLUGINS.map((p) => ({ ...p, connected: false })));
@@ -387,24 +387,118 @@ describe("small peeks (decision 12)", () => {
     fireEvent.click(b);
     expect(container.textContent).not.toMatch(/mirror/i);
   });
-  it("shelf: 'Share' goes to share_open by id; 'Ask Compass' when an assistant exists; two drop targets while dragging", async () => {
-    fakeBridge.setShelf([{ id: "f1", name: "presentation-draft.pdf", sub: "2.4 MB, just now", kind: "pdf" }, { id: "f2", name: "screen-recording.mp4", sub: "38 MB", kind: "video" }]);
-    const main = PLUGINS[0];
-    const { container } = render(<ShelfCard items={await fakeBridge.call("shelf_list")} main={main} />);
-    fireEvent.click(within(container).getByRole("button", { name: "presentation-draft.pdf, share" }));
-    fireEvent.click(within(container).getByRole("button", { name: "screen-recording.mp4, Ask Compass" }));
+  const SHELF = Array.from({ length: 10 }, (_, i) => ({ id: "f" + i, name: `file-${i}.pdf`, sub: `${i}.5 MB`, kind: "pdf" as const, pinned: false }));
+  const tile = (c: HTMLElement, name: string) => within(c).getByRole("button", { name: new RegExp("^" + name + ",") });
+  it("shelf: the grid shows every file (not two), click selects one, Ctrl and Shift add more, Esc clears", async () => {
+    fakeBridge.setShelf(SHELF);
+    const { container } = render(<ShelfCard items={await fakeBridge.call("shelf_list")} main={PLUGINS[0]} />);
+    expect(container.querySelectorAll(".shTile")).toHaveLength(10);
+    expect(container.textContent).toMatch(/10 files/);
+    fireEvent.click(tile(container, "file-1.pdf"));
+    expect(container.querySelector(".shBar")!.textContent).toMatch(/1 selected/);
+    fireEvent.click(tile(container, "file-3.pdf"), { ctrlKey: true });
+    expect(container.textContent).toMatch(/2 selected/);
+    fireEvent.click(tile(container, "file-6.pdf"), { shiftKey: true }); // range from the last click (3) to 6
+    expect(container.textContent).toMatch(/4 selected/);
+    expect(tile(container, "file-5.pdf").getAttribute("aria-pressed")).toBe("true");
+    expect(tile(container, "file-1.pdf").getAttribute("aria-pressed")).toBe("false");
+    fireEvent.keyDown(tile(container, "file-5.pdf"), { key: "Escape" });
+    expect(container.querySelector(".shBar")!.textContent).not.toMatch(/selected/);
+    fireEvent.click(tile(container, "file-2.pdf"), { detail: 0 }); // Enter / Space toggles
+    fireEvent.click(tile(container, "file-4.pdf"), { detail: 0 });
+    expect(container.textContent).toMatch(/2 selected/);
+  });
+  it("shelf: the action row sends the selected ids; Ask is last and only with an assistant", async () => {
+    fakeBridge.setShelf(SHELF.slice(0, 3));
+    const { container } = render(<ShelfCard items={await fakeBridge.call("shelf_list")} main={PLUGINS[0]} />);
+    fireEvent.click(tile(container, "file-0.pdf"));
+    fireEvent.click(tile(container, "file-2.pdf"), { ctrlKey: true });
+    const bar = container.querySelector<HTMLElement>(".shBar")!;
+    for (const name of ["Copy", "Share", "Zip", "Show in folder"]) fireEvent.click(within(bar).getByRole("button", { name }));
+    const btns = within(bar).getAllByRole("button");
+    expect(btns[btns.length - 1].textContent).toBe("Ask Compass");
+    fireEvent.click(btns[btns.length - 1]);
+    fireEvent.click(within(bar).getByRole("button", { name: "Remove from Shelf" }));
     await settle();
-    expect(logged("share_open")[0].args).toEqual({ id: "f1" });
-    expect(logged("shelf_ask")[0].args).toEqual({ id: "f2" });
+    expect(bar.textContent).not.toMatch(/selected/); // removed files leave the selection
+    const ids = { ids: ["f0", "f2"] };
+    expect(logged("shelf_copy_files")[0].args).toEqual(ids);
+    expect(logged("shelf_share")[0].args).toEqual(ids);
+    expect(logged("shelf_zip")[0].args).toEqual(ids);
+    expect(logged("shelf_show_in_folder")[0].args).toEqual({ id: "f0" });
+    expect(logged("shelf_remove")[0].args).toEqual(ids);
+    expect(logged("shelf_ask")[0].args).toEqual(ids);
     expect(container.textContent).not.toMatch(/Nearby sharing/i);
-    const bump = render(<ShelfBump main={main} />);
+    cleanup();
+    const none = render(<ShelfCard items={await fakeBridge.call("shelf_list")} main={null} />);
+    fireEvent.click(tile(none.container, "file-1.pdf"));
+    expect(none.container.querySelector(".assistant")).toBeNull();
+  });
+  it("shelf: hover minis open, pin and remove one file", async () => {
+    fakeBridge.setShelf(SHELF.slice(0, 2));
+    const { container } = render(<ShelfCard items={await fakeBridge.call("shelf_list")} main={null} />);
+    fireEvent.click(within(container).getByRole("button", { name: "Open file-1.pdf" }));
+    fireEvent.click(within(container).getByRole("button", { name: "Pin file-1.pdf" }));
+    fireEvent.click(within(container).getByRole("button", { name: "Remove file-0.pdf from Shelf" }));
+    await settle();
+    expect(logged("shelf_open")[0].args).toEqual({ id: "f1" });
+    expect(logged("shelf_pin")[0].args).toEqual({ id: "f1", on: true });
+    expect(logged("shelf_remove")[0].args).toEqual({ ids: ["f0"] });
+  });
+  it("shelf: dragging a selected tile 6 px drags the whole selection out; an unselected one goes alone", async () => {
+    fakeBridge.setShelf(SHELF.slice(0, 3));
+    const { container } = render(<ShelfCard items={await fakeBridge.call("shelf_list")} main={null} />);
+    fireEvent.click(tile(container, "file-0.pdf"));
+    fireEvent.click(tile(container, "file-1.pdf"), { ctrlKey: true });
+    const drag = (id: string) => {
+      const t = container.querySelector(`[data-shelf="${id}"]`)!;
+      fireEvent.pointerDown(t, { button: 0, clientX: 10, clientY: 10 });
+      fireEvent.pointerMove(t, { buttons: 1, clientX: 12, clientY: 12 }); // under 6 px: still a click
+      fireEvent.pointerMove(t, { buttons: 1, clientX: 30, clientY: 10 });
+    };
+    drag("f1");
+    expect(container.querySelectorAll(".shTile.lifted")).toHaveLength(2);
+    drag("f2");
+    await settle();
+    expect(logged("shelf_drag").map((l) => l.args)).toEqual([{ ids: ["f0", "f1"] }, { ids: ["f2"] }]);
+    expect(container.querySelectorAll(".shTile.lifted")).toHaveLength(0);
+  });
+  it("shelf: empty state offers Add files and Paste (newest image or file clip); a file dragged over makes the card a drop zone", async () => {
+    fakeBridge.addClip({ id: "k1", createdAt: Date.now(), pinned: false, source: null, kind: "image", text: null, sub: null, thumb: null, screenshot: true });
+    const { container } = render(<ShelfCard items={[]} main={null} />);
+    await settle();
+    expect(container.textContent).toMatch(/Park files here/);
+    fireEvent.click(within(container).getByRole("button", { name: "Add files" }));
+    fireEvent.click(within(container).getByRole("button", { name: "Paste" }));
+    await settle();
+    expect(logged("shelf_add")).toHaveLength(1);
+    expect(logged("clip_to_shelf")[0].args).toEqual({ id: "k1" });
+    expect(container.querySelector(".shWell.over")).toBeNull();
+    act(() => fakeBridge.emit("shelf_drag", true));
+    expect(container.querySelector(".shWell.over")).not.toBeNull();
+    const bump = render(<ShelfBump main={PLUGINS[0]} />);
     expect(bump.container.querySelectorAll(".dropSmall")).toHaveLength(2);
   });
-  it("shelf: without an assistant, no Ask button but a hint row (no dead end)", async () => {
-    fakeBridge.setShelf([{ id: "f1", name: "a.pdf", sub: "1 MB", kind: "pdf" }]);
-    const { container } = render(<ShelfCard items={await fakeBridge.call("shelf_list")} main={null} />);
-    expect(container.querySelector(".mini.ask")).toBeNull();
-    expect(container.textContent).toMatch(/Connect an assistant/);
+  it("shelf: without an image or file on the clipboard there is no Paste button (no dead button)", async () => {
+    await fakeBridge.call("clip_clear", {});
+    const { container } = render(<ShelfCard items={[]} main={null} />);
+    await settle();
+    expect(within(container).queryByRole("button", { name: "Paste" })).toBeNull();
+  });
+  it("shelf privacy: locked, presenting or sharing shows kinds only, no names, no actions, no drag", async () => {
+    fakeBridge.setShelf([{ id: "f1", name: "secret-contract.pdf", sub: "2.4 MB", kind: "pdf", pinned: false }]);
+    const { container } = render(<ShelfCard items={await fakeBridge.call("shelf_list")} main={PLUGINS[0]} generic />);
+    expect(container.innerHTML).not.toMatch(/secret-contract/);
+    expect(container.textContent).toMatch(/PDF/);
+    expect(container.querySelector(".shMinis")).toBeNull();
+    expect(container.querySelector(".assistant")).toBeNull();
+    const t = container.querySelector('[data-shelf="f1"]')!;
+    fireEvent.pointerDown(t, { button: 0, clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(t, { buttons: 1, clientX: 40, clientY: 0 });
+    fireEvent.click(within(container).getByRole("button", { name: /^PDF,/ }));
+    await settle();
+    expect(logged("shelf_drag")).toHaveLength(0);
+    expect(container.textContent).not.toMatch(/selected/);
   });
   it("shelf: share_open is rejected for a file that does not exist (fake bridge)", async () => {
     await expect(fakeBridge.call("share_open", { id: "missing" })).rejects.toBe("denied");

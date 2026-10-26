@@ -612,6 +612,51 @@ pub async fn set_mic_muted(muted: bool) -> Res<()> {
     notch_win::audio::set_mic_muted(muted).then_some(()).ok_or(CmdError::Refused)
 }
 
+/// The Status panel's per-app mixer: one row per app on the default output, names and icons from the strip's caches.
+/// The page polls it only while the list is open; nothing while locked, presenting or sharing the screen (app names are content).
+#[tauri::command]
+pub async fn audio_sessions(app: AppHandle, n: State<'_, Notch>) -> Res<Vec<notch_core::status::AudioSession>> {
+    use notch_core::status::{group_sessions, session_key, AudioSession};
+    cmd::unlocked(crate::privacy::closed(&app))?;
+    let raw = notch_win::audio::sessions().into_iter().filter_map(|(pid, v, m)| Some((session_app(pid)?, v, m)));
+    Ok(group_sessions(raw)
+        .into_iter()
+        .map(|(id, volume, muted)| AudioSession {
+            app: if id == SYSTEM_SOUNDS { "System sounds".into() } else { name(&n, &id, None) },
+            icon: icon(&n, &id),
+            color_icon: color(&n, &id),
+            id: session_key(&id),
+            volume,
+            muted,
+        })
+        .collect())
+}
+
+/// `id` from `audio_sessions`; at least one of `volume` (0..1, clamped) and `muted`. Sets all of that app's sessions.
+#[tauri::command]
+pub async fn audio_session_set(app: AppHandle, id: String, volume: Option<f64>, muted: Option<bool>) -> Res<()> {
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    not_in_demo()?;
+    let volume = volume.map(|v| notch_core::status::clamp_volume(v).ok_or(CmdError::Invalid)).transpose()?;
+    if volume.is_none() && muted.is_none() {
+        return Err(CmdError::Invalid);
+    }
+    let pick = |pid| session_app(pid).is_some_and(|a| notch_core::status::session_key(&a) == id);
+    notch_win::audio::set_sessions(pick, volume, muted).then_some(()).ok_or(CmdError::Refused)
+}
+
+/// The system-sounds session (pid 0) has no process: its own key, no icon.
+const SYSTEM_SOUNDS: &str = "system:sounds";
+
+/// A session's app id; None = Peeka itself or a process it can't read (elevated / protected: not listed).
+fn session_app(pid: u32) -> Option<String> {
+    match pid {
+        0 => Some(SYSTEM_SOUNDS.into()),
+        p if p == std::process::id() => None,
+        p => notch_win::apps::app_id_of_process(p),
+    }
+}
+
 #[tauri::command]
 pub async fn set_brightness(app: AppHandle, n: State<'_, Notch>, value: u8) -> Res<()> {
     if value > 100 {
@@ -1387,7 +1432,8 @@ pub fn clip_open(app: AppHandle, id: String) -> Res<()> {
 #[tauri::command]
 pub fn clip_to_shelf(app: AppHandle, id: String) -> Res<()> {
     cmd::unlocked(crate::plugins::locked(&app))?;
-    let items = clip_history(&app)?.clip_history.lock().shelf_sources(&id, false, &crate::clip_history::temp_shelf())?;
+    let dir = notch_core::shelf::copies_dir(&app.state::<Notch>().data_dir);
+    let items = clip_history(&app)?.clip_history.lock().shelf_sources(&id, false, &dir)?;
     if extras(&app)?.shelf.lock().add(items) {
         let _ = app.emit("shelf_changed", ());
     }
@@ -1518,19 +1564,137 @@ pub fn shelf_list(app: AppHandle) -> Res<Vec<ShelfItem>> {
     Ok(extras(&app)?.shelf.lock().list())
 }
 
-/// The shelf file to the main assistant only (one-shot share) as a copy (`shelf_copy`);
+/// The shelf files to the main assistant only (one-shot share) as copies (`shelf_copy`);
 /// `not_connected` without one (checked before copying).
 #[tauri::command]
-pub fn shelf_ask(app: AppHandle, id: String) -> Res<()> {
+pub fn shelf_ask(app: AppHandle, ids: Vec<String>) -> Res<()> {
     cmd::unlocked(crate::plugins::locked(&app))?;
-    let copies = cmd::shelf_copies(main_holds(&app, None)?, [id.as_str()], |id| shelf_copy(&app, id))?;
-    let path = copies.into_iter().next().ok_or(CmdError::NotConnected)?;
-    let attachments = vec![notch_core::plugins::host::Attachment {
-        kind: notch_core::plugins::host::AttachKind::Rack,
-        path: Some(path),
-        text: None,
-    }];
+    let copies = cmd::shelf_copies(main_holds(&app, None)?, ids.iter().map(String::as_str), |id| shelf_copy(&app, id))?;
+    if copies.is_empty() {
+        return Err(CmdError::NotConnected);
+    }
+    let attachments: Vec<_> = copies
+        .into_iter()
+        .map(|path| notch_core::plugins::host::Attachment {
+            kind: notch_core::plugins::host::AttachKind::Rack,
+            path: Some(path),
+            text: None,
+        })
+        .collect();
     on_host(&app, |h, now| h.composer_submit("", &attachments, now).map(|(_, o)| ((), o)))
+}
+
+/* ---------- the Shelf card (direction A): every action takes ids Peeka handed out, never a path ---------- */
+
+fn shelf_paths(app: &AppHandle, ids: &[String]) -> Res<Vec<PathBuf>> {
+    extras(app)?.shelf.lock().paths(ids).ok_or(CmdError::Unknown)
+}
+
+fn shelf_changed(app: &AppHandle, changed: bool) {
+    if changed {
+        let _ = app.emit("shelf_changed", ());
+    }
+}
+
+fn island_hwnd(app: &AppHandle) -> Res<isize> {
+    Ok(app.get_webview_window("island").and_then(|w| w.hwnd().ok()).ok_or(CmdError::Unknown)?.0 as isize)
+}
+
+/// "Add files": Windows's Open dialog over the island, several files at once. Cancelling is not an error. Sync: the
+/// dialog belongs to the island window's (main) thread.
+#[tauri::command]
+pub fn shelf_add(app: AppHandle) -> Res<()> {
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    let picked = notch_win::picker::open_files(island_hwnd(&app)?);
+    let items = picked.into_iter().filter_map(|p| Some((p.clone(), Some(std::fs::metadata(&p).ok()?.len())))).collect();
+    let changed = extras(&app)?.shelf.lock().add(items);
+    shelf_changed(&app, changed);
+    Ok(())
+}
+
+/// "Open" with the default app (a folder opens in Explorer). Not a file Windows would run (`denied`).
+#[tauri::command]
+pub fn shelf_open(app: AppHandle, id: String) -> Res<()> {
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    let path = extras(&app)?.shelf.lock().path(&id).ok_or(CmdError::Unknown)?.to_path_buf();
+    if notch_core::shelf::runnable(&path) {
+        return Err(CmdError::Denied);
+    }
+    Win32Control.launch(&path.to_string_lossy()).then_some(()).ok_or(CmdError::Refused)
+}
+
+/// Pin keeps a file at the top of the shelf.
+#[tauri::command]
+pub fn shelf_pin(app: AppHandle, id: String, on: bool) -> Res<()> {
+    let ok = extras(&app)?.shelf.lock().pin(&id, on);
+    shelf_changed(&app, ok);
+    ok.then_some(()).ok_or(CmdError::Unknown)
+}
+
+/// Off the shelf. Peeka's own copies (clipboard images, zips) are deleted with it; the owner's files never are.
+#[tauri::command]
+pub fn shelf_remove(app: AppHandle, ids: Vec<String>) -> Res<()> {
+    let changed = extras(&app)?.shelf.lock().remove(&ids);
+    shelf_changed(&app, changed);
+    Ok(())
+}
+
+/// "Copy": the files onto the clipboard as files (paste in Explorer or a chat app); Peeka's own write stays out of
+/// the clipboard history.
+#[tauri::command]
+pub fn shelf_copy_files(app: AppHandle, ids: Vec<String>) -> Res<()> {
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    let paths = shelf_paths(&app, &ids)?.iter().map(|p| p.to_string_lossy().into_owned()).collect();
+    notch_win::clipboard::write(&notch_core::clip::Payload::Files(paths)).then_some(()).ok_or(CmdError::Refused)
+}
+
+/// The Windows share sheet with every selected file. Sync: the sheet belongs to the island window's (main) thread.
+#[tauri::command]
+pub fn shelf_share(app: AppHandle, ids: Vec<String>) -> Res<()> {
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    let paths = shelf_paths(&app, &ids)?;
+    let title = match paths.as_slice() {
+        [one] => one.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+        many => format!("{} files", many.len()),
+    };
+    notch_win::share::open(island_hwnd(&app)?, &title, ShareTarget::Files(paths)).then_some(()).ok_or(CmdError::Refused)
+}
+
+/// "Show in folder": Explorer with the file selected.
+#[tauri::command]
+pub fn shelf_show_in_folder(app: AppHandle, id: String) -> Res<()> {
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    let path = extras(&app)?.shelf.lock().path(&id).ok_or(CmdError::Unknown)?.to_path_buf();
+    notch_win::downloads::show_in_folder(&path).then_some(()).ok_or(CmdError::Refused)
+}
+
+/// "Zip": the files into one zip in Peeka's shelf folder (`notch_core::shelf::copies_dir`), which then joins the
+/// shelf on top. Async: the zip runs off the main thread (about half a second).
+#[tauri::command]
+pub async fn shelf_zip(app: AppHandle, ids: Vec<String>) -> Res<()> {
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    let paths = shelf_paths(&app, &ids)?;
+    let dir = notch_core::shelf::copies_dir(&app.state::<Notch>().data_dir);
+    std::fs::create_dir_all(&dir).map_err(|_| CmdError::Io)?;
+    let out = notch_core::shelf::zip_target(&dir, &paths);
+    let zip = out.clone();
+    let ok = tauri::async_runtime::spawn_blocking(move || notch_win::zip::zip(&zip, &paths)).await.unwrap_or(false);
+    if !ok {
+        return Err(CmdError::Io);
+    }
+    let size = std::fs::metadata(&out).map_err(|_| CmdError::Io)?.len();
+    let changed = extras(&app)?.shelf.lock().add(vec![(out, Some(size))]);
+    shelf_changed(&app, changed);
+    Ok(())
+}
+
+/// Drag out to any app, Explorer or the desktop; the files stay on the shelf. Sync: Windows's drag loop runs on the
+/// UI thread that got the mouse press and returns when the drop ends. `refused` = nothing was dropped.
+#[tauri::command]
+pub fn shelf_drag(app: AppHandle, ids: Vec<String>) -> Res<()> {
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    let paths = shelf_paths(&app, &ids)?;
+    notch_win::drag::files(&paths).then_some(()).ok_or(CmdError::Refused)
 }
 
 #[tauri::command]

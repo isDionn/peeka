@@ -164,7 +164,7 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
       </Panel>
       {monitor.primary && (
         <Panel glow={glow} side="right" width={360} label="Status" dataKind="status" open={panel === "status"} onClose={close}>
-          {status && <StatusCard monitor={monitor} status={status} setStatus={setStatus} onQuit={() => setPanel("quit")} />}
+          {status && <StatusCard monitor={monitor} status={status} setStatus={setStatus} />}
         </Panel>
       )}
       {monitor.primary && (

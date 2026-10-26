@@ -267,26 +267,14 @@ describe("real pages (fake bridge)", () => {
   }));
 });
 
-/* ---------------- "Quit Peeka" in the Status panel (owner decision 2026-10-17): opens the quit confirmation ---------------- */
-describe("Status panel: Quit Peeka", () => {
-  it("the row is the same size as its neighbours, doesn't shift on hover, and opens the quit confirmation on click", T, () => on(P("o"), async (page) => {
-    const btn = page.getByRole("button", { name: "Quit Peeka" });
-    await btn.waitFor();
-    const rows = () => page.evaluate(() => {
-      const box = (e) => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; };
-      const own = document.querySelector('[aria-label="Quit Peeka"]').closest(".row");
-      const sibs = [...document.querySelectorAll('[data-panel="status"] .list .row')].filter((e) => e !== own);
-      return { own: box(own), sibs: sibs.map(box), btn: box(document.querySelector('[aria-label="Quit Peeka"]')) };
-    });
-    const before = await stable(rows);
-    assert.ok(before.sibs.length > 0, "no neighbouring rows");
-    assert.ok(before.sibs.every((s) => Math.abs(s.h - before.own.h) <= 1 && Math.abs(s.w - before.own.w) <= 1), `row size differs from its neighbours: ${JSON.stringify(before)}`);
-    const panelBottom = await page.evaluate(() => document.querySelector('[data-panel="status"]').getBoundingClientRect().bottom);
-    assert.ok(before.own.y + before.own.h <= panelBottom + 1 && before.sibs.every((s) => s.y < before.own.y), "the row must be at the bottom of the panel");
-    await btn.hover();
-    await frame(page);
-    assert.deepEqual((await stable(rows)).btn, before.btn, "the button shifted on hover");
-    await btn.click();
+/* ---------------- "Quit Peeka" lives in Settings > About (owner 2026-10-26; it left the Status panel) ---------------- */
+describe("Settings About: Quit Peeka", () => {
+  it("the Status panel has no Quit row; About's Quit opens the quit confirmation", T, () => on(P("o"), async (page) => {
+    await page.locator('[data-panel="status"] .list .row').first().waitFor();
+    assert.equal(await page.locator('[data-panel="status"]').getByText("Quit Peeka").count(), 0, "Quit is still in the Status panel");
+    await page.goto(page.url().replace("state=o", "state=ayg"));
+    await page.getByRole("button", { name: "About" }).click();
+    await page.locator(".row", { hasText: "Quit Peeka" }).getByRole("button", { name: "Quit" }).click();
     await until(async () => (await layers(page)).includes("panel:quit"), "the quit confirmation did not open");
     await page.getByText("Quit Peeka?").waitFor();
   }));

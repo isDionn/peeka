@@ -73,7 +73,8 @@ fn timeline_ms(start: i64, end: i64, position: i64, last_updated_utc: i64, now: 
     let ticks = |t: i64| (t.max(0) / 10_000) as u64;
     let duration_ms = ticks(end - start);
     let updated = ticks(last_updated_utc - EPOCH_DIFF_TICKS);
-    (duration_ms, media::project(ticks(position), updated, now, playing, duration_ms))
+    // measured from the start, like the duration and like `control`'s seek (start + ms)
+    (duration_ms, media::project(ticks(position - start), updated, now, playing, duration_ms))
 }
 
 /// Remembers the last cover per track, so a timeline tick does not read the picture again.
@@ -240,6 +241,7 @@ mod tests {
         );
         // a track that does not start at 0 (live/seek window): duration is end - start
         assert_eq!(timeline_ms(60 * SEC, 90 * SEC, 0, updated, 1_003_000, false).0, 30_000);
+        assert_eq!(timeline_ms(60 * SEC, 90 * SEC, 70 * SEC, updated, 1_003_000, false).1, 10_000, "position from the start");
         // negative ticks never wrap; an end before the start is a zero-length (unknown) duration
         assert_eq!(timeline_ms(10 * SEC, 0, -5, 0, 5_000, true), (0, 0));
         // the run-on stops at the end

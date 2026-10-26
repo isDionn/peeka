@@ -268,7 +268,6 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(3);background:#ff
 @media (hover:hover) and (pointer:fine){ .slot:not(.accent,.send):hover{background:var(--hover);color:var(--l1)} }
 .key-hint{display:inline-flex;gap:3px;align-items:center;color:var(--l3);font-size:11px}
 .key-hint kbd{font:600 11px/16px var(--font);padding:0 5px;border-radius:8px;background:rgba(255,255,255,.08);color:var(--l2)}
-.shelf{display:grid;grid-template-columns:1fr 1fr .8fr;gap:8px}
 .file{display:flex;gap:10px;align-items:center;min-width:0;padding:10px}
 .file .tip{width:34px;height:40px;border-radius:var(--rInner);corner-shape:squircle;display:grid;place-items:center;flex:none}
 .drop{border-radius:var(--rPlat);corner-shape:squircle;display:grid;place-items:center;align-content:center;gap:4px;text-align:center;color:var(--l2);
@@ -461,10 +460,6 @@ body[data-color="1"] :is(.tabA,.pin,.appCell,.favTray .key):is(:hover,.hovered) 
 /* ring on keyboard only (when a card opens focus goes to the first control; a card opened by mouse shows no ring) */
 html:not([data-kb]) :is(.dangling,[data-panel]) :focus-visible{outline:none!important}
 /* shelf: file actions only on hover / focus, the tile stays 60 px tall */
-.shelf .file{position:relative}
-.shelf .file>div>div:last-child:has(.mini){position:absolute;right:6px;top:50%;translate:0 -50%;margin:0!important;opacity:0;transition:opacity var(--d-fast) var(--ease-move)}
-.shelf .file:is(:hover,:focus-within)>div>div:last-child:has(.mini){opacity:1}
-.shelf .file>div:last-of-type{padding-right:0}
 /* the primary button in the attention state (ticket) is white; blue is only for the meeting Join */
 .peekBar[data-state="attention"] .btn.blue{background:var(--l1);color:#000}
 /* approval dropping down in fullscreen: orange time line under the peek (4 s) */

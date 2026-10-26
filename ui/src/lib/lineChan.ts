@@ -1,4 +1,4 @@
-// The assistant line, the strip ripple and "Open notifications" go from the island page to the strip page (separate windows; same method as centerClock.ts).
+// The assistant line, the strip ripple and "Open notifications" go from the island page to the strip page (separate windows; a same-origin BroadcastChannel).
 // The island keeps the last line state and answers when the strip asks "?" (the strip may have opened later).
 export type LineMod = "idle" | "wait" | "listen" | "speak" | "off";
 export interface LineState { color: string; mod: LineMod; /** Half the peek/card width + shoulder: the line breaks there (0 = no break). */ gap: number }

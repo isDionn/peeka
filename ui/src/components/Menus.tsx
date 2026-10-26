@@ -21,7 +21,7 @@ export type ListMenu = { kind: "list"; x: number; y: number; bounds?: DOMRect; t
 export function ContextMenu({ menu, pins, windows, locked, onClose, onPins, onQuit, glow }: {
   menu: MenuState | ListMenu; pins: PinnedApp[]; windows: WindowInfo[]; /** No "Lock Peeka" item when Peeka is already locked. */ locked?: boolean; onClose: () => void;
   /** Monitor id when the strip draws the Drift glow (a strip or app menu continues it). */ glow?: string;
-  onPins: (appIds: string[]) => void; /** "Quit": opens Peeka's own confirmation (ADR-0062; "Quit Peeka" in the Status panel is the second route, owner decision 2026-10-17). */ onQuit?: () => void;
+  onPins: (appIds: string[]) => void; /** "Quit": opens Peeka's own confirmation (ADR-0062; the second route is "Quit Peeka" in Settings > About, owner 2026-10-26). */ onQuit?: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [armed, setArmed] = useState(false); // "Quit app" can lose unsaved work: the first click asks for confirmation (O10)

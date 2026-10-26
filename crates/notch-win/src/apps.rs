@@ -13,11 +13,6 @@ pub fn monitor_of(rect: &Rect, monitors: &[Monitor]) -> Option<usize> {
     monitors.iter().find(|m| m.rect.contains(cx, cy)).map(|m| m.index)
 }
 
-/// Desktop furniture never counts as "a fullscreen app" even though it covers the monitor.
-pub fn is_desktop_class(class: &str) -> bool {
-    matches!(class.to_ascii_lowercase().as_str(), "progman" | "workerw")
-}
-
 #[cfg(windows)]
 mod sys {
     use windows::core::PWSTR;
@@ -190,6 +185,12 @@ pub fn relaunch_command(hwnd: isize) -> Option<String> {
     sys::prop(sys::hwnd(hwnd), &PKEY_AppUserModel_RelaunchCommand)
 }
 
+/// A process's app id (`notch_core::apps::app_id`): its package app, else its exe. None = unreadable (elevated / protected).
+#[cfg(windows)]
+pub fn app_id_of_process(pid: u32) -> Option<String> {
+    notch_core::apps::app_id(sys::package_aumid(pid).as_deref(), &sys::exe_path(pid))
+}
+
 #[cfg(windows)]
 pub fn pid_of_window(hwnd: isize) -> u32 {
     sys::pid(sys::hwnd(hwnd))
@@ -294,19 +295,27 @@ pub fn foreground_covers() -> bool {
 }
 
 /// The index (`Monitor::index`) of the monitor the foreground window covers completely, if any: which screen a
-/// fullscreen video is on (scenario 39).
+/// fullscreen app is on (scenario 39). The rule is `notch_core::screens::covering_monitor` (tested there).
 #[cfg(windows)]
 pub fn foreground_cover_monitor() -> Option<usize> {
-    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+    use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, IsIconic, IsWindowVisible, IsZoomed};
     // SAFETY: no arguments; a null result is checked.
     let h = unsafe { GetForegroundWindow() };
-    if h.is_invalid() || is_desktop_class(&sys::class(h)) {
+    if h.is_invalid() {
         return None;
     }
-    let r = sys::rect(h)?;
-    let monitors = crate::monitors::list();
-    let i = monitor_of(&r, &monitors)?;
-    monitors.get(i).filter(|m| r.covers(&m.rect)).map(|m| m.index)
+    let class = sys::class(h);
+    // SAFETY: plain queries on the foreground handle; a stale one answers false.
+    let (visible, maximized) = unsafe { (IsWindowVisible(h).as_bool() && !IsIconic(h).as_bool(), IsZoomed(h).as_bool()) };
+    let w = notch_core::screens::FgWindow {
+        rect: sys::rect(h)?,
+        class: &class,
+        ours: sys::pid(h) == std::process::id(),
+        visible,
+        cloaked: sys::cloaked(h),
+        maximized,
+    };
+    notch_core::screens::covering_monitor(&w, &crate::monitors::list())
 }
 
 /// Start's "Run as administrator": the `runas` verb, so Windows shows its own UAC prompt. `target` is an exe or `.lnk`
@@ -386,11 +395,5 @@ mod tests {
         assert_eq!(monitor_of(&Rect { left: 1800, top: 0, right: 2400, bottom: 500 }, &ms), Some(1));
         assert_eq!(monitor_of(&Rect { left: -8, top: -8, right: 1928, bottom: 1088 }, &ms), Some(0), "maximised");
         assert_eq!(monitor_of(&Rect { left: -5000, top: 0, right: -4000, bottom: 10 }, &ms), None);
-    }
-
-    #[test]
-    fn the_desktop_is_not_a_fullscreen_app() {
-        assert!(is_desktop_class("Progman") && is_desktop_class("WorkerW"));
-        assert!(!is_desktop_class("Chrome_WidgetWin_1"));
     }
 }

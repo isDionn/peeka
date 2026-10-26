@@ -1,5 +1,5 @@
 // Fake back end used outside Tauri: realistic data, in-memory state, the same event path. Used by the preview and tests.
-import type { BtDevice, WifiNetwork, ClaudeChatDone, ClaudeChatState, AgentBridge, Attached, TrayIconX, CalendarNext, Alert, AssistantCounts, BridgeState, PermissionEvent, RecentItem, AlertsView, AllCommands, AllEvents, CallArgs, CommandName, Commands, ClipChange, ClipItem, ClipPlain, ComposerEvent, ConsentAnswer, LockState, MirrorState, MirrorView, Notice, TrayIcon, ShelfItem, TimerState, PrivacyState, RecapWeek, ConsentRequest, ModuleEntry, PluginCommands, PluginInfo, SurfacesView, Media, MonitorInfo, PinnedApp, SearchResult, Settings, Status, Audio, SysmonTick, VolumeOsd, WindowInfo } from "./bridge";
+import type { BtDevice, WifiNetwork, ClaudeChatDone, ClaudeChatState, AgentBridge, Attached, TrayIconX, CalendarNext, Alert, AssistantCounts, BridgeState, PermissionEvent, RecentItem, AlertsView, AllCommands, AllEvents, CallArgs, CommandName, Commands, ClipChange, ClipItem, ClipPlain, ComposerEvent, ConsentAnswer, LockState, MirrorState, MirrorView, Notice, TrayIcon, ShelfItem, TimerState, PrivacyState, RecapWeek, ConsentRequest, ModuleEntry, PluginCommands, PluginInfo, SurfacesView, Media, MonitorInfo, PinnedApp, SearchResult, Settings, Status, Audio, AudioSession, SysmonTick, VolumeOsd, WindowInfo } from "./bridge";
 import { APP_NAMES, iconOf } from "./fakeIcons";
 import { EMPTY_SURFACES, MODULES, PLUGINS } from "./plugin.fixtures";
 import { BRAND } from "./brand";
@@ -34,7 +34,7 @@ const TRACKS = [
 ];
 
 type W4Names = "search_index_state" | "search_open" | "search_ask" | "clip_list" | "clip_copy" | "clip_pin" | "clip_delete" | "clip_clear" | "clip_reveal" | "clip_share" | "clip_edit" | "clip_drag" | "clip_visible" | "lock_state" | "lock_now" | "lock_release";
-type W5Names = "window_preview" | "share_open" | "shelf_list" | "shelf_ask" | "timer_get" | "timer_start" | "timer_control" | "privacy_get" | "tray_open" | "mirror_state" | "mirror_enable" | "mirror_disable" | "mirror_list" | "mirror_dismiss" | "mirror_open_app" | "mirror_ask";
+type W5Names = "window_preview" | "share_open" | "shelf_list" | "shelf_ask" | "shelf_add" | "shelf_open" | "shelf_pin" | "shelf_remove" | "shelf_copy_files" | "shelf_share" | "shelf_show_in_folder" | "shelf_zip" | "shelf_drag" | "timer_get" | "timer_start" | "timer_control" | "privacy_get" | "tray_open" | "mirror_state" | "mirror_enable" | "mirror_disable" | "mirror_list" | "mirror_dismiss" | "mirror_open_app" | "mirror_ask";
 type W7Names = "recent_files" | "open_recent" | "set_start_items" | "app_show_in_folder" | "launch_app_admin" | "open_start_menu" | "open_calendar" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "agent_bridges" | "agent_bridge_install" | "agent_bridge_remove" | "agent_bridge_preview" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "window_pick" | "cc_focus_terminal" | "cc_diff" | "cc_diff_open" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus";
 /** Peeka Phase C: clipboard, download and copy-code commands; Settings > About demo restart. */
 /** The Modules card's Claude chat. */
@@ -84,6 +84,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   let windows: WindowInfo[] = [];
   let status: Status;
   let audio: Audio;
+  let mixer: AudioSession[];
   let audioRefuse = false;
   let wifiNets = structuredClone(WIFI0);
   let btDevs = structuredClone(BT0);
@@ -131,6 +132,12 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       { id: "bt", name: "Buds Pro", default: false },
       { id: "hdmi", name: "LG Monitor (HDMI)", default: false },
     ] };
+    mixer = [
+      { id: "a1", app: "Spotify", icon: "", colorIcon: null, volume: 0.8, muted: false },
+      { id: "a2", app: "Google Chrome", icon: "", colorIcon: null, volume: 0.45, muted: false },
+      { id: "a3", app: "Discord", icon: "", colorIcon: null, volume: 1, muted: true },
+      { id: "a4", app: "System sounds", icon: "", colorIcon: null, volume: 0.6, muted: false },
+    ];
     track = 0;
     media = { app: "Spotify", ...TRACKS[0], playing: true, positionMs: 84_000, positionAt: Date.now(), canPrevious: true, canNext: true, canSeek: true };
     const old = (id: string, title: string, subtitle: string, icon: string, ago: number, extra: Partial<Alert> = {}): Alert =>
@@ -213,6 +220,12 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       audio = { ...audio, outputs: audio.outputs.map((o) => ({ ...o, default: o.id === id })) };
     },
     set_mic_muted: ({ muted }) => { log.push({ cmd: "set_mic_muted", args: { muted } }); audio = { ...audio, micMuted: muted }; },
+    audio_sessions: () => { if (lock.locked) throw "denied"; return structuredClone(mixer); },
+    audio_session_set: ({ id, volume, muted }) => {
+      log.push({ cmd: "audio_session_set", args: { id, volume, muted } });
+      if (!mixer.some((m) => m.id === id)) throw "refused";
+      mixer = mixer.map((m) => (m.id === id ? { ...m, ...(volume !== undefined && { volume }), ...(muted !== undefined && { muted }) } : m));
+    },
     set_brightness: ({ value }) => { status = { ...status, brightness: value }; emit("status_changed", status); },
     set_radio: ({ kind, on }) => {
       status = kind === "wifi" ? { ...status, wifi: { on, name: on ? "Home-5G" : null } } : { ...status, bluetooth: { on, name: on ? "Buds Pro" : null } };
@@ -349,6 +362,8 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
 
   /* ---- Wave 5: window preview, share, shelf, timer, privacy (bridge.ts) ---- */
   let shelf: ShelfItem[] = [];
+  /** Rust's rules for the shelf actions: ids from the list only, nothing while locked. */
+  const shelfAct = (cmd: string, args: unknown, ids: string[]) => { if (lock.locked || !ids.length || !ids.every((id) => shelf.some((x) => x.id === id))) deny(); log.push({ cmd, args }); };
   let timer: TimerState | null = null;
   let privacy: PrivacyState = { mic: [], camera: [], screen: false };
   let mirror: MirrorState = { registered: false, access: "unknown", history: true, enabled: false, on: false, blocker: null };
@@ -375,6 +390,15 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     share_open: (a) => { if (!shelf.some((x) => x.id === a.id)) deny(); log.push({ cmd: "share_open", args: a }); },
     shelf_list: () => structuredClone(shelf),
     shelf_ask: (a) => { if (!plugins.some((x) => x.main && x.connected)) throw "not_connected"; log.push({ cmd: "shelf_ask", args: a }); },
+    shelf_add: () => { if (lock.locked) deny(); log.push({ cmd: "shelf_add", args: null }); },
+    shelf_open: (a) => shelfAct("shelf_open", a, [a.id]),
+    shelf_pin: (a) => { shelfAct("shelf_pin", a, [a.id]); const f = shelf.find((x) => x.id === a.id)!; shelf = [...shelf.filter((x) => x !== f)]; f.pinned = a.on; shelf.splice(a.on ? 0 : shelf.filter((x) => x.pinned).length, 0, f); emit("shelf_changed", null); },
+    shelf_remove: (a) => { log.push({ cmd: "shelf_remove", args: a }); shelf = shelf.filter((x) => !a.ids.includes(x.id)); emit("shelf_changed", null); },
+    shelf_copy_files: (a) => shelfAct("shelf_copy_files", a, a.ids),
+    shelf_share: (a) => shelfAct("shelf_share", a, a.ids),
+    shelf_show_in_folder: (a) => shelfAct("shelf_show_in_folder", a, [a.id]),
+    shelf_zip: (a) => { shelfAct("shelf_zip", a, a.ids); shelf = [...shelf.filter((x) => x.pinned), { id: "zip" + log.length, name: "Shelf files.zip", sub: "1.2 MB", kind: "other", pinned: false }, ...shelf.filter((x) => !x.pinned)]; emit("shelf_changed", null); },
+    shelf_drag: (a) => shelfAct("shelf_drag", a, a.ids),
     timer_get: () => (timer ? { ...timer } : null),
     timer_control: ({ action }) => {
       log.push({ cmd: "timer_control", args: { action } });

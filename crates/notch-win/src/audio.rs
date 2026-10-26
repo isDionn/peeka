@@ -148,6 +148,64 @@ pub fn set_mic_muted(muted: bool) -> bool {
     mic().is_some_and(|m| unsafe { m.SetMute(muted, &crate::volume::NOTCH_CONTEXT) }.is_ok())
 }
 
+/// The default output's sessions as Windows's own mixer lists them (active or inactive, not expired), oldest first:
+/// `(pid, volume 0..1, muted)`. pid 0 is the system-sounds session.
+#[cfg(windows)]
+pub fn sessions() -> Vec<(u32, f32, bool)> {
+    let mut out = Vec::new();
+    // SAFETY: live session objects from `each_session`.
+    each_session(|pid, v| {
+        if let (Ok(vol), Ok(m)) = unsafe { (v.GetMasterVolume(), v.GetMute()) } {
+            out.push((pid, vol, m.as_bool()));
+        }
+    });
+    out
+}
+
+/// Sets every session whose pid `pick` accepts (an app's sessions together). False = none matched, or Windows refused one.
+#[cfg(windows)]
+pub fn set_sessions(pick: impl Fn(u32) -> bool, volume: Option<f32>, muted: Option<bool>) -> bool {
+    let (mut hit, mut ok) = (false, true);
+    each_session(|pid, v| {
+        if !pick(pid) {
+            return;
+        }
+        hit = true;
+        // SAFETY: a live session; the context GUID outlives the calls.
+        unsafe {
+            if let Some(x) = volume {
+                ok &= v.SetMasterVolume(x, &crate::volume::NOTCH_CONTEXT).is_ok();
+            }
+            if let Some(m) = muted {
+                ok &= v.SetMute(m, &crate::volume::NOTCH_CONTEXT).is_ok();
+            }
+        }
+    });
+    hit && ok
+}
+
+#[cfg(windows)]
+fn each_session(mut f: impl FnMut(u32, &windows::Win32::Media::Audio::ISimpleAudioVolume)) {
+    use windows::core::Interface;
+    use windows::Win32::Media::Audio::{AudioSessionStateExpired, IAudioSessionControl2, IAudioSessionManager2, ISimpleAudioVolume};
+    let Some(devices) = enumerator() else { return };
+    // SAFETY: plain COM calls on objects released on drop.
+    unsafe {
+        let manager = devices.GetDefaultAudioEndpoint(eRender, eConsole).and_then(|d| d.Activate::<IAudioSessionManager2>(CLSCTX_ALL, None));
+        let Ok(list) = manager.and_then(|m| m.GetSessionEnumerator()) else { return };
+        for i in 0..list.GetCount().unwrap_or(0) {
+            let Ok(c) = list.GetSession(i) else { continue };
+            if c.GetState().map_or(true, |s| s == AudioSessionStateExpired) {
+                continue;
+            }
+            let (Ok(c2), Ok(v)) = (c.cast::<IAudioSessionControl2>(), c.cast::<ISimpleAudioVolume>()) else { continue };
+            if let Ok(pid) = c2.GetProcessId() {
+                f(pid, &v);
+            }
+        }
+    }
+}
+
 /// The default speaker's level meter (`IAudioMeterInformation`): it gives the output's peak level only, never the sound.
 #[cfg(windows)]
 pub fn meter() -> Option<windows::Win32::Media::Audio::Endpoints::IAudioMeterInformation> {

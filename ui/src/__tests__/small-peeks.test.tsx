@@ -278,48 +278,16 @@ describe("11 volume indicator while Claude is live", () => {
   });
 });
 
-describe("11 volume indicator keeps the strip's right side still", () => {
-  it("while the island clock is centered, a volume change doesn't hand the clock back to the strip (no time jumping next to the date)", async () => {
-    const said: boolean[] = [];
-    const ch = new BroadcastChannel("notch-center-clock");
-    ch.onmessage = (e) => { if (typeof e.data === "boolean") said.push(e.data); };
+describe("11 no clock in the island (RC7 owner: the strip's right side has it)", () => {
+  it("the resting center without an assistant shows no time, and a volume peek still comes and goes", async () => {
     fakeBridge.setPlugins([]);
-    try {
-      render(<Island monitor="m1" init={{ view: null }} />);
-      await settle(300);
-      expect(said.at(-1)).toBe(true); // no assistant: the island shows the clock, the strip only the date
-      const before = said.length;
-      act(() => fakeBridge.volumeOsd({ percent: 40, muted: false, device: null }));
-      await settle(200);
-      expect(center().textContent).toContain("Volume");
-      expect(said.slice(before)).not.toContain(false);
-    } finally { ch.close(); }
+    render(<Island monitor="m1" init={{ view: null }} />);
+    await settle(300);
+    expect(center().textContent).not.toMatch(/\d:\d\d/);
+    act(() => fakeBridge.volumeOsd({ percent: 40, muted: false, device: null }));
+    await settle(200);
+    expect(center().textContent).toContain("Volume");
   });
-});
-
-describe("11b Bluetooth and charger peeks keep the clock too", () => {
-  for (const [name, fire] of [
-    ["Bluetooth", () => fakeBridge.emit("bluetooth_connected", { name: "Buds Pro", battery: 80 })],
-    ["charger", () => batt(50, true)],
-  ] as const) {
-    it(`${name}: no hand-over to the strip and back`, async () => {
-      const said: boolean[] = [];
-      const ch = new BroadcastChannel("notch-center-clock");
-      ch.onmessage = (e) => { if (typeof e.data === "boolean") said.push(e.data); };
-      fakeBridge.setPlugins([]);
-      act(() => batt(50));
-      try {
-        render(<Island monitor="m1" init={{ view: null }} />);
-        await settle(300);
-        expect(said.at(-1)).toBe(true);
-        const before = said.length, rest = center().textContent;
-        act(() => fire());
-        await settle(300);
-        expect(center().textContent).not.toBe(rest); // the peek is up
-        expect(said.slice(before)).not.toContain(false);
-      } finally { ch.close(); }
-    });
-  }
 });
 
 describe("16 Hey Compass transcript", () => {

@@ -86,7 +86,9 @@ export function useHitRects(page: "strip" | "island", monitor: string, view = ""
   }, [page, monitor, view]);
   useEffect(() => {
     let raf = 0;
-    const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(send); };
+    // one report per frame at most, never pushed back: the springs write styles every frame, and cancel + re-request starved the report
+    // until the motion ended, so Rust kept the old rects and a click on an opening card fell through (RC7 owner: tabs dead until the open ended)
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; send(); }); };
     const mo = new MutationObserver(schedule);
     mo.observe(document.body, { subtree: true, childList: true, attributes: true });
     const ro = new ResizeObserver(schedule);

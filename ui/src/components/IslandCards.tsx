@@ -68,17 +68,25 @@ export function OsdBump({ osd }: { osd: VolumeOsd }) {
 
 /* ---- cards (.govde) ---- */
 
+/** Arrow keys on the track: 5 s back / forward (the range's own step is 1 s, for dragging). */
+const SEEK_KEYS: Record<string, number> = { ArrowLeft: -5, ArrowDown: -5, ArrowRight: 5, ArrowUp: 5 };
+
 /** b2 player card. M1: the ghost rides in at 56 px (swaying to the beat while playing; idle when paused or `calm` = locked/presenting); the strip's ghost steps aside (one mascot). */
 export function MusicCard({ media, pos, calm = false }: { media: Media; pos: number; calm?: boolean }) {
   const main = useMainAssistant();
   const d = durationSec(media) ?? 0;
   const [scrub, setScrub] = useState<number | null>(null);
+  const [held, setHeld] = useState(false); // sent: the new time stays until Rust's next timeline (players lag), a refusal, or 2 s
+  const drop = () => { setScrub(null); setHeld(false); };
+  useEffect(() => { if (held) drop(); }, [media.positionAt]); // eslint-disable-line react-hooks/exhaustive-deps -- only a fresh timeline ends the hold
+  useEffect(() => { if (!held) return; const t = setTimeout(drop, 2000); return () => clearTimeout(t); }, [held]);
   const val = scrub ?? pos;
   const sub = [media.artist, media.album].filter(Boolean).join(", ");
-  const commit = () => { if (scrub !== null) { bridge.call("media_control", { action: "seek", positionMs: Math.round(scrub * 1000) }).catch(() => undefined); setScrub(null); } };
+  const move = (v: number) => { setHeld(false); setScrub(Math.max(0, Math.min(d, v))); };
+  const commit = () => { if (scrub === null || held) return; setHeld(true); bridge.call("media_control", { action: "seek", positionMs: Math.round(scrub * 1000) }).catch(drop); };
   return (
     <div className="body">
-      <div className={"player" + (main ? " rider" : "")}>
+      <div className={"player" + (main ? " rider" : "")} data-scrub={scrub !== null ? "" : undefined}>
         {media.art ? <img className="cover" data-share="cover" src={media.art} alt="" /> : <span className="cover notchIcon" data-share="cover"><Music /></span>}
         <div style={{ minWidth: 0 }}>
           <div className="t20 b6" data-share="title" title={trackTitle(media)} style={{ width: "max-content", maxWidth: "100%" }}>{trackTitle(media)}</div>
@@ -94,7 +102,9 @@ export function MusicCard({ media, pos, calm = false }: { media: Media; pos: num
               <span style={{ minWidth: timeSlot(d) + "ch" }}>{fmtTime(val)}</span>
               <input type="range" min={0} max={d || 1} step={1} value={Math.min(val, d || 1)} disabled={!media.canSeek || !d} aria-label="Track position" aria-valuetext={`${fmtTime(val)} of ${fmtTime(d)}`}
                 style={{ "--y": d ? (Math.min(val, d) / d) * 100 + "%" : "0%" } as CSSProperties}
-                onChange={(e) => setScrub(+e.target.value)} onPointerUp={commit} onKeyUp={commit} onBlur={commit} />
+                onChange={(e) => move(+e.target.value)} onKeyDown={(e) => { const k = SEEK_KEYS[e.key]; if (k) { e.preventDefault(); move(val + k); } }}
+                onPointerDown={(e) => e.currentTarget.setPointerCapture?.(e.pointerId) /* the release lands here even off the track; the island keeps its hover */}
+                onPointerUp={commit} onKeyUp={commit} onBlur={commit} />
               <span style={{ textAlign: "right", minWidth: timeSlot(d) + 1 + "ch" }}>{d ? "-" + fmtTime(d - val) : ""}</span>
             </div>
           </div>
@@ -353,7 +363,7 @@ function ModulesCardImpl({ media, pos, sys, cpu, surf, shelf, main, meeting, onP
   const body = (p: string) => {
     const t = tabs.find((x) => x.plugin.id + "/" + x.id === p);
     return t ? <TabBlocks tab={t} />
-      : p === "shelf" ? <><ShelfCard items={shelf} main={main} /><ShelfSuggestRow items={shelf} main={main} /></>
+      : p === "shelf" ? <><ShelfCard items={shelf} main={main} generic={generic} />{!generic && <ShelfSuggestRow items={shelf} main={main} />}</>
       : p === "music" ? <MusicTab media={media} pos={pos} />
       : p === "calendar" ? (meeting ? <MeetingCard item={meeting} /> : <div className="box glass"><h4><Calendar />Calendar</h4><div className="t13 l2 b4">No upcoming meetings. Meetings come from a calendar plugin.</div></div>)
       : p === "timer" ? <TimerStart timer={timer} />

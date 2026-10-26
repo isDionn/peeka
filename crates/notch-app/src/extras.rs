@@ -45,7 +45,12 @@ pub fn extras(app: &AppHandle) -> Option<tauri::State<'_, Extras>> {
 
 /// Called once from `setup`, after `layout` built the island.
 pub fn start(app: &AppHandle) {
-    app.manage(Extras::default());
+    // demo: an empty shelf, the owner's saved one is not even read (like the clipboard)
+    let shelf = match app.try_state::<Notch>() {
+        Some(n) if !crate::app::demo() => Shelf::load(&n.data_dir),
+        _ => Shelf::default(),
+    };
+    app.manage(Extras { shelf: Mutex::new(shelf), ..Default::default() });
     tint_feed(app.clone());
 
     let handle = app.clone();

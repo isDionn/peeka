@@ -210,5 +210,58 @@ svg.lucide.genWarnIc { color: var(--orange); }
 .body > .player { align-items: start; }
 .player .progWrap { display: grid; grid-template-rows: minmax(0, 0fr); overflow: hidden; opacity: 0; translate: 0 -3px;
   transition: grid-template-rows 0s var(--d-exit), opacity var(--d-exit) var(--ease-in), translate var(--d-exit) var(--ease-in); }
-#island[data-hover] .player .progWrap, html[data-kb] #island .player:focus-within .progWrap { grid-template-rows: minmax(0, 1fr); opacity: 1; translate: none;
+#island[data-hover] .player .progWrap, html[data-kb] #island .player:focus-within .progWrap, #island .player[data-scrub] .progWrap { grid-template-rows: minmax(0, 1fr); opacity: 1; translate: none;
   transition: grid-template-rows 0s, opacity var(--d-move) var(--ease) 60ms, translate var(--d-move) var(--ease) 60ms; }
+
+/* Shelf (direction A, owner 2026-10-26): every file in a 4-column grid that scrolls on its own (2 rows, then the Modules
+   "more below" fade); the one action row has a fixed height outside it, so tiles never move when the selection changes. */
+.shBody { display: flex; flex-direction: column; gap: 10px; }
+.shWell { position: relative; }
+.shGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; max-height: 260px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; padding: 2px 2px 16px; margin: -2px -2px -16px; box-sizing: content-box;
+  animation: modMore linear both; animation-timeline: scroll(self); }
+.shTile { position: relative; min-width: 0; border-radius: var(--rPlat); corner-shape: squircle; user-select: none; touch-action: none;
+  transition: background-color var(--d-fast) var(--ease-move), box-shadow var(--d-fast) var(--ease-move), opacity var(--d-fast) var(--ease-move); }
+.shTile:hover { background: var(--hover); }
+.shTile.sel { background: color-mix(in srgb, var(--blue) 16%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--blue) 70%, transparent); }
+.shTile.lifted { opacity: .4; }
+.shTile.new { animation: shIn 420ms var(--ease) both; }
+.shTile.new .shThumb { animation: shFlash 1600ms var(--ease-move) both; }
+@keyframes shIn { from { opacity: 0; transform: translateY(-10px) scale(.92); } }
+@keyframes shFlash { 0% { box-shadow: 0 0 0 2px var(--glow-color), 0 0 24px color-mix(in srgb, var(--glow-color) 60%, transparent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.shPick { display: block; width: 100%; padding: 6px 6px 8px; border-radius: inherit; text-align: left; color: var(--l1); transition: transform var(--d-press) var(--ease); }
+.shPick:active { transform: scale(.97); }
+.shPick:disabled { cursor: default; }
+.shThumb { height: 72px; border-radius: var(--rInner); corner-shape: squircle; display: grid; place-items: center; background: rgba(255,255,255,.06); }
+.shThumb > svg.lucide { width: 26px; height: 26px; }
+.shName { display: block; margin-top: 7px; font: 600 12.5px/16px var(--font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shMeta { font: 400 11.5px/15px var(--font); color: var(--l3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; display: flex; gap: 4px; align-items: center; }
+.shMeta svg.lucide { width: 11px; height: 11px; flex: none; }
+.shCheck { position: absolute; left: 11px; top: 11px; width: 20px; height: 20px; border-radius: 10px; display: grid; place-items: center; pointer-events: none; background: rgba(0,0,0,.45); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.7);
+  opacity: 0; transition: opacity var(--d-fast) var(--ease-move), background-color var(--d-fast) var(--ease-move); }
+.shCheck svg.lucide { width: 12px; height: 12px; stroke-width: 3; color: #fff; opacity: 0; }
+.shTile:hover .shCheck, .shGrid.any .shCheck, .shTile.sel .shCheck { opacity: 1; }
+.shTile.sel .shCheck { background: var(--blueFill); box-shadow: none; }
+.shTile.sel .shCheck svg.lucide { opacity: 1; }
+.shMinis { position: absolute; right: 10px; top: 10px; display: flex; gap: 2px; padding: 2px; border-radius: 14px; background: rgba(20,20,22,.78); opacity: 0; transition: opacity var(--d-fast) var(--ease-move); }
+.shTile:hover .shMinis, .shTile:focus-within .shMinis { opacity: 1; }
+.shMinis .mini { width: 24px; height: 24px; }
+.shMinis .mini svg.lucide { width: 13px; height: 13px; }
+.shBar { height: 40px; display: flex; align-items: center; gap: 6px; }
+.shBar > * { animation: shFade var(--d-fast) var(--ease-move) both; }
+@keyframes shFade { from { opacity: 0; } }
+.shBar .n { font: 600 13px/20px var(--font); color: var(--l1); margin-right: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.shBar .sp { flex: 1; }
+.shBar .hint { color: var(--l3); font: 400 12px/16px var(--font); min-width: 0; }
+.shBar .ic { width: 30px; padding: 0; }
+/* a file dragged over the strip or the island: the whole well is the drop target */
+.shDrop { position: absolute; inset: 0; z-index: 3; border-radius: var(--rPlat); corner-shape: squircle; display: grid; place-items: center; align-content: center; gap: 8px; text-align: center;
+  color: var(--l1); font: 600 14px/20px var(--font); background: color-mix(in srgb, var(--glow-color) 18%, #141416); outline: 1.5px dashed color-mix(in srgb, var(--l1) 70%, transparent); outline-offset: -1.5px;
+  opacity: 0; transform: scale(.98); pointer-events: none; transition: opacity var(--d-fast) var(--ease-move), transform var(--d-move) var(--ease); }
+.shDrop svg.lucide { width: 26px; height: 26px; margin: 0 auto; }
+.shDrop small { display: block; font: 400 12px/16px var(--font); color: var(--l2); }
+.shWell.over .shDrop { opacity: 1; transform: none; }
+.shEmpty { min-height: 176px; border-radius: var(--rPlat); corner-shape: squircle; display: grid; place-items: center; align-content: center; gap: 10px; text-align: center; padding: 16px;
+  outline: 1px dashed var(--l4); outline-offset: -1px; color: var(--l2); font: 400 13px/19px var(--font); }
+.shEmpty > svg.lucide { width: 28px; height: 28px; margin: 0 auto; color: var(--l3); }
+.shEmpty b { display: block; color: var(--l1); font: 600 15px/20px var(--font); }
+.shEmpty .row { display: flex; gap: 8px; justify-content: center; margin-top: 4px; }

@@ -16,6 +16,9 @@ export function tintOf(c: unknown): Cols | null {
   return Array.isArray(c) && c.length === 3 && c.every((x) => typeof x === "string" && HEX.test(x)) ? [c[0], c[2], c[1]] : null;
 }
 
+/** Last colours per monitor in this window: a panel's glow mounts with them, not with the fallback (RC7 owner: Start / Search opened in the wrong colour, then faded over). */
+const LAST = new Map<string, Cols | null>();
+
 const LAYERS = ["sL", "sR", "p3", "p1", "p2"];
 interface Copy { cols: Cols | null; state: GlowState }
 const same = (a: Copy, b: Copy) => a.state === b.state && a.cols?.join() === b.cols?.join();
@@ -30,12 +33,12 @@ function phase(el: HTMLElement | null) {
 /** One slice of the field. Mount it inside a `.glowHost` (strip, island body) or a shoulder's `.glowSlice`. It paints only inside its host: nothing lands in the band under the strip that Rust samples (y >= 38 outside the card). */
 export function GlowField({ monitor }: { monitor: string }) {
   const [state, setState] = useState<GlowState>("idle");
-  const [tint, setTint] = useState<Cols | null>(null);
+  const [tint, setTint] = useState<Cols | null>(() => LAST.get(monitor) ?? null);
   useEffect(() => listenLine((m) => { if (m.k === "line") setState(glowOf(m.mod)); }), []);
-  // only this display's band; while sampling is paused nothing arrives and the last colours stay
-  useEffect(() => { const off = bridge.on("screen_tint", (t) => { if (t.monitor === monitor) setTint(tintOf(t.colors)); }); return () => { off.then((f) => f()); }; }, [monitor]);
-  // a new colour or speed goes into the hidden copy, then the copies cross-fade (never animates a colour, never jumps the phase in view)
-  const [cp, setCp] = useState<{ a: Copy; b: Copy; on: "a" | "b" }>(() => ({ a: { cols: null, state: "idle" }, b: { cols: null, state: "idle" }, on: "a" }));
+  // only this display's band; while sampling is paused nothing arrives and the last colours stay. Every field records every monitor's colours (the strip's and the island's fields stay mounted, so LAST is current).
+  useEffect(() => { const off = bridge.on("screen_tint", (t) => { const c = tintOf(t.colors); LAST.set(t.monitor, c); if (t.monitor === monitor) setTint(c); }); return () => { off.then((f) => f()); }; }, [monitor]);
+  // a new colour or speed goes into the hidden copy, then the copies cross-fade (never animates a colour, never jumps the phase in view); the first frame already has the current colours
+  const [cp, setCp] = useState<{ a: Copy; b: Copy; on: "a" | "b" }>(() => ({ a: { cols: tint, state: "idle" }, b: { cols: tint, state: "idle" }, on: "a" }));
   const key = `${state}|${tint?.join() ?? ""}`;
   useEffect(() => {
     const want: Copy = { cols: tint, state };
