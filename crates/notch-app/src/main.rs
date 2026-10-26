@@ -20,6 +20,8 @@ mod clip_history;
 #[cfg(windows)]
 mod plugins;
 #[cfg(windows)]
+mod privacy;
+#[cfg(windows)]
 mod recap;
 #[cfg(windows)]
 mod taskbar;
@@ -38,7 +40,7 @@ fn main() {
             std::process::exit(0);
         }
         // A coding agent's hook (`peeka.exe --cc-hook [agent [event]]`): forwards one sanitized event and exits, before Tauri starts.
-        if args.get(1).map(String::as_str) == Some("--cc-hook") {
+        if args.get(1).map(String::as_str) == Some(notch_core::brand::HOOK_ARG) {
             plugins::cc_hook_main();
         }
         // A restart from Settings > About (`demo_restart`): the old Peeka must be gone first, or single-instance

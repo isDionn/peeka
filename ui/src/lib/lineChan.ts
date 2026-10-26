@@ -22,6 +22,21 @@ export const announceLine = (s: LineState) => { if (current && current.color ===
 export const announceWave = (color: string) => post({ k: "wave", color });
 export const announceNotif = () => post({ k: "notif" });
 
+/** Surfaces hanging from the strip in this window (panels, context menus): the line breaks over each [left, right] (client px), as it does over the island. */
+const gaps = new Map<string, readonly [number, number]>();
+const gapSubs = new Set<() => void>();
+export function setStripGap(id: string, g: readonly [number, number] | null) {
+  const o = gaps.get(id);
+  if (g ? o?.[0] === g[0] && o?.[1] === g[1] : !o) return;
+  if (g) gaps.set(id, g); else gaps.delete(id);
+  gapSubs.forEach((f) => f());
+}
+export function listenStripGaps(cb: (g: (readonly [number, number])[]) => void): () => void {
+  const f = () => cb([...gaps.values()]);
+  gapSubs.add(f); f();
+  return () => { gapSubs.delete(f); };
+}
+
 /** Strip side: listener (first asks for the last state); the returned function closes the channel. */
 export function listenLine(cb: (m: LineMsg) => void): () => void {
   let c: BroadcastChannel | null = null;

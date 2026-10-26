@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, Brain, ChevronLeft, ChevronRight, Lock, Moon, PanelBottom, Power, RotateCcw, Search, Settings, SlidersHorizontal } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { ArrowUpRight, Brain, ChevronLeft, ChevronRight, FolderOpen, Lock, Moon, PanelBottom, Pencil, Pin, PinOff, Power, RotateCcw, Search, Settings, ShieldCheck, SlidersHorizontal, Trash2, Ungroup } from "lucide-react";
 import { bridge, type AppRef, type MonitorInfo, type PinnedApp, type RecentItem, type SearchResult, type StartItem } from "../bridge";
-import { derive } from "../lib/startItems";
+import { derive, hasApp, keyOf, pinApp, ungroup, withoutApp } from "../lib/startItems";
 import { StartGrid } from "./StartGrid";
+import { ContextMenu, type ListMenu, type MenuItem } from "./Menus";
+import { useWindows } from "../hooks";
 import { fileKind } from "../lib/clip";
 import { initial } from "../lib/plugin";
 import { AppIcon, HoldButton, Kbd } from "./common";
@@ -68,8 +71,61 @@ export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: Mo
   const openFound = (r: SearchResult) => { bridge.call("search_open", { id: r.id }).catch(() => undefined); onClose(); };
   const openRecent = (r: RecentItem) => { bridge.call("open_recent", { id: r.id }).catch(() => undefined); onClose(); };
 
+  // Right-click / Shift+F10 / Menu key on an app or folder (Windows 11 Start's menu, minus "Move to front" and app jump lists)
+  const windows = useWindows(monitor.id);
+  const body = useRef<HTMLDivElement>(null);
+  const [menu, setMenu] = useState<ListMenu | null>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const down = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest(".context")) setMenu(null); };
+    document.addEventListener("pointerdown", down);
+    return () => document.removeEventListener("pointerdown", down);
+  }, [menu]);
+  const show = (at: { x: number; y: number }, title: string, icon: React.ReactNode, items: MenuItem[]) =>
+    setMenu({ kind: "list", x: at.x, y: at.y, bounds: body.current?.closest("[data-panel]")?.getBoundingClientRect(), title, icon, items });
+  const away = (fn: () => Promise<unknown>) => () => { fn().catch(() => undefined); onClose(); };
+  const appItems = (appId: string): MenuItem[] => {
+    const ids = pins.map((p) => p.appId), onStrip = ids.includes(appId);
+    // the strip takes only its own ids (a pin, or an app with a window); a Start Menu shortcut can't be pinned there yet
+    const strip = onStrip || windows.some((w) => w.appId === appId);
+    const file = !appId.startsWith("aumid:"); // a Store app has no file to show or elevate
+    return [
+      hasApp(start.items, appId)
+        ? { label: "Unpin from Start", icon: <PinOff />, run: () => start.save(withoutApp(start.items, appId)) }
+        : { label: "Pin to Start", icon: <Pin />, run: () => start.save(pinApp(start.items, appId)) },
+      ...(strip ? [{ label: onStrip ? "Unpin from strip" : "Pin to strip", icon: <PanelBottom />, run: () => { bridge.call("set_pins", { appIds: onStrip ? ids.filter((i) => i !== appId) : [...ids, appId] }).catch(() => undefined); } }] : []),
+      "hr",
+      ...(file ? [
+        { label: "Open file location", icon: <FolderOpen />, run: away(() => bridge.call("app_show_in_folder", { appId })) },
+        { label: "Run as administrator", icon: <ShieldCheck />, run: away(() => bridge.call("launch_app_admin", { appId })) },
+      ] : []),
+      // never uninstalls by itself: Windows's Installed apps page, where the owner picks the app
+      { label: "Uninstall", icon: <Trash2 />, run: away(() => bridge.call("open_windows_settings", { uri: "ms-settings:appsfeatures" })) },
+    ];
+  };
+  const appMenu = (appId: string, name: string, icon: React.ReactNode) => ({
+    onContextMenu: (e: React.MouseEvent) => { e.preventDefault(); show({ x: e.clientX, y: e.clientY }, name, icon, appItems(appId)); },
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (!(e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))) return;
+      e.preventDefault();
+      const r = e.currentTarget.getBoundingClientRect();
+      show({ x: r.left, y: r.bottom }, name, icon, appItems(appId));
+    },
+  });
+  const gridMenu = (it: StartItem, at: { x: number; y: number }, rename: () => void) => {
+    if (it.kind === "folder") {
+      show(at, it.name, null, [
+        { label: "Rename", icon: <Pencil />, run: rename },
+        { label: "Ungroup", icon: <Ungroup />, run: () => start.save(ungroup(start.items, keyOf(it))) },
+      ]);
+      return;
+    }
+    const a = start.refs.get(it.appId);
+    show(at, a?.name ?? "App", a && <AppIcon src={a.icon} color={a.colorIcon} />, appItems(it.appId));
+  };
+
   return (
-    <div className="body">
+    <div className="body" ref={body}>
       <div className="inputBox glass">
         <Search className="l3" />
         <input data-autofocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search apps, windows, files and settings" aria-label="Search in Start"
@@ -83,7 +139,7 @@ export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: Mo
       {t ? (
         <div className="list glass startResult" role="group" aria-label="Search results" style={{ "--indent": "36px" } as React.CSSProperties}>
           {found.map((r, i) => (
-            <button key={r.id} className={"row" + (i === sel ? " selected" : "")} onMouseMove={() => setSel(i)} onClick={() => openFound(r)}>
+            <button key={r.id} className={"row" + (i === sel ? " selected" : "")} onMouseMove={() => setSel(i)} onClick={() => openFound(r)} {...(r.kind === "app" ? appMenu(r.appId, r.title, <AppIcon src={r.icon} />) : null)}>
               <ResultIcon r={r} /><span className="text" style={{ textAlign: "left" }}>{r.title}</span>{r.subtitle && r.kind !== "app" && <span className="t12 l3">{r.subtitle}</span>}
             </button>
           ))}
@@ -98,14 +154,14 @@ export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: Mo
           {all ? (
             <div className="suggestionGrid allApps" role="group" aria-label="All apps">
               {apps.map((a) => (
-                <button key={a.appId} className="row" onClick={() => launch(a.appId)}>
+                <button key={a.appId} className="row" onClick={() => launch(a.appId)} {...appMenu(a.appId, a.name, <AppIcon src={a.icon} color={a.colorIcon} />)}>
                   <AppIcon src={a.icon} color={a.colorIcon} /><span className="text" style={{ textAlign: "left" }} title={a.name}>{a.name}</span>
                 </button>
               ))}
             </div>
           ) : (
             <>
-              <StartGrid items={start.items} apps={start.refs} onChange={start.save} onLaunch={launch} />
+              <StartGrid items={start.items} apps={start.refs} onChange={start.save} onLaunch={launch} onMenu={gridMenu} />
               {recent.length > 0 && (
                 <>
                   <div className="sectionHead"><span>Recommended</span>{recent.length > 4 && <button className="btn kk glass" aria-expanded={more} onClick={() => setMore(!more)}>{more ? "Show less" : "Show more"}<ChevronRight /></button>}</div>
@@ -143,6 +199,7 @@ export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: Mo
         </span>
         <button className="smallLink" onClick={() => { bridge.call("open_start_menu").catch(() => undefined); onClose(); }}>Open Windows Start<ArrowUpRight /></button>
       </div>
+      {menu && createPortal(<ContextMenu menu={menu} pins={pins} windows={windows} onClose={() => setMenu(null)} onPins={() => undefined} />, document.body)}
     </div>
   );
 }

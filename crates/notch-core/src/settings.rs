@@ -81,6 +81,14 @@ pub struct Settings {
     /// strip pins and the app list, as before folders; set the first time the owner arranges it (`set_start_items`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start_items: Option<Vec<StartItem>>,
+    /// The Hidden icons panel's order and groups (same shape as `start_items`; app ids are the tray's `exe:<path>`).
+    /// None = Windows's order, as before; written with `set_settings` (`trayItems`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tray_items: Option<Vec<StartItem>>,
+    /// The Windows taskbar's pins were copied once (owner RC5; only while `pins` was empty). Not a setting: after it, a
+    /// strip with everything unpinned stays so; Settings' "Import Windows taskbar pins" adds them again on request.
+    #[serde(default)]
+    pub taskbar_pins_imported: bool,
 }
 
 /// One cell of Start's pinned grid: an app, or a folder of at least two apps (owner 2026-10-26).
@@ -176,6 +184,8 @@ impl Default for Settings {
             watch_downloads: true,
             screen_tint: true,
             start_items: None,
+            tray_items: None,
+            taskbar_pins_imported: false,
         }
     }
 }
@@ -205,6 +215,8 @@ pub struct UiSettings {
     pub taskbar_hide: HideMode,
     /// Start's grid with folders; null = derived by the page. Written with `set_start_items`.
     pub start_items: Option<Vec<StartItem>>,
+    /// The Hidden icons panel's order and groups; null = Windows's order.
+    pub tray_items: Option<Vec<StartItem>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -234,6 +246,8 @@ pub struct UiPatch {
     pub celebrate: Option<bool>,
     pub watch_downloads: Option<bool>,
     pub screen_tint: Option<bool>,
+    /// The Hidden icons panel's order and groups, cleaned like Start's grid.
+    pub tray_items: Option<Vec<StartItem>>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -280,6 +294,7 @@ pub fn to_ui(s: &Settings, name_icon: impl Fn(&str) -> Option<(String, String)>)
         screen_tint: s.screen_tint,
         taskbar_hide: s.taskbar_hide,
         start_items: s.start_items.clone(),
+        tray_items: s.tray_items.clone(),
     }
 }
 
@@ -325,6 +340,9 @@ pub fn apply_patch(
     }
     if let Some(v) = patch.clip_media {
         next.clip_media = v;
+    }
+    if let Some(v) = patch.tray_items {
+        next.tray_items = Some(clean_start_items(v));
     }
     if let Some(v) = patch.clip_password_min {
         // Shorter only, never past an hour.
@@ -435,6 +453,22 @@ mod tests {
             serde_json::to_string(&s.start_items).unwrap(),
             r#"[{"kind":"folder","name":"Work","appIds":["a","b"]},{"kind":"app","appId":"c"}]"#
         );
+    }
+
+    #[test]
+    fn tray_items_old_file_is_none_and_a_patch_saves_them_cleaned() {
+        let old: Settings = serde_json::from_str(r#"{"version":1,"pins":[]}"#).unwrap();
+        assert_eq!(old.tray_items, None);
+        assert!(!serde_json::to_string(&old).unwrap().contains("tray_items"), "None is not written");
+        let patch: UiPatch =
+            serde_json::from_str(r#"{"trayItems":[{"kind":"folder","name":" ","appIds":["exe:a","exe:b"]},{"kind":"app","appId":"exe:a"},{"kind":"app","appId":"exe:c"}]}"#)
+                .unwrap();
+        let next = apply_patch(&old, patch, |_| None, |_| None).unwrap();
+        assert_eq!(next.tray_items, Some(vec![folder("Folder", &["exe:a", "exe:b"]), app("exe:c")]));
+        assert_eq!(next.start_items, None, "Start's grid is untouched");
+        assert_eq!(to_ui(&next, |_| None).tray_items, next.tray_items);
+        // a patch without the field keeps them
+        assert_eq!(apply_patch(&next, UiPatch::default(), |_| None, |_| None).unwrap().tray_items, next.tray_items);
     }
 
     #[test]

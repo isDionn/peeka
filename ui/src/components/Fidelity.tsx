@@ -7,7 +7,7 @@ import { AlertIcon } from "../lib/alertIcon";
 import { actionLabel } from "../lib/alerts";
 import { flat, MASCOT_STATES, plain, pluginName } from "../lib/plugin";
 import { askLabel } from "../hooks";
-import { listenLine, LINE_IDLE, type LineState } from "../lib/lineChan";
+import { listenLine, listenStripGaps, LINE_IDLE, type LineState } from "../lib/lineChan";
 import { lineVars } from "../lib/line";
 import { useGuard } from "../lib/useGuard";
 import { Mascot, type MascotHandle, type Mood } from "../mascot";
@@ -22,9 +22,16 @@ const refOf = (m: Pick<PluginInfo, "id" | "name">) => ({ id: m.id, name: m.name,
 export function StripLine({ shift = 0 }: { shift?: number }) {
   const [s, setS] = useState<LineState>(LINE_IDLE);
   useEffect(() => listenLine((m) => { if (m.k === "line") setS({ color: m.color, mod: m.mod, gap: m.gap }); }), []);
-  const mask = s.gap > 0 ? `linear-gradient(90deg,#000 calc(50% - ${s.gap + 8}px),transparent calc(50% - ${s.gap}px),transparent calc(50% + ${s.gap}px),#000 calc(50% + ${s.gap + 8}px))` : undefined;
+  const [gaps, setGaps] = useState<(readonly [number, number])[]>([]);
+  useEffect(() => listenStripGaps(setGaps), []);
+  // one mask layer per break (island at the centre, each open strip panel / menu), intersected: the line is drawn only where no surface hangs
+  const masks = [
+    ...(s.gap > 0 ? [`linear-gradient(90deg,#000 calc(50% - ${s.gap + 8}px),transparent calc(50% - ${s.gap}px),transparent calc(50% + ${s.gap}px),#000 calc(50% + ${s.gap + 8}px))`] : []),
+    ...gaps.map(([a, b]) => `linear-gradient(90deg,#000 ${a - 8}px,transparent ${a}px,transparent ${b}px,#000 ${b + 8}px)`),
+  ];
+  const mask = masks.length ? masks.join(",") : undefined;
   return (
-    <div id="line" data-mode={s.mod} aria-hidden="true" style={{ ...lineVars(s), maskImage: mask, WebkitMaskImage: mask, transform: shift ? `translateY(${shift}px)` : undefined }}>
+    <div id="line" data-mode={s.mod} aria-hidden="true" style={{ ...lineVars(s), maskImage: mask, WebkitMaskImage: mask, maskComposite: masks.length > 1 ? "intersect" : undefined, transform: shift ? `translateY(${shift}px)` : undefined }}>
       <i className="left" /><i className="right" />
     </div>
   );

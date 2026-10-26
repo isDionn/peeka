@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { bridge, type TrayIconX } from "../bridge";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { bridge, type AppRef, type StartItem, type TrayIconX } from "../bridge";
 import { AppIcon, AppLetter, SAFE_ICON } from "./common";
+import { StartGrid } from "./StartGrid";
+import { withNew } from "../lib/startItems";
+import { useSettings } from "../hooks";
 import "../fidelity-settings.css";
 
 /** Rust `tray_icons`: `open_tray` + color icon. No badge count arrives; without `badge` no badge is drawn. */
@@ -25,6 +28,8 @@ function TrayIconView({ t, size, color }: { t: TrayIconX; size: number; color?: 
  * Hidden icons under the strip arrow (mockup y1): small 4-column grid, name as a tooltip on hover, red badge. Wave 0 test 4 fallback:
  * Rust gives the read-only `NotifyIconSettings` list; clicking calls `tray_open` (the window comes forward or the app starts).
  * Panel width should be ~188 px (Shell `<Panel width>`); at 300 px the grid sits to the left.
+ * Owner 2026-10-26: drag to reorder, drop one icon on another to group them: Start's folders (StartGrid, compact), saved as
+ * `settings.trayItems` by the tray's stable `exe:<path>` id. Icons of apps not running now keep their place, unseen.
  */
 export function TrayList({ monitor, onClose }: { monitor: string; onClose: () => void }) {
   const [list, setList] = useState<TrayIconX[] | null>(last);
@@ -33,6 +38,17 @@ export function TrayList({ monitor, onClose }: { monitor: string; onClose: () =>
     loadTray(monitor).then((l) => { last = l; if (live) setList(l); }).catch(() => { if (live) setList([]); });
     return () => { live = false; };
   }, [monitor]);
+  const saved = useSettings()?.trayItems;
+  const [mine, setMine] = useState<StartItem[] | null>(null); // shown at once while Rust saves
+  useEffect(() => { setMine(null); }, [saved]); // Rust's cleaned copy (settings_changed) wins
+  const byId = useMemo(() => new Map((list ?? []).map((t) => [t.id, t])), [list]);
+  const refs = useMemo(() => new Map<string, AppRef>((list ?? []).map((t) => [t.id, { appId: t.id, name: t.name, icon: t.icon, colorIcon: t.colorIcon }])), [list]);
+  const items = useMemo(() => withNew(mine ?? saved ?? [], (list ?? []).map((t) => t.id)), [mine, saved, list]);
+  const save = (next: StartItem[]) => { setMine(next); bridge.call("set_settings", { patch: { trayItems: next } }).catch(() => undefined); };
+  const compact = useMemo(() => ({
+    tile: (a: AppRef, mini: boolean) => { const t = byId.get(a.appId)!; return mini ? <TrayIconView t={{ ...t, badge: undefined }} size={14} color={t.colorIcon} /> : <TrayIconView t={t} size={18} color={t.colorIcon} />; },
+    label: (a: AppRef) => label(byId.get(a.appId)!),
+  }), [byId]);
   const grid = useRef<HTMLDivElement>(null);
   // icons arrive async: nothing could take focus when the panel opened, so focus goes to the first icon (or the grid) once the list arrives (F-09)
   useEffect(() => { if (list?.length) grid.current?.querySelector<HTMLElement>("button")?.focus(); }, [list]);
@@ -42,9 +58,7 @@ export function TrayList({ monitor, onClose }: { monitor: string; onClose: () =>
       {list && list.length === 0 && <div className="noResults">No icons</div>}
       {list && list.length > 0 && (
         <div className="trayIconGrid" role="group" aria-label="Hidden icons" ref={grid}>
-          {list.map((t, i) => (
-            <button key={t.id} title={t.name} aria-label={label(t)} data-autofocus={i === 0 ? "" : undefined} onClick={() => open(t, onClose)}><TrayIconView t={t} size={18} color={t.colorIcon} /></button>
-          ))}
+          <StartGrid items={items} apps={refs} onChange={save} onLaunch={(id) => open(byId.get(id)!, onClose)} compact={compact} />
         </div>
       )}
     </div>

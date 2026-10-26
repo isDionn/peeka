@@ -45,3 +45,16 @@ export function moveTo(items: StartItem[], key: string, beforeKey: string, after
 /** A folder renamed; a blank name is "Folder" (Rust also cuts it to 40 characters). */
 export const rename = (items: StartItem[], key: string, name: string): StartItem[] =>
   items.map((it) => (it.kind === "folder" && keyOf(it) === key ? { ...it, name: name.trim() || "Folder" } : it));
+
+/** A folder's apps back on the grid in its place, in its order (Start's "Ungroup"). */
+export const ungroup = (items: StartItem[], key: string): StartItem[] =>
+  items.flatMap((it) => (it.kind === "folder" && keyOf(it) === key ? derive(it.appIds) : [it]));
+
+/** Is the app anywhere on the grid (a cell or inside a folder)? */
+export const hasApp = (items: StartItem[], appId: string) => items.some((it) => (it.kind === "app" ? it.appId === appId : it.appIds.includes(appId)));
+
+/** "Pin to Start": the app goes last, unless it is already there. */
+export const pinApp = (items: StartItem[], appId: string): StartItem[] => (hasApp(items, appId) ? items : [...items, { kind: "app", appId }]);
+
+/** The saved arrangement plus the ids it doesn't know yet, last in the order given (the tray: an app that started since). */
+export const withNew = (items: StartItem[], ids: string[]): StartItem[] => [...items, ...derive(ids.filter((id) => !hasApp(items, id)))];

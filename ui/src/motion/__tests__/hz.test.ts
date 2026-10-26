@@ -77,3 +77,16 @@ describe("high Hz: the same motion", () => {
     r.forEach((x) => expect(x.tr).toBe(""));
   });
 });
+
+describe("negative frame time", () => {
+  it("a first rAF stamped before the kick never overshoots: the value moves toward the target only", () => {
+    const s = new Spring(0, SPRINGS.open);
+    s.retarget(542);
+    advance(s, -0.05); // click handler kicked the loop after the frame's start
+    expect(s.x).toBeGreaterThanOrEqual(0);
+    expect(s.v).toBeGreaterThanOrEqual(0);
+    const first = s.x;
+    advance(s, 1 / 60);
+    expect(s.x).toBeGreaterThan(first);
+  });
+});

@@ -361,7 +361,12 @@ pub fn surfaces(app: &AppHandle) -> Option<SurfacesView> {
     let p = app.try_state::<Plugins>()?;
     let alerts = crate::live::alerts_view(&n);
     let ctx = Attention { dnd: n.settings.lock().dnd, ..*n.attention.lock() };
-    let v = p.host.lock().surfaces_view(&ctx, alerts.top.as_deref(), alerts.drop_strip_ms);
+    let private = crate::privacy::closed(app); // before the host lock: it takes that lock itself
+    let mut v = p.host.lock().surfaces_view(&ctx, alerts.top.as_deref(), alerts.drop_strip_ms);
+    if private {
+        v.assistant_state.clear();
+    }
+    v.private = private;
     Some(v)
 }
 
@@ -376,10 +381,12 @@ pub fn locked(app: &AppHandle) -> bool {
     app.try_state::<Plugins>().is_some_and(|p| p.host.lock().locked())
 }
 
+/// Also every privacy gate change (lock, presence, sharing) lands here: the held `assistant_event`s go out once open.
 pub fn emit_surfaces(app: &AppHandle) {
     if let Some(v) = surfaces(app) {
         let _ = app.emit("plugin_surfaces_changed", v);
     }
+    crate::privacy::release(app);
 }
 
 /// Runs what the host decided. Locks are taken one at a time (host, then alerts), never nested.
@@ -424,8 +431,14 @@ pub fn run(app: &AppHandle, outs: Vec<Out>) {
             Out::Ui(UiEvent::CcEdit { sid, file, add, del }) => {
                 crate::recap::count(app, notch_core::recap::Ev::Edit { sid: sid.as_deref(), file: &file });
                 // locked or presenting: the page learns only that an edit happened (generic label)
-                let open = !crate::clip_history::hide_passwords(app);
+                let open = !crate::privacy::closed(app);
                 let _ = app.emit("cc_edit", serde_json::json!({ "sid": sid, "file": open.then_some(file), "add": open.then_some(add), "del": open.then_some(del) }));
+            }
+            Out::Ui(UiEvent::AssistantEvent(v)) => crate::privacy::event(app, v),
+            Out::Ui(UiEvent::AssistantReply(v)) => {
+                // the gate closed while it was on the way: the page gets the code, never the data
+                let v = if crate::privacy::closed(app) { serde_json::json!({"id": v.get("id"), "error": {"code": -32020}}) } else { v };
+                let _ = app.emit("assistant_reply", v);
             }
             Out::Ui(UiEvent::FirstConnect) => {
                 let _ = app.emit("first_connect", ());

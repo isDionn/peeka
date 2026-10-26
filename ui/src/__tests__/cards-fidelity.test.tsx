@@ -5,7 +5,7 @@ import { fakeBridge } from "../bridge.fake";
 import { SURFACES_J, VOICE_ASSISTANT, VOICE_YOU, VOICE_SPEAKING, VOICE_THINKING, withRecommended } from "../plugin.fixtures";
 import { EmptyBoard, ErrorCard, FirstConnectCard, LoadingCard, makeErrorBudget } from "../components/CardsExtra";
 import { Island } from "../components/Island";
-import { FirstRunCard, modulesKw } from "../components/IslandCards";
+import { FirstRunCard, MOD_NARROW } from "../components/IslandCards";
 import { ApprovalCard, ApprovalCenter, ComposerCard, ProtrusionBump, ProtrusionCenter } from "../components/Plugin";
 import { shortApprovalTitle } from "../lib/cardsText";
 import { resetMascotRegistry } from "../mascot/useSingleMascot";
@@ -184,10 +184,9 @@ describe("Modules (j)", () => {
     expect(tabs).toEqual(["General", "Music", "Clipboard", "Shelf", "Calendar", "Timer", "System", "Notifications", "Claude", "Compass", "Compass › Claude Code", "Compass › Team"]);
     expect(screen.getByRole("button", { name: "Modules settings" })).toBeTruthy(); // owner: a gear to Settings › Modules (hide Calendar / Timer)
     expect(container.querySelectorAll(".grid.general3 > .box")).toHaveLength(2);
-    // General home: every enabled module is one click away (a pill when it has something to say, otherwise a dock shortcut), in module order
-    expect([...container.querySelectorAll(".genHome :is(.genPill, .genKey)")].map((b) => b.getAttribute("aria-label")).filter((l) => l?.endsWith(": open tab")).sort())
-      .toEqual(["Calendar", "Clipboard", "Music", "Notifications", "System", "Timer"].map((m) => m + ": open tab"));
-    expect(container.querySelectorAll(".genPills .genPill").length).toBeLessThanOrEqual(3);
+    // General home (Places): each place's name opens its tab, in fixed place order; Claude Code with 0 sessions is a plain label (no empty list)
+    expect([...container.querySelectorAll(".genHome .genHead")].map((b) => b.getAttribute("aria-label")))
+      .toEqual(["Music: open tab", null, "Clipboard: open tab", "Calendar: open tab", "Timer: open tab"]);
     expect(container.querySelectorAll(".quota .meter")).toHaveLength(2);
     expect(container.querySelector(".quota .threshold")).toBeTruthy();
     expect(screen.getByText("Resets in 2h 14m")).toBeTruthy();
@@ -223,51 +222,40 @@ describe("Modules (j)", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Music" }));
     expect(screen.getByRole("button", { name: "Previous track" })).toBeTruthy();
   });
-  it("General home: the now line follows the music, the clipboard pill shows count/kind/age only, never the copied text", async () => {
+  it("General home: the Music place follows the music, the Clipboard place shows count/kind/age only, never the copied text", async () => {
     fakeBridge.addClip({ id: "s1", createdAt: Date.now(), pinned: false, source: "Chrome", kind: "text", text: "secret text", sub: null, thumb: null, screenshot: false } as never);
     const { container } = render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
     const home = container.querySelector(".genHome")!;
-    expect(home.querySelector(".genNow .t20")?.textContent).toBe("Night Train");
-    const clip = home.querySelector('.genPill[aria-label="Clipboard: open tab"]');
-    expect(clip?.textContent).toMatch(/^\d+ items?text, /); // count, then kind and age of the newest (the text item)
+    expect(home.querySelector(".genMusic")?.textContent).toContain("Night Train");
+    const clip = home.querySelector('.genTile[style*="grid-area: clip"]');
+    expect(clip?.textContent).toMatch(/^ClipboardText, just now\d+ items?$/); // kind and age of the newest (the text item), then the count
     expect(home.textContent).not.toContain("secret");
     expect(home.textContent).not.toContain("Chrome");
   });
-  it("a General shortcut opens its own tab in one click; an empty module keeps a shortcut", async () => {
+  it("a General place opens its own tab in one click; an empty module keeps its place", async () => {
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
-    expect(screen.queryByText("No timer running")).toBeNull(); // an empty module is a dock shortcut, not a tile
     fireEvent.click(screen.getByRole("button", { name: "Timer: open tab" }));
     expect(screen.getByRole("tab", { name: "Timer" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByLabelText("Minutes")).toBeTruthy();
   });
 });
 
-describe("Modules card width follows the tab", () => {
-  it("General is wide, the others as narrow as their own card", () => {
-    const w = (p: string) => modulesKw(p, 1920);
-    expect(w("general")).toBe(1056);
-    const narrow = ["music", "clipboard", "shelf", "calendar", "timer", "system", "notifications", "plugin"].map(w);
-    expect(new Set(narrow)).toEqual(new Set([620])); // every tab except General has the same width
-    expect(modulesKw("general", 1366)).toBe(751);
-    // the island window (760 css) can't draw a card wider than 760 - 2 x 72 shadow: General stays at the others' width, never narrower (0.3.4 drew it 418 wide, cut)
-    expect(modulesKw("general", 1920, 760 - 144)).toBe(620);
-    expect(modulesKw("general", 1920, 1200 - 144)).toBe(1056);
-  });
-  it("the card width changes with the tab; on a narrow card an inactive tab is icon-only", async () => {
-    fakeBridge.setSurfaces(SURFACES_J); // with plugin boxes General is wide (3 columns); without boxes General is 620
+describe("Modules card width", () => {
+  it("every tab is 620 wide, General included (Places), and tabs are icon-only", async () => {
+    expect(MOD_NARROW).toBe(620);
+    fakeBridge.setSurfaces(SURFACES_J); // even with plugin boxes General stays 620 (they stack under the places)
     // a 1920 screen and a window with room for the wide card (jsdom: screen 0, window 1024)
     vi.spyOn(window.screen, "width", "get").mockReturnValue(1920);
     vi.spyOn(window, "innerWidth", "get").mockReturnValue(1920);
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
     const kart = () => (document.querySelector(".islandInner.mockCard, .islandInner") as HTMLElement).style.width;
-    const genel = kart();
+    expect(kart()).toBe("620px");
     vi.restoreAllMocks();
     fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
     expect(kart()).toBe("620px");
-    expect(kart()).not.toBe(genel);
     expect(screen.getByRole("tab", { name: "Clipboard" }).textContent).toBe("");
     expect(screen.getByRole("tab", { name: "Calendar" }).textContent).toBe("");
   });

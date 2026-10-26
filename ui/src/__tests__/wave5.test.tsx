@@ -500,7 +500,7 @@ describe("module management and color icons", () => {
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
     expect(screen.getByRole("tab", { name: "Shelf" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "System: open tab" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^System: .*open tab$/ })).toBeTruthy();
   });
   it("in Settings › Appearance the color icons switch writes the setting and puts a flag on the page; no flag while off", async () => {
     render(<Shell monitor="m1" init={{ panel: "appearance" }} />);

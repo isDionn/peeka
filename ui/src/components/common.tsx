@@ -4,10 +4,12 @@ import { useFocusTrap } from "../lib/useFocusTrap";
 import { useGuard } from "../lib/useGuard";
 import { GUARD_MS } from "../lib/plugin";
 import { useHold } from "../lib/useHold";
-import { createShape, type Shape } from "../motion/shape";
+import { createShape, notchRadius, shoulderOf, type Shape } from "../motion/shape";
 import { mountShoulders } from "../motion/shoulder";
+import { setStripGap } from "../lib/lineChan";
 import { GlowField } from "./Glow";
 import { useLayoutEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 /** Icons from Rust may only be PNG/SVG data URLs (they go inside CSS url("...")). */
 export const SAFE_ICON = /^data:image\/(png|svg\+xml)[;,]/;
@@ -91,7 +93,7 @@ export function Panel({ side, width, label, open, onClose, dataKind, children, o
   /** Distance from the edge (px, default 8): the tray panel sits under the arrow at this distance. */ offset?: number;
   /** Ambient color (a soft glow behind the card; mockup mt amber). */ amb?: string;
   /** No corner close button when the content shows its own "Esc" hint. */ ownHint?: boolean; /* small popovers like the tray use this too: Esc and clicking outside close it, a corner button would cover the icons */
-  /** Monitor id: a centre panel that reads as an island card draws the Drift glow (its centre is the screen's centre line, glow.css). */ glow?: string;
+  /** Monitor id when the strip draws the Drift glow: the panel and its shoulders continue it (one field in screen coordinates, glow.css). */ glow?: string;
 }) {
   const [vh, setVh] = useState(() => window.innerHeight);
   useEffect(() => { const f = () => setVh(window.innerHeight); addEventListener("resize", f); return () => removeEventListener("resize", f); }, []);
@@ -102,10 +104,21 @@ export function Panel({ side, width, label, open, onClose, dataKind, children, o
   const cut = useRef<HTMLDivElement>(null), layers = useRef<HTMLDivElement>(null), tone = useRef<HTMLDivElement>(null);
   const shape = useRef<Shape | null>(null);
   const [shown, setShown] = useState(false); // the box still has height (open, or closing)
+  const [slices, setSlices] = useState<HTMLElement[]>([]);
+  const off = useRef(offset ?? 8);
+  off.current = offset ?? 8;
   useLayoutEffect(() => {
     const sh = mountShoulders(layers.current!);
-    const s = createShape(root.current!, cut.current!, { anchor: side, layers: [sh.layer], tone: tone.current, onBox: (_w, bh) => setShown(bh > 0) });
+    const host = root.current!;
+    const s = createShape(host, cut.current!, { anchor: side, tone: tone.current, onBox: (_w, bh) => setShown(bh > 0), layers: [sh.layer, (st) => {
+      // the Drift glow is one field in screen coordinates (glow.css): cx = the screen's centre line in this box, for the body and both shoulder slices (as Island.tsx)
+      const cx = side === "left" ? innerWidth / 2 - off.current : side === "right" ? st.bw + off.current - innerWidth / 2 : st.bw / 2;
+      host.style.setProperty("--gx", `${cx}px`);
+      const k = st.f / 12, tx = [st.offsetX - st.f, st.offsetX + st.w - k];
+      sh.shoulders.forEach((el, i) => { const sl = el.firstElementChild as HTMLElement | null; if (sl && k > 0.01) sl.style.transform = `scale(${1 / k}) translate(${cx - tx[i]}px,0)`; });
+    }] });
     shape.current = s;
+    setSlices(sh.shoulders.map((el) => el.appendChild(Object.assign(document.createElement("div"), { className: "glowSlice" }))));
     return () => { s.destroy(); sh.destroy(); };
   }, [side]);
   useLayoutEffect(() => { shape.current?.to(width, open ? content : 0); }, [width, open, content]);
@@ -118,6 +131,13 @@ export function Panel({ side, width, label, open, onClose, dataKind, children, o
     setContent(el.offsetHeight);
     return () => ro.disconnect();
   }, [mounted.current]);
+  // the strip line breaks over the panel and its shoulders while it hangs (open, or still closing), as over the island
+  useLayoutEffect(() => {
+    if (!(open || shown)) { setStripGap(dataKind, null); return; }
+    const r = root.current!.getBoundingClientRect(), f = shoulderOf(notchRadius(content));
+    setStripGap(dataKind, [Math.round(r.left - f), Math.round(r.right + f)]);
+  }, [open, shown, width, offset, content, dataKind]);
+  useEffect(() => () => setStripGap(dataKind, null), [dataKind]);
   useFocusTrap(root, onClose, open && content > 0);
 
   const pos: CSSProperties = side === "left" ? { left: offset ?? 8 } : side === "right" ? { right: offset ?? 8 } : { left: "50%", transform: "translateX(-50%)" };
@@ -130,7 +150,7 @@ export function Panel({ side, width, label, open, onClose, dataKind, children, o
       <div className="cut" ref={cut}>
         <div className="tone" ref={tone} />
         {amb && <div className="amb" />}
-        {glow && side === "center" && <div className="glowHost"><GlowField monitor={glow} /></div>}
+        {glow && mounted.current && <div className="glowHost"><GlowField monitor={glow} /></div>}
         {open && !ownHint && <button className="panelClose mini" title="Close (Esc)" aria-label="Close panel" onClick={onClose}><X /></button>}
         {(open || mounted.current) && (
           <div ref={inner} className={"inner " + (side === "right" ? "onRight" : side === "left" ? "onLeft" : "middle")} style={{ width, maxHeight: panelMaxH(vh), overflowY: "auto" }}>
@@ -138,6 +158,7 @@ export function Panel({ side, width, label, open, onClose, dataKind, children, o
           </div>
         )}
       </div>
+      {glow && mounted.current && slices.map((el, i) => createPortal(<GlowField monitor={glow} />, el, "s" + i))}
     </div>
   );
 }

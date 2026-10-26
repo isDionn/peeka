@@ -311,6 +311,50 @@ pub async fn set_pins(app: AppHandle, n: State<'_, Notch>, app_ids: Vec<String>)
     Ok(next.pins.iter().map(|p| pin_ref(&n, p)).collect())
 }
 
+/// The Windows taskbar's pins (in its order) added after Peeka's own; nothing is ever removed (owner RC5). `first_run`:
+/// once ever, and only while Peeka has no pins yet; the Settings action always imports.
+pub fn import_pins(app: &AppHandle, n: &Notch, first_run: bool) -> Res<Vec<apps::Pin>> {
+    if first_run && n.settings.lock().taskbar_pins_imported {
+        return Ok(n.settings.lock().pins.clone());
+    }
+    let found = if first_run && !n.settings.lock().pins.is_empty() {
+        vec![]
+    } else {
+        notch_win::com();
+        let running: Vec<String> = snapshot(n).into_iter().map(|i| i.app_id).collect();
+        notch_win::startmenu::taskbar_pins(&running)
+    };
+    let added = !found.is_empty();
+    let next = {
+        let mut s = n.settings.lock();
+        let mut next = s.clone();
+        next.pins = apps::add_pins(&s.pins, found);
+        next.taskbar_pins_imported = true;
+        n.save(&next).map_err(|_| CmdError::Io)?;
+        *s = next.clone();
+        next
+    };
+    if added {
+        let _ = app.emit("pins_changed", ());
+    }
+    Ok(next.pins)
+}
+
+/// Settings › "Import Windows taskbar pins".
+#[tauri::command]
+pub async fn import_taskbar_pins(app: AppHandle, n: State<'_, Notch>) -> Res<Vec<AppRef>> {
+    not_in_demo()?;
+    let pins = import_pins(&app, &n, false)?;
+    Ok(pins.iter().map(|p| pin_ref(&n, p)).collect())
+}
+
+/// The strip's right-edge "Show desktop": Win+D (a second click brings the windows back).
+#[tauri::command]
+pub async fn show_desktop() -> Res<()> {
+    not_in_demo()?;
+    notch_win::apps::toggle_desktop().then_some(()).ok_or(CmdError::Refused)
+}
+
 #[tauri::command]
 pub fn activate_window(n: State<'_, Notch>, hwnd: isize) -> Res<()> {
     apps::find_window(&n.items.lock(), hwnd).ok_or(CmdError::Unknown)?;
@@ -329,6 +373,30 @@ pub fn launch_app(n: State<'_, Notch>, app_id: String) -> Res<()> {
     let apps = n.apps.lock().0.clone();
     let relaunch = relaunch_of(&n, &items, &app_id);
     Ok(apps::launch_any(&Win32Control, &items, &apps, &app_id, relaunch.as_deref())?)
+}
+
+/// Start's menu: the file behind an app Notch listed (its Start Menu shortcut or exe), never a Store app (`invalid`:
+/// no file the owner should touch) and never a path the page made up (`unknown`).
+fn app_file(n: &Notch, app_id: &str) -> Res<String> {
+    let known = listed(n).iter().any(|a| a.app_id == app_id) || n.items.lock().iter().any(|i| i.app_id == app_id);
+    if !known {
+        return Err(CmdError::Unknown);
+    }
+    apps::launch_target(app_id).filter(|_| !app_id.starts_with("aumid:")).ok_or(CmdError::Invalid)
+}
+
+/// "Open file location": Explorer with the shortcut (or exe) selected, as Windows's Start does.
+#[tauri::command]
+pub fn app_show_in_folder(n: State<'_, Notch>, app_id: String) -> Res<()> {
+    let path = app_file(&n, &app_id)?;
+    notch_win::downloads::show_in_folder(std::path::Path::new(&path)).then_some(()).ok_or(CmdError::Refused)
+}
+
+/// "Run as administrator": Windows asks with its own UAC prompt; `refused` when the owner says no.
+#[tauri::command]
+pub fn launch_app_admin(n: State<'_, Notch>, app_id: String) -> Res<()> {
+    let path = app_file(&n, &app_id)?;
+    notch_win::apps::run_as_admin(&path).then_some(()).ok_or(CmdError::Refused)
 }
 
 #[tauri::command]
@@ -833,7 +901,7 @@ pub fn save_diagnostics(app: AppHandle, n: State<'_, Notch>) -> Res<String> {
     let text = notch_core::diagnostics::render(&d, &n.settings.lock());
     let text = notch_core::diagnostics::scrub(&text, env("USERPROFILE").as_deref(), env("USERNAME").as_deref());
     let dir = n.data_dir.join("diagnostics");
-    let name = format!("peeka-diag-{stamp}.txt");
+    let name = format!("{}-diag-{stamp}.txt", notch_core::brand::EXE_NAME);
     let path = dir.join(&name);
     std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&path, text)).map_err(|_| CmdError::Io)?;
     *n.diag_last.lock() = Some(path);
@@ -1103,6 +1171,21 @@ pub fn composer_submit(
     Ok(turn)
 }
 
+#[derive(Serialize)]
+pub struct PageReq {
+    id: u64,
+}
+
+/// A build-time extension asks the main assistant (assistant slots, docs/plugin-api.md §11): one name from the brand's
+/// `page_requests` (`invalid` for any other, a non-object or too large), sent as `page.request`; the answer comes as
+/// `assistant_reply` with this id. `denied` while the privacy gate is closed, `not_connected` without a main assistant.
+#[tauri::command]
+pub fn assistant_request(app: AppHandle, method: String, params: serde_json::Value) -> Res<PageReq> {
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    cmd::unlocked(crate::privacy::closed(&app))?;
+    on_host(&app, |h, _| h.page_request(&method, params).map(|(id, o)| (PageReq { id }, o)))
+}
+
 #[tauri::command]
 pub fn composer_voice(app: AppHandle) -> Res<()> {
     on_host(&app, |h, _| just(h.composer_voice()))
@@ -1217,7 +1300,7 @@ fn clip_history(app: &AppHandle) -> Res<tauri::State<'_, crate::clip_history::Cl
 
 #[tauri::command]
 pub fn clip_list(app: AppHandle) -> Res<Vec<ItemView>> {
-    let hide = crate::clip_history::hide_passwords(&app);
+    let hide = crate::privacy::closed(&app);
     Ok(clip_history(&app)?.clip_history.lock().list(hide))
 }
 
@@ -1804,7 +1887,7 @@ fn agent_file(id: &str) -> Res<PathBuf> {
             .map(PathBuf::from)
             .map_or_else(|| home().map(|h| h.join(".copilot")), Ok)?
             .join("hooks")
-            .join("peeka.json"),
+            .join(format!("{}.json", notch_core::brand::EXE_NAME)),
     })
 }
 
@@ -1871,7 +1954,7 @@ pub async fn cc_focus_terminal(app: AppHandle, session_id: String) -> Res<()> {
 /// while locked or presenting (`denied`); `missing` = no edit cached for it, or older than 30 min.
 #[tauri::command]
 pub fn cc_diff(app: AppHandle, sid: String) -> Res<serde_json::Value> {
-    cmd::unlocked(crate::clip_history::hide_passwords(&app))?;
+    cmd::unlocked(crate::privacy::closed(&app))?;
     let e = cc_cached(&sid)?;
     Ok(serde_json::json!({ "file": e.rel, "add": e.add, "del": e.del, "lines": e.lines, "more": e.more }))
 }
@@ -1879,7 +1962,7 @@ pub fn cc_diff(app: AppHandle, sid: String) -> Res<serde_json::Value> {
 /// "Open in editor": that edited file with its default app; not a file Windows would run (`denied`).
 #[tauri::command]
 pub fn cc_diff_open(app: AppHandle, sid: String) -> Res<()> {
-    cmd::unlocked(crate::clip_history::hide_passwords(&app))?;
+    cmd::unlocked(crate::privacy::closed(&app))?;
     let path = PathBuf::from(cc_cached(&sid)?.abs);
     if !path.is_file() {
         return Err(CmdError::Missing);

@@ -210,6 +210,16 @@ pub fn ex_style_of_window(hwnd: isize) -> u32 {
     sys::ex_style(sys::hwnd(hwnd))
 }
 
+/// "Show desktop", exactly Win+D: hides every window, a second call brings them back (`IShellDispatch4::ToggleDesktop`).
+#[cfg(windows)]
+pub fn toggle_desktop() -> bool {
+    use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
+    use windows::Win32::UI::Shell::{IShellDispatch4, Shell};
+    crate::com();
+    // SAFETY: plain COM calls on an object released on drop.
+    unsafe { CoCreateInstance::<_, IShellDispatch4>(&Shell, None, CLSCTX_ALL).and_then(|s| s.ToggleDesktop()).is_ok() }
+}
+
 /// Top-level windows in Z-order. Hidden windows are skipped early (the filter drops them anyway) so the slower AUMID /
 /// exe lookups run only for candidates.
 #[cfg(windows)]
@@ -297,6 +307,19 @@ pub fn foreground_cover_monitor() -> Option<usize> {
     let monitors = crate::monitors::list();
     let i = monitor_of(&r, &monitors)?;
     monitors.get(i).filter(|m| r.covers(&m.rect)).map(|m| m.index)
+}
+
+/// Start's "Run as administrator": the `runas` verb, so Windows shows its own UAC prompt. `target` is an exe or `.lnk`
+/// path Notch listed itself.
+#[cfg(windows)]
+pub fn run_as_admin(target: &str) -> bool {
+    use windows::core::{w, PCWSTR};
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    let file = crate::to_wide(target);
+    // SAFETY: a NUL-terminated wide string that outlives the call; > 32 = success (a declined UAC prompt is <= 32).
+    let r = unsafe { ShellExecuteW(None, w!("runas"), PCWSTR(file.as_ptr()), PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL) };
+    r.0 as isize > 32
 }
 
 /// `AppControl` on the real desktop.

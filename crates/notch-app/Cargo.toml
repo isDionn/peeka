@@ -12,6 +12,8 @@ path = "src/main.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+# build.rs reads the brand file's mirror package (already in Cargo.lock).
+serde_json.workspace = true
 
 [dependencies]
 notch-core.workspace = true

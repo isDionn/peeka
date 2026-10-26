@@ -47,22 +47,27 @@ export function SessionChip({ n, list, edge, last, locked, limited = false }: { 
     document.addEventListener("pointerdown", down);
     return () => document.removeEventListener("pointerdown", down);
   }, [open]);
+  return (
+    <div ref={root} className="sessionChip" style={{ right: `calc(50% + ${edge}px)` } as CSSProperties}>
+      <button type="button" className="sessionBtn" data-hit aria-expanded={open} aria-label={`${n} sessions, ${open ? "hide" : "show"} list`} onClick={() => setOpen(!open)}>{n} sessions</button>
+      {open && <SessionList n={n} list={list} last={last} locked={locked} limited={limited} />}
+    </div>
+  );
+}
+
+/** The chip's list; also opened from General's "Claude Code" place (IslandCards.tsx). */
+export function SessionList({ n, list, last, locked, limited = false }: { n: number; list: CcSession[]; last: { tool: string | null; at: number } | null; locked: boolean; limited?: boolean }) {
   const ago = last ? Math.max(0, Math.round((Date.now() - last.at) / 1000)) : null;
   // only Claude Code's (or none told apart): the wording stays as it was; mixed agents: each row names its agent
   const mixed = list.some((x) => x.agent !== "claude");
   const what = mixed ? "agent sessions" : "Claude Code sessions";
   return (
-    <div ref={root} className="sessionChip" style={{ right: `calc(50% + ${edge}px)` } as CSSProperties}>
-      <button type="button" className="sessionBtn" data-hit aria-expanded={open} aria-label={`${n} sessions, ${open ? "hide" : "show"} list`} onClick={() => setOpen(!open)}>{n} sessions</button>
-      {open && (
-        <div className="sideList sessionList" data-hit role="group" aria-label={mixed ? "Agent sessions" : "Claude Code sessions"}>
-          <div className="sideRow"><span className="b6 sideName">{n} {what} open</span></div>
-          {limited && <div className="sideRow"><Gauge aria-hidden="true" /><span className="l2 sideName">Usage limit reached</span></div>}
-          {list.map((x, i) => <div className="sideRow" key={x.sid}>{mixed && !locked && <span className="agentDot" style={{ background: agentOf(x.agent).color }} aria-hidden="true" />}<span className="l3 sideName">{mixed && !locked && `${agentOf(x.agent).name} · `}Session {i + 1}{!locked && `: ${x.tool ? flat(x.tool, 24) : "event"}, ${Math.max(0, Math.round((Date.now() - x.at) / 1000))}s ago`}</span>{!locked && originLabel(x.origin) && <span className="t12 l3">{originLabel(x.origin)}</span>}</div>)}
-          {list.length === 0 && !locked && last && <div className="sideRow"><span className="l3 sideName">Last activity: {last.tool ? flat(last.tool, 24) : "event"}, {ago}s ago</span></div>}
-          {n > list.length && <div className="sideRow"><span className="l3 sideName">{list.length ? `${n - list.length} more can't be told apart` : "Sessions can't be told apart"}</span></div>}
-        </div>
-      )}
+    <div className="sideList sessionList" data-hit role="group" aria-label={mixed ? "Agent sessions" : "Claude Code sessions"}>
+      <div className="sideRow"><span className="b6 sideName">{n} {what} open</span></div>
+      {limited && <div className="sideRow"><Gauge aria-hidden="true" /><span className="l2 sideName">Usage limit reached</span></div>}
+      {list.map((x, i) => <div className="sideRow" key={x.sid}>{mixed && !locked && <span className="agentDot" style={{ background: agentOf(x.agent).color }} aria-hidden="true" />}<span className="l3 sideName">{mixed && !locked && `${agentOf(x.agent).name} · `}Session {i + 1}{!locked && `: ${x.tool ? flat(x.tool, 24) : "event"}, ${Math.max(0, Math.round((Date.now() - x.at) / 1000))}s ago`}</span>{!locked && originLabel(x.origin) && <span className="t12 l3">{originLabel(x.origin)}</span>}</div>)}
+      {list.length === 0 && !locked && last && <div className="sideRow"><span className="l3 sideName">Last activity: {last.tool ? flat(last.tool, 24) : "event"}, {ago}s ago</span></div>}
+      {n > list.length && <div className="sideRow"><span className="l3 sideName">{list.length ? `${n - list.length} more can't be told apart` : "Sessions can't be told apart"}</span></div>}
     </div>
   );
 }

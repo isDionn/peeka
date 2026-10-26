@@ -9,6 +9,8 @@ pub const COMMANDS: &[&str] = &[
     "list_windows",
     "get_pins",
     "set_pins",
+    "import_taskbar_pins",
+    "show_desktop",
     "activate_window",
     "close_window",
     "new_window",
@@ -114,6 +116,8 @@ pub const COMMANDS: &[&str] = &[
     "recent_files",
     "open_recent",
     "set_start_items",
+    "app_show_in_folder",
+    "launch_app_admin",
     // Fidelity 3: from the main assistant (notch_core::plugins::host::assistant)
     "assistant_counts",
     "assistant_open",
@@ -159,6 +163,8 @@ pub const COMMANDS: &[&str] = &[
     // Ctrl+Alt+Shift+D / Settings > About: one local text file for bug reports (`notch_core::diagnostics`)
     "save_diagnostics",
     "diagnostics_open_folder",
+    // Assistant slots: one page -> main assistant request (brand `page_requests`), the reply comes as `assistant_reply`
+    "assistant_request",
     // Long-press pickers on the Wi-Fi / Bluetooth tiles (`notch_win::wifi`, `notch_win::bluetooth`)
     "wifi_networks",
     "wifi_connect",
@@ -213,6 +219,8 @@ pub const EVENTS: &[&str] = &[
     "claude_chat_done",
     "diagnostics_saved",
     "screen_tint",
+    "assistant_event",
+    "assistant_reply",
 ];
 
 fn ts_list(out: &mut String, name: &str, items: &[&str]) {

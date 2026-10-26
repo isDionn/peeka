@@ -3,6 +3,7 @@
 
 pub mod alerts;
 pub mod apps;
+pub mod brand;
 pub mod capture;
 pub mod clickthrough;
 pub mod claude_chat;
@@ -46,12 +47,12 @@ pub(crate) mod test_util;
 
 use std::path::{Path, PathBuf};
 
-/// The only place the product name lives in Rust (the other is `tauri.conf.json`).
-pub const PRODUCT_NAME: &str = "Peeka";
+/// The product name (brand file; the other place is `tauri.conf.json`).
+pub const PRODUCT_NAME: &str = brand::PRODUCT_NAME;
 /// Code name: data folder, pipe name, file names. Never the product name.
-pub const CODE_NAME: &str = "notch";
+pub const CODE_NAME: &str = brand::CODE_NAME;
 /// Tests and dev runs point the data folder elsewhere.
-pub const DATA_DIR_ENV: &str = "NOTCH_DATA_DIR";
+pub const DATA_DIR_ENV: &str = brand::DATA_DIR_ENV;
 
 /// `NOTCH_DATA_DIR`, else `%LOCALAPPDATA%\notch`. None = neither is set (no place to keep the marker).
 pub fn data_dir() -> Option<PathBuf> {

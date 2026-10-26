@@ -17,7 +17,13 @@ export type XMsg = { t: "panel"; panel: "search" | "settings" | "status" | "star
   /** Strip -> island: is the welcome card open? */
   | { t: "welcome?" }
   /** Strip -> island: a strip panel shows its own ghost right now (the empty Notifications panel's 96 px one): the strip ghost steps aside (one mascot on screen). */
-  | { t: "ghost"; on: boolean };
+  | { t: "ghost"; on: boolean }
+  /** Island -> strip: the extension card is open (assistant slots, `ext.ts`). */
+  | { t: "ext-open"; open: boolean }
+  /** Strip / Ctrl+K -> island: open the extension card (`full`: full size), with an opaque target the card reads. */
+  | { t: "ext-go"; full?: boolean; target?: unknown }
+  /** -> island, only with an extension card: open the Music or Clipboard card (over the extension card it tucks it away). */
+  | { t: "card"; view: "music-card" | "clipboard" };
 const NAME = "notch-xwin";
 
 export function sendX(m: XMsg) {

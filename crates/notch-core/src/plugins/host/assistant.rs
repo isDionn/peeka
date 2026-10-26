@@ -4,15 +4,17 @@
 //! permission log. The main assistant pushes; Notch keeps the last value and the page reads it. Without a ready
 //! main assistant every read is `NoMain` ("Assistant not connected"), before it has sent anything `NotYet`.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use super::{fail, notification, Host, Out, OwnerErr, RpcErr, UiEvent};
+use super::{fail, notification, ConnId, Host, Out, OwnerErr, RpcErr, UiEvent};
 use crate::plugins::registry::{PermissionEvent, PERMISSION_LOG_MAX};
-use crate::plugins::{cc_hooks, code, items, Scope};
+use crate::plugins::{cc_hooks, code, items, Scope, MAX_MESSAGE};
 
 /// Plugin -> Notch methods of this file, all main-assistant only, with the scope each needs.
-pub(super) const METHODS: [(&str, Scope); 9] = [
+pub(super) const METHODS: [(&str, Scope); 11] = [
     ("assistant.counts.set", Scope::CardModule),
     ("cc.sessions.set", Scope::CardModule),
     ("cc.event", Scope::IslandProtrusion),
@@ -22,7 +24,29 @@ pub(super) const METHODS: [(&str, Scope); 9] = [
     ("meeting.set", Scope::IslandProtrusion),
     ("job.done", Scope::IslandProtrusion),
     ("shelf.suggestion", Scope::FilesDrop),
+    // assistant slots (docs/plugin-api.md §11): events and last values for a build-time extension's own UI
+    ("assistant.event", Scope::ComposerHandler),
+    ("assistant.state.set", Scope::ComposerHandler),
 ];
+
+/// `assistant.state.set`: at most this many keys, each value at most this large once serialized.
+const MAX_STATE_KEYS: usize = 16;
+const MAX_STATE_VALUE: usize = 64 * 1024;
+/// `page.request`s still waiting for a reply; past this the oldest is forgotten (its page times out on its own).
+const MAX_PAGES: usize = 32;
+/// `assistant_reply` error code Peeka gives itself when the asked connection closed (the plugin's own codes pass
+/// through as they came).
+pub const PAGE_NOT_CONNECTED: i64 = -32022;
+
+/// `assistant.event` type / `assistant.state.set` key: `^[a-z][a-z0-9_.]{0,31}$`.
+fn slot_name(p: &Value, k: &str) -> Result<String, RpcErr> {
+    let n = p.get(k).and_then(Value::as_str).unwrap_or_default();
+    let mut cs = n.chars();
+    let ok = n.len() <= 32
+        && cs.next().is_some_and(|c| c.is_ascii_lowercase())
+        && cs.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '.');
+    ok.then(|| n.to_string()).ok_or_else(|| bad(&format!("{k}: a-z first, then a-z 0-9 _ . (at most 32)")))
+}
 
 const MAX_COUNT: u64 = 9_999;
 const MAX_CALENDAR: usize = 5;
@@ -150,6 +174,8 @@ pub(super) struct AssistantState {
     shelf_answer: Option<Option<String>>,
     /// When the main assistant last sent `cc.event`.
     main_cc: Option<u64>,
+    /// `assistant.state.set`: the last value per key.
+    state: BTreeMap<String, Value>,
 }
 
 fn bad(m: &str) -> RpcErr {
@@ -264,9 +290,98 @@ impl Host {
                 }
                 s.shelf_answer = Some(p.get("text").and_then(|v| items::display(v, 300)));
             }
+            "assistant.event" => {
+                let kind = slot_name(p, "type")?;
+                let data = p.get("data").filter(|d| d.is_object()).ok_or_else(|| bad("data must be an object"))?;
+                out.push(Out::Ui(UiEvent::AssistantEvent(json!({"type": kind, "data": data}))));
+            }
+            "assistant.state.set" => {
+                let key = slot_name(p, "key")?;
+                match p.get("value") {
+                    None | Some(Value::Null) => {
+                        s.state.remove(&key);
+                    }
+                    Some(v) => {
+                        if v.to_string().len() > MAX_STATE_VALUE {
+                            return Err(fail(code::TOO_LARGE, "value exceeds 64 KB"));
+                        }
+                        if !s.state.contains_key(&key) && s.state.len() >= MAX_STATE_KEYS {
+                            return Err(bad("at most 16 keys; send null to drop one"));
+                        }
+                        s.state.insert(key, v.clone());
+                    }
+                }
+                out.push(Out::Ui(UiEvent::SurfacesChanged));
+            }
             _ => return Err(fail(code::NO_METHOD, "no such method")),
         }
         Ok(json!({"ok": true}))
+    }
+
+    /// `SurfacesView.assistantState`: the ready main assistant's last values (empty without one).
+    pub fn assistant_state(&self) -> BTreeMap<String, Value> {
+        self.assistant_of_main().map(|s| s.state.clone()).unwrap_or_default()
+    }
+
+    /// The page asks the main assistant (`assistant_request`): only a name on the brand's `page_requests` list with an
+    /// object as params, wrapped as `page.request {method, params}` with Peeka's own id, so the page can never send a
+    /// line that looks like one of Peeka's own notifications. The reply comes back through [`Host::line`].
+    pub fn page_request(&mut self, method: &str, params: Value) -> Result<(u64, Vec<Out>), OwnerErr> {
+        if !crate::brand::PAGE_REQUESTS.contains(&method) || !params.is_object() {
+            return Err(OwnerErr::Invalid);
+        }
+        self.page_send(method, params)
+    }
+
+    /// [`Host::page_request`] after its allow-list check (tests use it directly: Peeka's own list is empty).
+    pub(super) fn page_send(&mut self, method: &str, params: Value) -> Result<(u64, Vec<Out>), OwnerErr> {
+        let (_, conn) = self.main_ready().ok_or(OwnerErr::NoMain)?;
+        let id = self.page_req + 1;
+        let inner = json!({"method": method, "params": params});
+        let line = json!({"jsonrpc": "2.0", "id": id, "method": "page.request", "params": inner}).to_string();
+        if line.len() > MAX_MESSAGE {
+            return Err(OwnerErr::Invalid);
+        }
+        self.page_req = id;
+        if self.pages.len() >= MAX_PAGES {
+            if let Some(oldest) = self.pages.keys().min().copied() {
+                self.pages.remove(&oldest);
+            }
+        }
+        self.pages.insert(id, conn);
+        Ok((id, vec![Out::Send(conn, line)]))
+    }
+
+    /// A method-less line answering a waiting `page.request` on the connection that was asked? Anything else is not
+    /// a page reply (`line` handles it as before).
+    pub(super) fn is_page_reply(&self, conn: ConnId, msg: &Value) -> bool {
+        msg.get("method").is_none()
+            && msg.get("id").and_then(Value::as_u64).is_some_and(|id| self.pages.get(&id) == Some(&conn))
+    }
+
+    /// Only the result or the error code go to the page, never the plugin's message text.
+    pub(super) fn page_reply(&mut self, msg: &Value, len: usize) -> Vec<Out> {
+        let Some(id) = msg.get("id").and_then(Value::as_u64) else { return vec![] };
+        self.pages.remove(&id);
+        let reply = match (msg.get("result"), msg.get("error")) {
+            _ if len > MAX_MESSAGE => json!({"id": id, "error": {"code": code::TOO_LARGE}}),
+            (Some(r), None) => json!({"id": id, "result": r}),
+            (_, e) => {
+                let c = e.and_then(|e| e.get("code")).and_then(Value::as_i64).unwrap_or(code::INVALID_REQUEST);
+                json!({"id": id, "error": {"code": c}})
+            }
+        };
+        vec![Out::Ui(UiEvent::AssistantReply(reply))]
+    }
+
+    /// A connection closed: its waiting page requests end now (the page stops waiting).
+    pub(super) fn page_gone(&mut self, conn: ConnId, out: &mut Vec<Out>) {
+        let mut gone: Vec<u64> = self.pages.iter().filter(|(_, c)| **c == conn).map(|(id, _)| *id).collect();
+        gone.sort_unstable();
+        for id in gone {
+            self.pages.remove(&id);
+            out.push(Out::Ui(UiEvent::AssistantReply(json!({"id": id, "error": {"code": PAGE_NOT_CONNECTED}}))));
+        }
     }
 
     /// The main assistant's values, only while it is the ready main assistant.

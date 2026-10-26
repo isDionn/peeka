@@ -11,6 +11,7 @@ import { SearchPanel } from "./SearchPanel";
 import { SettingsPanel, type SettingsPage } from "./SettingsPanel";
 import { StartPanel } from "./StartPanel";
 import { StatusCard } from "./StatusCard";
+import { stripKind } from "./Pano";
 import { TrayList } from "./TrayList";
 import "../panel-surface.css";
 import { onX, sendX } from "../lib/xwin";
@@ -49,7 +50,8 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
     if (fresh && primary && !mirror.quiet && !lock.locked) setToast((t) => (t || panelRef.current !== null ? t : { n: fresh }));
   }, [mirror, primary, lock.locked]);
   useEffect(() => { if (panel !== null || lock.locked) setToast(null); }, [panel, lock.locked]); // locking also closes an open notification card
-  // newly copied text / file: since no screenshot peek shows, "Copied" appears below the strip for 1.6 s (R2-O1). Passwords and screenshots don't count.
+  // newly copied plain text: no copy-strip peek shows for it, so "Copied" appears below the strip for 1.6 s (R2-O1). Images, files and links
+  // have their peek ("Link copied", over which this note sat); passwords show nothing.
   const clips = useClips();
   const seenClips = useRef<Set<string> | null>(null);
   const [clipNote, setClipNote] = useState(false);
@@ -58,7 +60,7 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
     const prev = seenClips.current;
     seenClips.current = new Set(clips.map((c) => c.id));
     const now = bridge.now().getTime();
-    if (prev && primary && clips.some((c) => !prev.has(c.id) && c.kind !== "password" && !(c.kind === "image" && c.screenshot) && now - c.createdAt < 5000)) {
+    if (prev && primary && clips.some((c) => !prev.has(c.id) && c.kind !== "password" && !stripKind(c) && now - c.createdAt < 5000)) {
       setClipNote(true);
       clearTimeout(noteTimer.current);
       noteTimer.current = setTimeout(() => setClipNote(false), 1600);
@@ -152,39 +154,40 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
   };
   if (!monitor) return null;
   const close = () => setPanel(null);
+  const glow = monitor.primary ? monitor.id : undefined; // the strip draws the Drift glow on the primary only; its panels continue it
 
   return (
     <>
       <Strip monitor={monitor} windows={windows} pins={pins} status={status} openPanel={panel} onPanel={toggle} onMenu={(m) => { setPanel(null); setMenu(m); }} onReorder={reorder} center={center} />
-      <Panel side="left" width={600} label="Start" dataKind="start" open={panel === "start"} onClose={close}>
+      <Panel glow={glow} side="left" width={600} label="Start" dataKind="start" open={panel === "start"} onClose={close}>
         <StartPanel monitor={monitor} pins={pins} onClose={close} onSettings={() => setPanel("appearance")} />
       </Panel>
       {monitor.primary && (
-        <Panel side="right" width={360} label="Status" dataKind="status" open={panel === "status"} onClose={close}>
+        <Panel glow={glow} side="right" width={360} label="Status" dataKind="status" open={panel === "status"} onClose={close}>
           {status && <StatusCard monitor={monitor} status={status} setStatus={setStatus} onQuit={() => setPanel("quit")} />}
         </Panel>
       )}
       {monitor.primary && (
-        <Panel side="right" width={188} offset={trayRight} label="Hidden icons" dataKind="tray" open={panel === "tray"} onClose={close}>
+        <Panel glow={glow} side="right" width={188} offset={trayRight} label="Hidden icons" dataKind="tray" open={panel === "tray"} onClose={close}>
           <TrayList monitor={monitor.id} onClose={close} />
         </Panel>
       )}
-      <Panel side="right" width={360} label="Calendar" dataKind="calendar" open={panel === "calendar"} onClose={close}>
+      <Panel glow={glow} side="right" width={360} label="Calendar" dataKind="calendar" open={panel === "calendar"} onClose={close}>
         <CalendarPanel />
       </Panel>
-      <Panel side="right" width={400} label="Notifications" dataKind="notif" open={panel === "notif"} onClose={close}>
+      <Panel glow={glow} side="right" width={400} label="Notifications" dataKind="notif" open={panel === "notif"} onClose={close}>
         <NotificationList onReview={(a) => { setReview(a); setPanel("cleanup"); }} onClose={close} onEmpty={setNotifEmpty} />
       </Panel>
-      <Panel side="center" width={520} amb="#FF9F0A" label="Cleanup approval" dataKind="cleanup" open={panel === "cleanup" && !!review} onClose={close}>
+      <Panel glow={glow} side="center" width={520} amb="#FF9F0A" label="Cleanup approval" dataKind="cleanup" open={panel === "cleanup" && !!review} onClose={close}>
         {review && <ReviewCard alert={review} onClose={close} />}
       </Panel>
-      <Panel side="center" width={640} label="Search" dataKind="search" open={panel === "search"} onClose={close}>
+      <Panel glow={glow} side="center" width={640} label="Search" dataKind="search" open={panel === "search"} onClose={close}>
         <SearchPanel onClose={close} initialQuery={init?.query} initialSel={init?.sel} />
       </Panel>
-      <Panel side="center" width={780} label="Peeka settings" dataKind="settings" open={SETTINGS_PAGES.includes(panel)} onClose={close}>
+      <Panel glow={glow} side="center" width={780} label="Peeka settings" dataKind="settings" open={SETTINGS_PAGES.includes(panel)} onClose={close}>
         {settings && <SettingsPanel page={panel === "shortcuts" || panel === "plugins" || panel === "modules" || panel === "clipboard" || panel === "mascot" ? panel : "appearance"} onPage={(p: SettingsPage) => setPanel(p)} settings={settings} onQuit={() => setPanel("quit")} />}
       </Panel>
-      <Panel side="center" width={400} label="Quit Peeka" dataKind="quit" open={panel === "quit"} onClose={close} glow={monitor.id}>
+      <Panel glow={glow} side="center" width={400} label="Quit Peeka" dataKind="quit" open={panel === "quit"} onClose={close}>
         <QuitConfirm onCancel={close} />
       </Panel>
       <SetupPanel open={panel === "setup"} onClose={close} startStep={init?.setupStep} />
@@ -197,7 +200,7 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
         </div>
       )}
       {menu && (
-        <ContextMenu menu={{ ...menu, x: Math.max(8, Math.min(menu.x, window.innerWidth - 248)) }} pins={pins} windows={windows} locked={lock.locked} onClose={() => setMenu(null)}
+        <ContextMenu menu={{ ...menu, x: Math.max(8, Math.min(menu.x, window.innerWidth - 248)) }} pins={pins} windows={windows} locked={lock.locked} glow={glow} onClose={() => setMenu(null)}
           onPins={reorder} onQuit={() => setPanel("quit")} />
       )}
     </>

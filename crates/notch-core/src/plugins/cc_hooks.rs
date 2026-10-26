@@ -115,7 +115,7 @@ pub fn agent(id: &str) -> Option<&'static Agent> {
 }
 
 /// The argument that marks an entry as Peeka's.
-pub const HOOK_ARG: &str = "--cc-hook";
+pub const HOOK_ARG: &str = crate::brand::HOOK_ARG;
 /// Claude Code kills a hook after this; ours exits on its own after 2 s anyway.
 const TIMEOUT_S: u64 = 5;
 
@@ -384,7 +384,7 @@ fn handler(a: &Agent, exe: &str, ev: &str) -> Value {
         // Codex caps SessionEnd's timeout at 3 s; the hook is done in 2 s anyway
         "codex" => json!({ "type": "command", "command": command_line(exe, "codex"), "async": true, "timeout": 3 }),
         // Gemini's timeout is in ms; `name` lets the owner `/hooks disable peeka`
-        "gemini" => json!({ "name": "peeka", "type": "command", "command": command_line(exe, "gemini"), "timeout": 5000 }),
+        "gemini" => json!({ "name": crate::brand::EXE_NAME, "type": "command", "command": command_line(exe, "gemini"), "timeout": 5000 }),
         "cursor" => json!({ "command": command_line(exe, "cursor") }),
         // Copilot CLI's `exec` + `args`: no shell at all
         _ => json!({ "type": "command", "exec": exe, "args": [HOOK_ARG, a.id, ev], "timeoutSec": TIMEOUT_S }),
@@ -586,11 +586,11 @@ fn edit(a: &Agent, path: &Path, expect: Option<&str>, f: impl FnOnce(&mut Value)
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(fail)?;
     }
-    let bak = path.with_extension("json.bak-peeka");
+    let bak = path.with_extension(format!("json.bak-{}", crate::brand::EXE_NAME));
     if p.old.is_some() && !bak.exists() {
         std::fs::copy(path, &bak).map_err(fail)?;
     }
-    let tmp = path.with_extension("json.tmp-peeka");
+    let tmp = path.with_extension(format!("json.tmp-{}", crate::brand::EXE_NAME));
     std::fs::write(&tmp, bytes).map_err(fail)?;
     std::fs::rename(&tmp, path).map_err(fail)
 }

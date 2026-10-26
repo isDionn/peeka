@@ -59,6 +59,29 @@ describe("strip pins", () => {
     expect(document.querySelector(".stripTip")).toBeNull();
     expect(document.querySelector(".preview .pvName")!.textContent).toBe("Chrome");
   });
+  it("owner RC5: the last control on the right is a Show desktop button (after the clock)", async () => {
+    render(<Shell monitor="m1" />);
+    await settle();
+    const b = document.querySelector<HTMLElement>('header.bar button[aria-label="Show desktop"]')!;
+    expect(b.nextElementSibling).toBeNull();
+    expect(b.previousElementSibling!.getAttribute("data-panel-trigger")).toBe("calendar");
+    fireEvent.click(b);
+    await settle();
+    expect(logged("show_desktop")).toHaveLength(1);
+  });
+  it("owner RC5: one window = the small bubble with its title, no preview card; 2+ windows keep the preview", async () => {
+    render(<Shell monitor="m1" />);
+    await settle();
+    fireEvent.pointerEnter(document.querySelector('.pin[data-app="vscode"]')!);
+    await settle(300);
+    expect(document.querySelector(".preview")).toBeNull();
+    expect(document.querySelector(".stripTip .tipSub")!.textContent).toBe("Header.tsx, website");
+    expect(logged("window_preview")).toHaveLength(0); // no screenshot taken
+    fireEvent.pointerEnter(document.querySelector('.pin[data-app="chrome"]')!);
+    await settle(60);
+    expect(document.querySelector(".stripTip")).toBeNull();
+    expect(document.querySelectorAll(".preview .small")).toHaveLength(2);
+  });
 });
 
 describe("window picker (F-05)", () => {

@@ -59,22 +59,131 @@ pub fn scan() -> Vec<ListedApp> {
     to_list(lnks, target)
 }
 
-/// A shortcut's target path (`IShellLinkW::GetPath`, raw); None for a non-file target (Store app, URL).
+/// A shortcut's target path (`IShellLinkW::GetPath`, `%vars%` expanded so it matches a window's exe path); None for a
+/// non-file target (Store app, URL).
 #[cfg(windows)]
 pub fn target(lnk: &Path) -> Option<String> {
+    target_args(lnk).map(|(t, _)| t)
+}
+
+/// The target path and whether the shortcut passes it arguments.
+#[cfg(windows)]
+fn target_args(lnk: &Path) -> Option<(String, bool)> {
     use windows::core::{Interface, PCWSTR};
     use windows::Win32::System::Com::{CoCreateInstance, IPersistFile, CLSCTX_INPROC_SERVER, STGM_READ};
-    use windows::Win32::UI::Shell::{IShellLinkW, ShellLink, SLGP_RAWPATH};
+    use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
 
     let path = crate::to_wide(&lnk.to_string_lossy());
-    // SAFETY: plain COM calls on objects released on drop; the path buffer outlives Load; GetPath writes into `buf`.
+    // SAFETY: plain COM calls on objects released on drop; the path buffer outlives Load; GetPath / GetArguments write
+    // into their buffers.
     unsafe {
         let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER).ok()?;
         link.cast::<IPersistFile>().ok()?.Load(PCWSTR(path.as_ptr()), STGM_READ).ok()?;
         let mut buf = [0u16; 1024];
-        link.GetPath(&mut buf, std::ptr::null_mut(), SLGP_RAWPATH.0 as u32).ok()?;
-        Some(crate::wide_to_string(&buf)).filter(|s| !s.is_empty())
+        link.GetPath(&mut buf, std::ptr::null_mut(), 0).ok()?;
+        let mut args = [0u16; 1024];
+        let has_args = link.GetArguments(&mut args).is_ok() && !crate::wide_to_string(&args).trim().is_empty();
+        Some((crate::wide_to_string(&buf), has_args)).filter(|(s, _)| !s.is_empty())
     }
+}
+
+/// A shortcut's own AppUserModelID (`PKEY_AppUserModel_ID`), the id Windows groups its windows by.
+#[cfg(windows)]
+fn shortcut_aumid(lnk: &str) -> Option<String> {
+    use windows::Win32::Storage::EnhancedStorage::PKEY_AppUserModel_ID;
+    use windows::Win32::System::Com::{CoTaskMemFree, StructuredStorage::PropVariantToStringAlloc};
+    use windows::Win32::UI::Shell::PropertiesSystem::{IPropertyStore, SHGetPropertyStoreFromParsingName, GPS_DEFAULT};
+    let path = crate::to_wide(lnk);
+    // SAFETY: a NUL-terminated path; the store and value are released on drop; `s` is a CoTaskMem string we free.
+    unsafe {
+        let store: IPropertyStore = SHGetPropertyStoreFromParsingName(windows::core::PCWSTR(path.as_ptr()), None, GPS_DEFAULT).ok()?;
+        let value = store.GetValue(&PKEY_AppUserModel_ID).ok()?;
+        let s = PropVariantToStringAlloc(&value).ok()?;
+        let out = s.to_string().ok();
+        CoTaskMemFree(Some(s.0 as *const _));
+        out.filter(|a| !a.trim().is_empty())
+    }
+}
+
+/// The Windows taskbar's `Favorites` value (read-only), or empty.
+#[cfg(windows)]
+fn taskband() -> Vec<u8> {
+    use windows::core::w;
+    use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_BINARY};
+    let (key, value) = (w!(r"Software\Microsoft\Windows\CurrentVersion\Explorer\Taskband"), w!("Favorites"));
+    let mut size = 0u32;
+    // SAFETY: the first call asks for the size; the second writes at most `size` bytes into `buf`.
+    unsafe {
+        if RegGetValueW(HKEY_CURRENT_USER, key, value, RRF_RT_REG_BINARY, None, None, Some(&mut size)).is_err() {
+            return vec![];
+        }
+        let mut buf = vec![0u8; size as usize];
+        if RegGetValueW(HKEY_CURRENT_USER, key, value, RRF_RT_REG_BINARY, None, Some(buf.as_mut_ptr().cast()), Some(&mut size)).is_err() {
+            return vec![];
+        }
+        buf.truncate(size as usize);
+        buf
+    }
+}
+
+/// The shell item's desktop parsing name (an Apps-folder item or a file path).
+#[cfg(windows)]
+fn parsing_name(item: &[u8]) -> Option<String> {
+    use windows::Win32::System::Com::CoTaskMemFree;
+    use windows::Win32::UI::Shell::{SHGetNameFromIDList, SIGDN_DESKTOPABSOLUTEPARSING};
+    // a valid ITEMIDLIST ends with a zero u16; never hand the shell one that doesn't
+    if item.len() < 2 || item[item.len() - 2..] != [0, 0] {
+        return None;
+    }
+    let owned = item.to_vec(); // aligned copy kept alive for the call
+    // SAFETY: a terminated ID list that outlives the call; the returned CoTaskMem string is freed after reading.
+    unsafe {
+        let s = SHGetNameFromIDList(owned.as_ptr().cast(), SIGDN_DESKTOPABSOLUTEPARSING).ok()?;
+        let out = s.to_string().ok();
+        CoTaskMemFree(Some(s.0 as *const _));
+        out
+    }
+}
+
+/// The apps pinned on the Windows taskbar, in its order, as strip pins (owner RC5). `running` = the strip's current app
+/// ids (a shortcut takes the id its open window already has). Without the `Favorites` value: the `User Pinned\TaskBar`
+/// shortcuts by name. Needs COM on the calling thread. Reads only; nothing is written or sent anywhere.
+#[cfg(windows)]
+pub fn taskbar_pins(running: &[String]) -> Vec<notch_core::apps::Pin> {
+    use notch_core::apps::{fallback_name, shortcut_id, taskband_items, taskbar_pin, Pin, TaskbarPin};
+    let blob = taskband();
+    let mut found: Vec<TaskbarPin> = taskband_items(&blob).into_iter().filter_map(parsing_name).filter_map(|p| taskbar_pin(&p)).collect();
+    if found.is_empty() {
+        let dir = std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join(r"Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar"));
+        let mut lnks = Vec::new();
+        if let Some(dir) = dir {
+            walk(&dir, MAX_DEPTH, &mut lnks); // depth MAX_DEPTH: this folder only
+        }
+        lnks.sort();
+        found = lnks.into_iter().map(|l| TaskbarPin::Shortcut(l.to_string_lossy().into_owned())).collect();
+    }
+    found
+        .into_iter()
+        .map(|f| match f {
+            TaskbarPin::App(aumid) => {
+                let app_id = format!("aumid:{aumid}");
+                Pin { name: fallback_name(&app_id), app_id, relaunch: None }
+            }
+            TaskbarPin::Shortcut(lnk) => {
+                let p = Path::new(&lnk);
+                let stem = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+                let name = stem.strip_suffix(".exe").unwrap_or(&stem).to_string(); // "Tool.exe.lnk" names "Tool"
+                let aumid = shortcut_aumid(&lnk);
+                // File Explorer's shortcut points at a shell folder; the strip knows its windows as explorer.exe's
+                let explorer = (aumid.as_deref() == Some("Microsoft.Windows.Explorer"))
+                    .then(|| std::env::var("WINDIR").ok().map(|w| format!(r"{w}\explorer.exe")))
+                    .flatten();
+                let target = target_args(p).filter(|(_, args)| !args).map(|(t, _)| t).or(explorer);
+                let app_id = shortcut_id(&lnk, aumid.as_deref(), target.as_deref(), running);
+                Pin { app_id, name, relaunch: None }
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]

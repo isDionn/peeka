@@ -299,7 +299,7 @@ export function ShotBump({ item, main, big = false }: { item: ClipPlain; main: P
     <div className="peekBar shotOut">
       <div className="shotTop">
         {k === "image" ? thumb && <img className="snipSmall" src={thumb} alt={item.screenshot ? "Screenshot thumbnail" : "Image thumbnail"} /> : <span className="tip2 shotIcon"><Ic /></span>}
-        <span className="t12 l2">{k === "image" ? "Copied to clipboard" : flat(item.text ?? item.sub, 40)}</span>
+        <span className="t12 l2">{k === "image" ? "Copied" /* the 360 px peek cut "Copied to clipboard" next to "Ask <assistant>" + Edit */ : flat(item.text ?? item.sub, 40)}</span>
         {ask}
         {item.screenshot ? <button className="btn kk gray" onClick={call("clip_edit")}>Edit</button> : k !== "image" && pin}
       </div>

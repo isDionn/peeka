@@ -40,7 +40,7 @@ const INLINE_BUDGET: usize = 256 * 1024;
 const APPROVAL_PRIORITY: u8 = 90;
 const BUSY_RETRY_S: u64 = 30;
 const SWEEP_MS: u64 = 60_000;
-const STREAM_METHODS: [&str; 3] = ["composer.delta", "voice.transcript", "live_text.append"];
+const STREAM_METHODS: [&str; 4] = ["composer.delta", "voice.transcript", "live_text.append", "assistant.event"];
 /// Known methods whose source comes in a later wave: the scope is checked, then "not yet".
 const LATER: [&str; 4] = ["media.read", "windows.read", "notifications.post", "notifications.read"];
 /// `search.results`: at most this many rows per plugin and query.
@@ -75,6 +75,11 @@ pub enum UiEvent {
     /// `cc_edit` (`{sid, file, add, del}`): an Edit/Write inside the session cwd, from Peeka's own hook only. `file` is
     /// relative to the cwd; the app strips it while locked or presenting.
     CcEdit { sid: Option<String>, file: String, add: u32, del: u32 },
+    /// `assistant_event` (`{type, data}`): the main assistant's `assistant.event`; the app holds it while the privacy
+    /// gate is closed.
+    AssistantEvent(Value),
+    /// `assistant_reply` (`{id, result}` or `{id, error: {code}}`): the main assistant's answer to a `page.request`.
+    AssistantReply(Value),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -193,6 +198,11 @@ pub struct SurfacesView {
     pub waiting: usize,
     pub voice: Option<VoiceView>,
     pub locked: bool,
+    /// `assistant.state.set`'s last values of the ready main assistant; empty while the privacy gate is closed.
+    pub assistant_state: BTreeMap<String, Value>,
+    /// The privacy gate is closed (locked, presenting / busy, screen shared; the app sets it): the one flag a
+    /// build-time extension reads.
+    pub private: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -438,6 +448,9 @@ pub struct Host {
     search_req: u64,
     search_hits: Vec<SearchHit>,
     assistant: assistant::AssistantState,
+    /// `page.request`: the last id and the ones still waiting for their reply, with the connection asked.
+    page_req: u64,
+    pages: HashMap<u64, ConnId>,
 }
 
 /// One `search.provider` row (`wave4-api.ts` `SearchResult` with `kind: "plugin"`).
@@ -491,6 +504,8 @@ impl Host {
             search_req: 0,
             search_hits: vec![],
             assistant: assistant::AssistantState::default(),
+            page_req: 0,
+            pages: HashMap::new(),
         }
     }
 
@@ -547,6 +562,9 @@ impl Host {
             out.push(Out::Send(conn, error_line(&Value::Null, &fail(code::PARSE, "not JSON"))));
             return out;
         };
+        if self.is_page_reply(conn, &msg) {
+            return self.page_reply(&msg, raw.len());
+        }
         let id = msg.get("id").cloned();
         let rid = id.clone().unwrap_or(Value::Null);
         let method = msg.get("method").and_then(Value::as_str).map(str::to_string);
@@ -1038,6 +1056,7 @@ impl Host {
     pub fn disconnect(&mut self, conn: ConnId, now: u64) -> Vec<Out> {
         let mut out = vec![];
         let Some(c) = self.conns.remove(&conn) else { return out };
+        self.page_gone(conn, &mut out);
         if self.consent.as_ref().is_some_and(|x| x.conn == conn) {
             self.consent = None;
             out.push(Out::ConsentClose);
@@ -1561,6 +1580,8 @@ impl Host {
             composer,
             voice: self.voice.clone(),
             locked: self.lock.locked(),
+            assistant_state: if self.lock.locked() { BTreeMap::new() } else { self.assistant_state() },
+            private: self.lock.locked(),
         }
     }
 
@@ -1633,3 +1654,5 @@ fn approval_alert(a: &Approval) -> Alert {
 
 #[cfg(test)]
 pub(crate) mod tests;
+#[cfg(test)]
+mod tests_slots;

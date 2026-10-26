@@ -99,7 +99,7 @@ pub fn apply(mode: HideMode, by_hand: bool) {
     if by_hand {
         SUSPENDED.store(false, Ordering::SeqCst);
     }
-    let want = if SUSPENDED.load(Ordering::SeqCst) { OFF } else { logic::want_of(mode) };
+    let want = if SUSPENDED.load(Ordering::SeqCst) || !notch_core::brand::HIDE_TASKBAR { OFF } else { logic::want_of(mode) };
     // Peeka's Start takes the Win key only while Windows's taskbar is hidden (restored = Windows's Start again).
     #[cfg(windows)]
     notch_win::winkey::set_on(want != OFF);

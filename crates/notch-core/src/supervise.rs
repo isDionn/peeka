@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 /// Launched by the Run key or by the guard: start quietly.
 pub const AUTOSTART_ARG: &str = "--autostart";
 /// The value name under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
-pub const RUN_VALUE_NAME: &str = "notch";
+pub const RUN_VALUE_NAME: &str = crate::brand::CODE_NAME;
 pub const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 
 /// Back-off before relaunch number 1, 2, 3+ (counted over `HISTORY_MS`).

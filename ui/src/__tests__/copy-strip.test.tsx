@@ -105,3 +105,16 @@ describe("copy strip", () => {
     expect(bump()).toBeNull();
   });
 });
+
+describe("'Copied' note under the strip", () => {
+  it("only for plain text: a link, file or image has its own peek, so the note would sit on top of it", async () => {
+    const { Shell } = await import("../components/Shell");
+    render(<Shell monitor="m1" />);
+    await settle(200);
+    await copy(clip("n1", { kind: "text", text: "https://example.com/a", hint: "link", thumb: null }));
+    await copy(clip("n2", { kind: "file", text: "report.pdf", thumb: null }));
+    expect(document.querySelector(".clipNote")).toBeNull();
+    await copy(clip("n3", { kind: "text", text: "hello", thumb: null }));
+    expect(document.querySelector(".clipNote")?.textContent).toBe("Copied");
+  });
+});

@@ -72,6 +72,8 @@ export interface Settings extends ClipSettings {
   taskbarHide: "full" | "auto" | "off";
   /** Start's pinned grid with folders; absent / null = derived from the strip pins and the app list (as before folders). Written with `set_start_items`. */
   startItems?: StartItem[] | null;
+  /** The Hidden icons panel's order and groups (same shape; app ids are the tray's `exe:<path>`); absent / null = Windows's order. Written with `set_settings`. */
+  trayItems?: StartItem[] | null;
   secondaryStrips: boolean;
   shortcuts: Record<ShortcutId, string>;
   shortcutExceptions: ShortcutException[];
@@ -208,10 +210,18 @@ export interface Commands {
   get_pins: { args: void; ret: PinnedApp[] };
   /** Order of pinned apps; pin / unpin / drag-reorder all call this. */
   set_pins: { args: { appIds: string[] }; ret: PinnedApp[] };
+  /** Settings: the Windows taskbar's pins, in its order, added after Peeka's own (none removed, no duplicates); also runs once on first start while Peeka has no pins. `unsupported` in demo. */
+  import_taskbar_pins: { args: void; ret: PinnedApp[] };
+  /** The strip's right-edge "Show desktop": Win+D (a second call brings the windows back). `unsupported` in demo. */
+  show_desktop: { args: void; ret: void };
   activate_window: { args: { hwnd: number }; ret: void };
   close_window: { args: { hwnd: number }; ret: void };
   new_window: { args: { appId: string }; ret: void };
   launch_app: { args: { appId: string }; ret: void };
+  /** Start's menu "Open file location": Explorer with the app's shortcut (or exe) selected. `invalid` for a Store app, `unknown` for an id Notch never listed. */
+  app_show_in_folder: { args: { appId: string }; ret: void };
+  /** Start's menu "Run as administrator": Windows's UAC prompt; `refused` when declined. Same ids as `app_show_in_folder`. */
+  launch_app_admin: { args: { appId: string }; ret: void };
   list_apps: { args: void; ret: AppRef[] };
   /** Wave 4: file, setting and plugin results too; empty query = recents (wave4-api.ts). */
   search: { args: { query: string }; ret: SearchResult[] };

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useLayoutEffect, useRef, useState } from "react";
 import type { AppRef, StartItem } from "../bridge";
 import { dropOnto, keyOf, moveTo, rename } from "../lib/startItems";
 import { useFocusTrap } from "../lib/useFocusTrap";
@@ -11,10 +11,17 @@ import "../start-folders.css";
  * apps); dragging an app out of it closes it and drops the app on the grid (a folder left with one app becomes that app).
  * Tiles never move while a drag hovers; on drop they slide to their new place (FLIP).
  */
-export function StartGrid({ items, apps, onChange, onLaunch }: { items: StartItem[]; apps: Map<string, AppRef>; onChange: (next: StartItem[]) => void; onLaunch: (appId: string) => void }) {
+export function StartGrid({ items, apps, onChange, onLaunch, onMenu, compact }: {
+  items: StartItem[]; apps: Map<string, AppRef>; onChange: (next: StartItem[]) => void; onLaunch: (appId: string) => void;
+  /** Right-click, Shift+F10 or the Menu key on a cell (also inside the open folder); `rename` opens that folder with its name field focused. */
+  onMenu?: (it: StartItem, at: { x: number; y: number }, rename: () => void) => void;
+  /** The Hidden icons panel: icon-only 40 px cells (name as tooltip), the opener draws each icon (`mini` = inside a folder tile) and names it. */
+  compact?: { tile: (a: AppRef, mini: boolean) => React.ReactNode; label: (a: AppRef) => string };
+}) {
   const grid = useRef<HTMLDivElement>(null);
   const caret = useRef<HTMLSpanElement>(null);
   const [open, setOpen] = useState<string | null>(null); // the open folder's key
+  const [naming, setNaming] = useState(false); // opened by "Rename": the name field takes focus
   const folder = items.find((it) => it.kind === "folder" && keyOf(it) === open);
   const drag = useRef<{ key: string; x0: number; y0: number; el: HTMLElement; live: boolean; ghost?: HTMLElement; drop?: { merge: string } | { before: string; after: boolean } } | null>(null);
   const moved = useRef(false); // the click after a drag is not a click
@@ -43,7 +50,8 @@ export function StartGrid({ items, apps, onChange, onLaunch }: { items: StartIte
     const cell = document.elementFromPoint(x, y)?.closest<HTMLElement>(".appCell");
     if (!cell || !grid.current?.contains(cell) || cell.dataset.key === d.key) return;
     const lt = cell.querySelector(".lt")!.getBoundingClientRect();
-    if (d.key.startsWith("app:") && x > lt.left - 6 && x < lt.right + 6 && y > lt.top - 6 && y < lt.bottom + 6) { // a folder never goes into a folder
+    const pad = compact ? -10 : 6; // a compact cell is all tile: its outer 10 px reorder, the middle merges
+    if (d.key.startsWith("app:") && x > lt.left - pad && x < lt.right + pad && y > lt.top - pad && y < lt.bottom + pad) { // a folder never goes into a folder
       cell.classList.add("mergeTarget");
       d.drop = { merge: cell.dataset.key! };
       return;
@@ -93,34 +101,54 @@ export function StartGrid({ items, apps, onChange, onLaunch }: { items: StartIte
   const cardRef = useRef<HTMLDivElement>(null);
   const cell = (it: StartItem, autofocus = false) => {
     const key = keyOf(it);
-    const click = () => { if (moved.current) return; if (it.kind === "app") onLaunch(it.appId); else setOpen(key); };
+    const click = () => { if (moved.current) return; if (it.kind === "app") onLaunch(it.appId); else { setNaming(false); setOpen(key); } };
     if (it.kind === "app") {
       const a = apps.get(it.appId);
-      if (!a) return null; // not installed any more / the list is still loading
-      return (
+      if (!a) return null; // not installed any more / not running (tray) / the list is still loading
+      return compact ? (
+        <button key={key} data-key={key} className="appCell" title={a.name} aria-label={compact.label(a)} data-autofocus={autofocus ? "" : undefined} onClick={click}>
+          <span className="lt">{compact.tile(a, false)}</span>
+        </button>
+      ) : (
         <button key={key} data-key={key} className="appCell" data-autofocus={autofocus ? "" : undefined} onClick={click}>
           <span className="lt"><AppIcon src={a.icon} color={a.colorIcon} /></span><span className="appName" title={a.name}>{a.name}</span>
         </button>
       );
     }
     const shown = it.appIds.map((id) => apps.get(id)).filter((a): a is AppRef => !!a);
+    if (!shown.length) return null; // none of its apps is here now (tray: none running)
     return (
-      <button key={key} data-key={key} className="appCell" aria-haspopup="dialog" aria-label={`${it.name}, folder, ${it.appIds.length} apps`} onClick={click}>
-        <span className="lt folderLt">{shown.slice(0, 4).map((a) => <AppIcon key={a.appId} src={a.icon} color={a.colorIcon} size={14} />)}</span>
-        <span className="appName" title={it.name}>{it.name}</span>
+      <button key={key} data-key={key} className="appCell" aria-haspopup="dialog" aria-label={`${it.name}, folder, ${shown.length} app${shown.length === 1 ? "" : "s"}`} title={compact ? it.name : undefined} onClick={click}>
+        <span className="lt folderLt">{shown.slice(0, 4).map((a) => compact ? <Fragment key={a.appId}>{compact.tile(a, true)}</Fragment> : <AppIcon key={a.appId} src={a.icon} color={a.colorIcon} size={14} />)}</span>
+        {!compact && <span className="appName" title={it.name}>{it.name}</span>}
       </button>
     );
   };
 
+  /** The cell's item: a grid cell, or an app inside the open folder. */
+  const menuAt = (el: HTMLElement, at: { x: number; y: number }) => {
+    const key = el.closest<HTMLElement>(".appCell")?.dataset.key;
+    const it = key ? items.find((i) => keyOf(i) === key) ?? (key.startsWith("app:") ? { kind: "app" as const, appId: key.slice(4) } : undefined) : undefined;
+    if (!it || !onMenu) return false;
+    onMenu(it, at, () => { setNaming(true); setOpen(key!); });
+    return true;
+  };
+  const onContextMenu = (e: React.MouseEvent) => { if (menuAt(e.target as HTMLElement, { x: e.clientX, y: e.clientY })) e.preventDefault(); };
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!(e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))) return;
+    const r = (e.target as HTMLElement).getBoundingClientRect();
+    if (menuAt(e.target as HTMLElement, { x: r.left, y: r.bottom })) e.preventDefault();
+  };
+
   return (
-    <div className="startGrid" onPointerDown={onDown}>
+    <div className="startGrid" onPointerDown={onDown} onContextMenu={onContextMenu} onKeyDown={onKeyDown}>
       <div className="appGrid" ref={grid}>
         {items.map((it) => cell(it))}
         <span className="startCaret" ref={caret} aria-hidden="true" />
       </div>
       {folder?.kind === "folder" && (
         <FolderCard key={open} folder={folder} anchor={grid.current?.querySelector<HTMLElement>(`[data-key="${CSS.escape(open!)}"]`) ?? null} grid={grid.current} cardRef={cardRef}
-          onRename={(name) => change(rename(items, open!, name))} onClose={() => setOpen(null)}>
+          naming={naming} onRename={(name) => change(rename(items, open!, name))} onClose={() => setOpen(null)}>
           {folder.appIds.map((id, i) => cell({ kind: "app", appId: id }, i === 0))}
         </FolderCard>
       )}
@@ -129,9 +157,9 @@ export function StartGrid({ items, apps, onChange, onLaunch }: { items: StartIte
 }
 
 /** The open folder: a glass card over the grid, grown from its tile; focus stays inside, Esc closes and goes back to the tile. */
-function FolderCard({ folder, anchor, grid, cardRef, onRename, onClose, children }: {
+function FolderCard({ folder, anchor, grid, cardRef, naming, onRename, onClose, children }: {
   folder: Extract<StartItem, { kind: "folder" }>; anchor: HTMLElement | null; grid: HTMLElement | null; cardRef: React.RefObject<HTMLDivElement | null>;
-  onRename: (name: string) => void; onClose: () => void; children: React.ReactNode;
+  naming: boolean; onRename: (name: string) => void; onClose: () => void; children: React.ReactNode;
 }) {
   const [name, setName] = useState(folder.name);
   const [pos, setPos] = useState<React.CSSProperties>({});
@@ -139,7 +167,8 @@ function FolderCard({ folder, anchor, grid, cardRef, onRename, onClose, children
     const host = cardRef.current?.offsetParent as HTMLElement | null;
     if (!host || !grid || !anchor) return;
     const h = host.getBoundingClientRect(), g = grid.getBoundingClientRect(), c = anchor.getBoundingClientRect();
-    const left = Math.max(16, Math.min(g.left - h.left + (g.width - 360) / 2, h.width - 376)), top = g.top - h.top + host.scrollTop - 4;
+    const w = cardRef.current!.offsetWidth, m = Math.min(16, (h.width - w) / 2); // Start: 360 px, 16 px from the edges; the tray: its CSS width
+    const left = Math.max(m, Math.min(g.left - h.left + (g.width - w) / 2, h.width - w - m)), top = g.top - h.top + host.scrollTop - 4;
     setPos({ left, top, "--ox": `${c.left + c.width / 2 - h.left - left}px`, "--oy": `${c.top + 20 - h.top + host.scrollTop - top}px` } as React.CSSProperties);
   }, [anchor, grid, cardRef]);
   const save = () => { const n = name.trim() || "Folder"; setName(n); if (n !== folder.name) onRename(n); };
@@ -150,6 +179,7 @@ function FolderCard({ folder, anchor, grid, cardRef, onRename, onClose, children
       <div className="startScrim" onPointerDown={close} />
       <div className="startFolder" role="dialog" aria-label={`${folder.name} folder`} ref={cardRef} style={pos}>
         <input className="startFolderName" aria-label="Folder name" spellCheck={false} maxLength={40} value={name} onChange={(e) => setName(e.target.value)} onBlur={save}
+          data-autofocus={naming ? "" : undefined} onFocus={naming ? (e) => e.currentTarget.select() : undefined}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); save(); cardRef.current?.querySelector<HTMLElement>(".appCell")?.focus(); } }} />
         <div className="appGrid">{children}</div>
       </div>

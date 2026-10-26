@@ -7,6 +7,8 @@ import { Mascot } from "../mascot";
 import { flatten, groupResults, parseTimer, splitMatch } from "../lib/search";
 import { AppIcon, Kbd } from "./common";
 import { FileIcon } from "./Pano";
+import { ExtGroup, useExtSearch } from "./ExtSearch";
+import { ext } from "../ext";
 import "../fidelity-settings.css";
 
 const KIND_LABEL: Record<SearchResult["kind"], string> = { app: "App", window: "Window", file: "File", setting: "Setting", plugin: "Plugin" };
@@ -52,22 +54,33 @@ export function SearchPanel({ onClose, initialQuery = "", initialSel = 0 }: { on
   const ordered = useMemo(() => flatten(groups), [groups]);
   const timer = useMemo(() => parseTimer(q), [q]); // local action: first row, never goes to the assistant (no tokens spent)
   const ti = timer ? 1 : 0; // the action row is first in navigation order
-  const askIx = main ? ordered.length + ti : -1; // "ask the assistant" is the last navigable row
-  const total = ordered.length + ti + (main ? 1 : 0);
+  // assistant slots (Y3): the extension's commands come after the timer, its groups after Peeka's results; empty without one
+  const x = useExtSearch(query, !!main, onClose);
+  const lead = x.lead.length;
+  const askIx = main ? ordered.length + ti + lead + x.tailCount : -1; // "ask the assistant" is the last navigable row
+  const total = ordered.length + ti + lead + x.tailCount + (main ? 1 : 0);
 
   const open = (r?: SearchResult) => { if (!r) return; bridge.call("search_open", { id: r.id }).catch(() => undefined); onClose(); };
   const doAsk = () => { bridge.call("search_ask", { query }).catch(() => undefined); onClose(); };
   const doTimer = () => { if (!timer) return; bridge.call("timer_start", { label: timer.label, seconds: timer.seconds }).catch(() => undefined); onClose(); };
-  const cur = ordered.length === 0 && !timer && !touched ? -1 : sel;
-  const act = (i: number) => (timer && i === 0 ? doTimer() : i === askIx ? doAsk() : open(ordered[i - ti]));
+  const cur = ordered.length === 0 && lead === 0 && !timer && !touched ? -1 : sel;
+  const act = (i: number) => {
+    if (timer && i === 0) return doTimer();
+    if (i === askIx) return doAsk();
+    const j = i - ti;
+    if (j < lead) return x.lead[j].go();
+    if (j < lead + ordered.length) return open(ordered[j - lead]);
+    x.tail.flatMap((g) => g.rows)[j - lead - ordered.length]?.go();
+  };
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); setTouched(true); setSel((s) => Math.max(0, Math.min(total - 1, s + (e.key === "ArrowDown" ? 1 : -1)))); }
     else if (e.key === "Enter") { e.preventDefault(); if (cur >= 0) act(cur); }
   };
   useEffect(() => { list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView?.({ block: "nearest" }); }, [sel]);
 
-  let n = ti; // navigation row index
-  const noRows = ordered.length === 0 && !timer && !groups.some((g) => g.note);
+  let n = ti + lead; // navigation row index
+  const noRows = ordered.length === 0 && lead === 0 && x.tailCount === 0 && !timer && !groups.some((g) => g.note);
+  const hover = (i: number) => { setTouched(true); setSel(i); };
   return (
     <div className="body">
       <div className="inputBox large glass">
@@ -89,6 +102,7 @@ export function SearchPanel({ onClose, initialQuery = "", initialSel = 0 }: { on
             </div>
           </div>
         )}
+        {lead > 0 && <ExtGroup title={ext()!.label} rows={x.lead} start={ti} cur={cur} idp={id} onHover={hover} />}
         {groups.map((g) => (
           <div key={g.key} role="group" aria-label={g.title}>
             <div className="groupHead">{g.title}</div>
@@ -106,8 +120,10 @@ export function SearchPanel({ onClose, initialQuery = "", initialSel = 0 }: { on
             {g.note && <div className="noResults t12">{g.note}</div>}
           </div>
         ))}
+        {x.tail.map((g) => { const start = n; n += g.rows.length; return <ExtGroup key={g.title} title={g.title} rows={g.rows} start={start} cur={cur} idp={id} onHover={hover} />; })}
+        {x.status && <div className="noResults t12" role="status">{x.status}</div>}
         {!query && <div className="noResults t12">Start typing to find apps, open windows, files, settings{main ? ", notes" : ""}.</div>}
-        {query && noRows && <div className="noResults">No results for “{query}”.{main ? ` You can ask ${main.name}.` : ""}</div>}
+        {query && noRows && !x.status && <div className="noResults">No results for “{query}”.{main ? ` You can ask ${main.name}.` : ""}</div>}
         {main && (
           <>
             <div className="groupHead" aria-hidden="true" />

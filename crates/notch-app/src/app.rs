@@ -13,7 +13,9 @@
 //! `plugin_stream`; the consent window loads `consent.html` (label `consent`). Wave 4: `lock_changed`
 //! (`notch_core::lock::LockState`), `clip_changed` (`clip_history.rs`). Wave 5 (`extras.rs`): `privacy_changed`,
 //! `input_tick`, `timer_changed`, `shelf_changed`, `shelf_drag`, `bluetooth_connected`, `music_stopped`, `download_done`, `cpu_high`, `fullscreen_screens` (`{island, strips}`: what the fullscreen app hides, per monitor), `approval_badge` (`{monitor, count}` or null: an approval waits while the cursor is on another monitor's strip). `screen_tint` (`notch_core::tint::ScreenTint`, every 2 s per strip monitor unless paused). Wave 6 (`mirror.rs`): `notifications_changed`
-//! (`notch_core::mirror::MirrorView`). Commands: see `commands.rs`.
+//! (`notch_core::mirror::MirrorView`). Assistant slots (`plugins.rs`, `privacy.rs`): `assistant_event` (`{type, data}`,
+//! held while the privacy gate is closed), `assistant_reply` (`{id, result}` or `{id, error: {code}}`: the answer to
+//! `assistant_request`). Commands: see `commands.rs`.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -202,6 +204,8 @@ pub fn run() {
             crate::commands::list_windows,
             crate::commands::get_pins,
             crate::commands::set_pins,
+            crate::commands::import_taskbar_pins,
+            crate::commands::show_desktop,
             crate::commands::activate_window,
             crate::commands::close_window,
             crate::commands::new_window,
@@ -305,6 +309,8 @@ pub fn run() {
             crate::commands::recent_files,
             crate::commands::open_recent,
             crate::commands::set_start_items,
+            crate::commands::app_show_in_folder,
+            crate::commands::launch_app_admin,
             crate::commands::assistant_counts,
             crate::commands::assistant_open,
             crate::commands::calendar_next,
@@ -339,6 +345,7 @@ pub fn run() {
             crate::commands::claude_chat_send,
             crate::commands::claude_chat_stop,
             crate::commands::claude_chat_new,
+            crate::commands::assistant_request,
         ])
         .setup(|app| {
             setup(app.handle()).map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
@@ -429,18 +436,23 @@ fn setup(app: &AppHandle) -> Result<(), String> {
     layout(app);
     let emergency_key = register_shortcuts(app);
     if !is_demo {
-        crate::taskbar::init(app, &data_dir, emergency_key);
+        // The brand may leave the taskbar and the Win key alone (two builds side by side must not fight over them).
+        if notch_core::brand::HIDE_TASKBAR {
+            crate::taskbar::init(app, &data_dir, emergency_key);
+        }
         crate::taskbar::apply(mode, false);
         // A lone Win tap opens Peeka's Start while Peeka hides the taskbar (`taskbar::apply` turns it on and off).
-        let handle = app.clone();
-        notch_win::winkey::start(move |at| {
-            let Some(n) = handle.try_state::<Notch>() else { return };
-            let monitor = cursor_monitor(&n).map(|i| i.to_string()).unwrap_or_default();
-            let _ = handle.emit("shortcut", serde_json::json!({ "name": "start", "monitor": monitor }));
-            if cfg!(debug_assertions) {
-                eprintln!("[winkey] hook -> emit {} us", at.elapsed().as_micros());
-            }
-        });
+        if notch_core::brand::START_KEY_HOOK {
+            let handle = app.clone();
+            notch_win::winkey::start(move |at| {
+                let Some(n) = handle.try_state::<Notch>() else { return };
+                let monitor = cursor_monitor(&n).map(|i| i.to_string()).unwrap_or_default();
+                let _ = handle.emit("shortcut", serde_json::json!({ "name": "start", "monitor": monitor }));
+                if cfg!(debug_assertions) {
+                    eprintln!("[winkey] hook -> emit {} us", at.elapsed().as_micros());
+                }
+            });
+        }
     }
     let handle = app.clone();
     notch_win::foreground::watch(move |exe| on_foreground(&handle, &exe));
@@ -457,6 +469,17 @@ fn setup(app: &AppHandle) -> Result<(), String> {
     // "Restore taskbar" item calls `taskbar::emergency` like the Start panel and the strip's right-click.
     probe_once(app.clone());
     crate::live::start(app);
+    if !is_demo {
+        // first run: the Windows taskbar's pins become the strip's (once, only while Peeka has none; reads only)
+        let handle = app.clone();
+        thread::spawn(move || {
+            if let Some(n) = handle.try_state::<Notch>() {
+                if let Err(e) = crate::commands::import_pins(&handle, &n, true) {
+                    eprintln!("[notch] taskbar pins: {e:?}");
+                }
+            }
+        });
+    }
     app.manage(crate::downloads::State::default());
     crate::extras::start(app);
     crate::mirror::start(app);
@@ -597,7 +620,8 @@ pub fn layout(app: &AppHandle) {
         let label = format!("strip-{}", m.index);
         let Some(w) = build(app, &label, &format!("index.html?monitor={}", m.index)) else { continue };
         let Ok(hwnd) = w.hwnd().map(|h| h.0 as isize) else { continue };
-        let bar = ports::reserve(&n.appbar, hwnd, m).unwrap_or_else(|| notch_core::model::strip_rect(m));
+        let reserved = if notch_core::brand::RESERVE_APPBAR { ports::reserve(&n.appbar, hwnd, m) } else { None };
+        let bar = reserved.unwrap_or_else(|| notch_core::model::strip_rect(m));
         let rect = notch_core::model::strip_window_rect(bar, m);
         place(&w, rect);
         {

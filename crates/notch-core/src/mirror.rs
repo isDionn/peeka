@@ -19,8 +19,8 @@ use crate::clip::vault::Secret;
 
 /// Must match `crates/notch-app/identity/AppxManifest.xml` and the `<msix>` element of `crates/notch-app/notch.manifest`
 /// (a test checks both). A rename means the owner unregisters and registers again.
-pub const PACKAGE_NAME: &str = "Notch.Mirror";
-pub const PUBLISHER: &str = "CN=Notch";
+pub const PACKAGE_NAME: &str = crate::brand::MIRROR_PACKAGE;
+pub const PUBLISHER: &str = crate::brand::MIRROR_PUBLISHER;
 pub const APPLICATION_ID: &str = "Notch";
 
 /// The card's one button instead of Windows's "Reply" (no API reaches a toast's inline reply).

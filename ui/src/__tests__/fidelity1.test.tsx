@@ -6,7 +6,7 @@ import { StripLine } from "../components/Fidelity";
 import { Shell } from "../components/Shell";
 import { sendX } from "../lib/xwin";
 import { CONSENT } from "../plugin.fixtures";
-import { announceLine } from "../lib/lineChan";
+import { announceLine, listenStripGaps, setStripGap } from "../lib/lineChan";
 import { AMBER, lineOf, lineVars, MINT } from "../lib/line";
 import { APPROVAL_LOW, PLUGINS, PROTRUSION } from "../plugin.fixtures";
 
@@ -58,6 +58,17 @@ describe("Compass line rules", () => {
     const el = document.getElementById("line")!;
     expect(el.dataset.mode).toBe("wait");
     expect(el.style.getPropertyValue("--lc")).toBe(AMBER);
+  });
+  it("the line breaks over each surface hanging from the strip until it closes; a repeat of the same gap doesn't notify", () => {
+    const seen: (readonly [number, number])[][] = [];
+    const off = listenStripGaps((g) => seen.push(g));
+    setStripGap("status", [1540, 1924]);
+    setStripGap("status", [1540, 1924]);
+    setStripGap("menu", [952, 1213]);
+    setStripGap("status", null);
+    setStripGap("menu", null);
+    off();
+    expect(seen).toEqual([[], [[1540, 1924]], [[1540, 1924], [952, 1213]], [[952, 1213]], []]);
   });
 });
 

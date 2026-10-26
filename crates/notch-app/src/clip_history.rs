@@ -4,7 +4,6 @@
 //! never logs an item's content.
 
 use notch_core::clip::{Change, ClipHistory};
-use notch_core::presence::Presence;
 use notch_win::dpapi::Dpapi;
 use parking_lot::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
@@ -49,15 +48,6 @@ pub fn start(app: &AppHandle, data_dir: std::path::PathBuf) {
     }
 }
 
-/// Password rows stay out of the list and the events while Notch is locked, and (a heuristic) while
-/// Windows is in presentation or busy mode, or the screen is being shared or recorded.
-pub fn hide_passwords(app: &AppHandle) -> bool {
-    let presence = app.try_state::<Notch>().map(|n| n.attention.lock().presence).unwrap_or_default();
-    crate::plugins::locked(app)
-        || matches!(presence, Presence::Presentation | Presence::Busy)
-        || crate::extras::sharing(app)
-}
-
 /// `clipboard.read`'s source (never a password item: `ClipHistory::plugin_items`).
 fn refresh_plugins(app: &AppHandle) {
     let (Some(p), Some(pl)) = (app.try_state::<ClipState>(), app.try_state::<crate::plugins::Plugins>()) else {
@@ -74,7 +64,7 @@ pub fn emit(app: &AppHandle, changes: Vec<Change>) {
     if changes.iter().any(|c| c.reason == "added") {
         crate::recap::count(app, notch_core::recap::Ev::Clip);
     }
-    let hide = hide_passwords(app);
+    let hide = crate::privacy::closed(app); // password rows stay out while the privacy gate is closed
     for c in changes {
         let _ = app.emit("clip_changed", c.hiding_passwords(hide));
     }

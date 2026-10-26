@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 pub const STRIP_HEIGHT: f64 = 30.0;
 /// The island window's fixed size in CSS px: widest card 640 + shadow and shoulder room, tallest card.
 /// shortcut: placeholder numbers until the UI agent measures the tallest card in the maket; change here only.
-pub const ISLAND_WIDTH: f64 = 760.0;
-pub const ISLAND_HEIGHT: f64 = 620.0;
+pub const ISLAND_WIDTH: f64 = crate::brand::ISLAND_MAX.0;
+pub const ISLAND_HEIGHT: f64 = crate::brand::ISLAND_MAX.1;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Rect {

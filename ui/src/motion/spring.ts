@@ -34,7 +34,9 @@ export class Spring {
 
 /** Advances a frame in fixed ~0.5 ms substeps (at least 8; dt capped at 1/30 s). Substeps don't depend on Hz: 60 and 240 Hz give the same motion. */
 export function advance(s: Spring, dt: number) {
-  const d = Math.min(dt, 1 / 30), n = Math.max(8, Math.ceil(d * 1920)), h = d / n;
+  // a loop kicked from a click handler gets its first rAF timestamp from before the click (the frame's start): dt < 0 integrated
+  // backwards and threw the first frame far past the target (panels: 160 px, then 31 px, then growing); take a normal frame instead
+  const d = dt > 0 ? Math.min(dt, 1 / 30) : 1 / 60, n = Math.max(8, Math.ceil(d * 1920)), h = d / n;
   for (let i = 0; i < n; i++) s.step(h);
   if (s.settled) s.snap();
 }

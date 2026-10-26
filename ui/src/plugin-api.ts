@@ -42,7 +42,13 @@ export interface SurfacesView {
   /** How long the approval strip drops down in fullscreen (ms); null = it doesn't. */ dropStripMs: number | null;
   tabs: ModuleTab[]; summary: SummaryRows[];
   /** Owner of Ctrl+Space (composer.handler); null if none. `voice` = the same plugin also holds voice.line. */ composer: (PluginRef & { voice: boolean }) | null;
+  /** Assistant slots: the main assistant's `assistant.state.set` values; empty while `private`. */ assistantState?: Record<string, unknown>;
+  /** Assistant slots: the privacy gate is closed (locked, presenting / busy, screen shared). The only flag an extension reads. */ private?: boolean;
 }
+/** Assistant slots: the main assistant's `assistant.event` (held by Rust while the privacy gate is closed). */
+export interface AssistantEvent { type: string; data: Record<string, unknown> }
+/** Assistant slots: the answer to one `assistant_request`; only the error code, never the plugin's text. */
+export type AssistantReply = { id: number; result: unknown; error?: undefined } | { id: number; error: { code: number }; result?: undefined };
 export type ComposerAttachment = { kind: ComposerKind };
 export interface ComposerEvent { turn: number; kind: "delta" | "chip" | "done" | "error"; text?: string; label?: string; chipKind?: "source" | "reminder" | "note"; message?: string }
 export type Decision = "allow" | "always" | "deny" | "choice";
@@ -78,6 +84,8 @@ export interface PluginCommands {
   plugin_remove: { args: { id: string }; ret: void };
   modules_get: { args: void; ret: ModuleEntry[] };
   modules_set: { args: { order: string[]; off: string[] }; ret: void };
+  /** Assistant slots: one request to the main assistant (a name from the brand's `page_requests`); the answer is the `assistant_reply` with this id. `denied` while the privacy gate is closed, `not_connected` without a main assistant, `invalid` otherwise. */
+  assistant_request: { args: { method: string; params: Record<string, unknown> }; ret: { id: number } };
 }
 export interface PluginEvents {
   plugin_surfaces_changed: SurfacesView;
@@ -86,12 +94,15 @@ export interface PluginEvents {
   plugin_stream: { streamId: string; text: string; /** Who said the `voice.transcript` line (e.g. "You"); no label if absent. */ speaker?: string };
   composer_event: ComposerEvent;
   consent_changed: null;
+  assistant_event: AssistantEvent;
+  assistant_reply: AssistantReply;
 }
 export const PLUGIN_COMMAND_NAMES = [
   "plugin_surfaces", "plugin_action", "approval_answer", "composer_submit", "composer_voice", "consent_get", "consent_answer",
   "plugin_list", "plugin_set_scope", "plugin_set_main", "plugin_disconnect", "plugin_remove", "modules_get", "modules_set",
+  "assistant_request",
 ] as const satisfies readonly (keyof PluginCommands)[];
-export const PLUGIN_EVENT_NAMES = ["plugin_surfaces_changed", "plugins_changed", "plugin_stream", "composer_event", "consent_changed"] as const satisfies readonly (keyof PluginEvents)[];
+export const PLUGIN_EVENT_NAMES = ["plugin_surfaces_changed", "plugins_changed", "plugin_stream", "composer_event", "consent_changed", "assistant_event", "assistant_reply"] as const satisfies readonly (keyof PluginEvents)[];
 // The name lists match the interfaces exactly: tsc stops here if one is missing or extra.
 const _cmds: Exclude<keyof PluginCommands, (typeof PLUGIN_COMMAND_NAMES)[number]> extends never ? true : never = true;
 const _evts: Exclude<keyof PluginEvents, (typeof PLUGIN_EVENT_NAMES)[number]> extends never ? true : never = true;

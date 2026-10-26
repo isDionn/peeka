@@ -183,8 +183,8 @@ pub fn audio_level(app: &AppHandle, on: bool) {
         let mut tick = 0u32;
         while METER.load(Ordering::SeqCst) == mine {
             let playing = app.try_state::<Notch>().is_some_and(|n| n.media.lock().as_ref().is_some_and(|m| m.playing));
-            // hide_passwords = locked, presentation/busy, or screen shared: the same "private" gate
-            if !playing || crate::clip_history::hide_passwords(&app) {
+            // the privacy gate: locked, presentation/busy, or screen shared
+            if !playing || crate::privacy::closed(&app) {
                 (meter, tick) = (None, 0);
                 std::thread::sleep(std::time::Duration::from_millis(250));
                 continue;

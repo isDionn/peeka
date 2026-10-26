@@ -149,6 +149,7 @@ fn privacy_refresh(app: &AppHandle) {
     let changed = std::mem::replace(&mut *x.privacy.lock(), next.clone()) != next;
     if changed {
         let _ = app.emit("privacy_changed", next);
+        crate::plugins::emit_surfaces(app); // screen sharing is part of the privacy gate (`SurfacesView.private`)
     }
 }
 
@@ -169,7 +170,8 @@ fn tint_feed(app: AppHandle) {
             let Some(n) = app.try_state::<Notch>() else { continue };
             let on = n.settings.lock().screen_tint && !crate::app::demo();
             let base = Pause {
-                locked: crate::plugins::locked(&app),
+                // the privacy gate (lock, presentation / busy, sharing); the fields below add the tint's own pauses
+                locked: crate::privacy::closed(&app),
                 presence: notch_win::presence::read(),
                 sharing: sharing(&app),
                 clip_open: n.capture.lock().is_open(),

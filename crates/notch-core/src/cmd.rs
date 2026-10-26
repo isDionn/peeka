@@ -86,7 +86,7 @@ pub fn unlocked(locked: bool) -> Result<(), CmdError> {
 }
 
 /// The commands in `crates/notch-app/src/commands.rs` that must start with `cmd::unlocked`.
-pub const SENDS_OWNER_CONTENT: [&str; 18] = [
+pub const SENDS_OWNER_CONTENT: [&str; 19] = [
     "composer_scan",
     "window_pick",
     "composer_attach_file",
@@ -105,6 +105,7 @@ pub const SENDS_OWNER_CONTENT: [&str; 18] = [
     "download_show_in_folder",
     "notif_copy_code",
     "claude_chat_send",
+    "assistant_request",
 ];
 
 /// shortcut: at most 64 pins; a bigger row would not fit any strip.

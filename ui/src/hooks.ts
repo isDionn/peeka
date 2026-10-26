@@ -228,13 +228,13 @@ export function usePlugins(): PluginInfo[] {
   return p;
 }
 
-export interface Turn { id: number; ask: string; answer: string; chips: { label: string; kind: string }[]; state: "wait" | "done" | "error"; error?: string }
+export interface Turn { id: number; ask: string; answer: string; chips: { label: string; kind: string }[]; state: "wait" | "done" | "error"; error?: string; /** When the turn started on this page (ms). */ at?: number }
 /** Ctrl+Space chat: sent questions and streaming answers. Answer chunks may arrive before `composer_submit` returns; the turn is created then. */
 export function useComposer() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const upd = useCallback((id: number, f: (t: Turn) => Turn) => setTurns((cur) => {
     const has = cur.some((t) => t.id === id);
-    const base = has ? cur : [...cur, { id, ask: "", answer: "", chips: [], state: "wait" as const }];
+    const base = has ? cur : [...cur, { id, ask: "", answer: "", chips: [], state: "wait" as const, at: Date.now() }];
     return base.map((t) => (t.id === id ? f(t) : t));
   }), []);
   useEffect(() => {

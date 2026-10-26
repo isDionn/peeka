@@ -40,3 +40,19 @@
 .trayHead{height:28px;margin-top:2px;padding:0 4px;display:flex;align-items:center}
 /* R1-8: setup steps share one height, Back / Next never move on any step (longest step is 172: step 1, intro + 3 rows; measured in the VM) */
 .setup .setupStep{min-height:172px}
+
+/* Context menus hang from the strip like the panels and island cards (owner, RC5: "they don't feel attached"): no gap, strip colour at the top,
+   8 px concave shoulders (<= 60 % of the 14 px corner, as motion/shape.ts shoulderOf), hairline and shadow on the sides and bottom only (the clip
+   stops the blur above the top edge), the Drift glow and the strip line handled in Menus.tsx (.hang: the strip and app menus; the Start list menu floats). Grows down from the strip edge, so it is attached at every frame. */
+.context.hang{top:var(--BAR);border-radius:0 0 14px 14px;transform-origin:50% 0;
+  background:linear-gradient(180deg,var(--strip),var(--card) 40px,var(--card2));
+  box-shadow:inset .5px 0 0 var(--edge),inset -.5px 0 0 var(--edge),inset 0 -.5px 0 var(--edge),0 10px 28px rgba(0,0,0,.24),0 28px 72px rgba(0,0,0,.3);
+  clip-path:inset(0 -120px -160px -120px)}
+.context.hang::before,.context.hang::after{content:"";position:absolute;top:0;width:9px;height:8px;pointer-events:none;background:var(--strip)}
+.context.hang::before{left:-8px;-webkit-mask:radial-gradient(circle 8px at 0 100%,transparent 7px,#000 8px);mask:radial-gradient(circle 8px at 0 100%,transparent 7px,#000 8px)}
+.context.hang::after{right:-8px;-webkit-mask:radial-gradient(circle 8px at 100% 100%,transparent 7px,#000 8px);mask:radial-gradient(circle 8px at 100% 100%,transparent 7px,#000 8px)}
+.context.open.hang{animation-name:contextHang}
+@keyframes contextHang{from{opacity:0;transform:scaleY(.94)}}
+.context.hang > .glowHost{border-radius:inherit;corner-shape:squircle}
+.context.hang > .glowHost .glowField{top:calc(-1 * var(--BAR));left:var(--gx,50%)}
+.context.hang > :not(.glowHost){position:relative}

@@ -34,8 +34,8 @@ export function Lead({ plugin, mascot, size = 24, onPoke, still, hint }: { plugi
 /** Peeka's button styles: only `default | primary | destructive`; no free colors. */
 const styleClass = (s: ActionDef["style"]) => (s === "primary" ? "blue" : s === "destructive" ? "destructiveFill" : "gray");
 
-/** A button that ignores clicks before the guard time has passed. */
-function GuardBtn({ className, onClick, children, ...rest }: { className: string; onClick: () => void; children: ReactNode } & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "className">) {
+/** A button that ignores clicks before the guard time has passed. Exported for extension cards (`ext.ts`). */
+export function GuardBtn({ className, onClick, children, ...rest }: { className: string; onClick: () => void; children: ReactNode } & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "className">) {
   const guard = useGuard();
   return <button {...rest} ref={guard.ref} className={className} data-guarded onClick={guard(onClick)}>{children}</button>;
 }
@@ -144,7 +144,8 @@ export function ApprovalBump({ a, onDetail, onlyDetail, dropMs, generic = false 
   );
 }
 
-function answer(a: ApprovalItem, decision: "allow" | "always" | "deny" | "choice", extra: { choiceId?: string; text?: string } = {}, surface: "protrusion" | "card" = "card") {
+/** An approval decision to the plugin. Exported for extension cards (`ext.ts`). */
+export function answer(a: ApprovalItem, decision: "allow" | "always" | "deny" | "choice", extra: { choiceId?: string; text?: string } = {}, surface: "protrusion" | "card" = "card") {
   bridge.call("approval_answer", { pluginId: a.plugin.id, id: a.id, decision, surface, ...extra }).catch(() => undefined);
 }
 

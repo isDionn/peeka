@@ -15,6 +15,8 @@
   z-index: 2; opacity: 0; corner-shape: squircle; will-change: transform, opacity;
   box-shadow: -.5px 0 0 var(--edge), .5px 0 0 var(--edge), 0 .5px 0 var(--edge), 0 1px 2px rgba(0, 0, 0, 0.18),
     0 10px 28px rgba(0, 0, 0, 0.24), 0 28px 72px rgba(0, 0, 0, 0.3);
+  /* the blur reached ~44 px up and darkened the strip's bottom rows over the card (owner, RC5): no shadow above the top edge, sides and bottom keep theirs */
+  clip-path: inset(0 -120px -160px -120px);
 }
 /* 12 px fillet + 1 px into the body, scaled f/12. Concave curve: strip color, quarter-circle cut out with a 1 px soft edge. */
 .nm-shoulder { z-index: 4; width: 13px; height: 12px; background: var(--strip, #0a0a0b); will-change: transform; }

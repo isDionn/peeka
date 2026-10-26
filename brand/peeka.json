@@ -1,0 +1,14 @@
+{
+  "product_name": "Peeka",
+  "code_name": "notch",
+  "data_dir_env": "NOTCH_DATA_DIR",
+  "exe_name": "peeka",
+  "hook_arg": "--cc-hook",
+  "mirror": { "package": "Notch.Mirror", "publisher": "CN=Notch" },
+  "updates_url": "https://github.com/isDionn/peeka/releases/latest",
+  "island_max": [760, 620],
+  "page_requests": [],
+  "start_key_hook": true,
+  "hide_taskbar": true,
+  "reserve_appbar": true
+}

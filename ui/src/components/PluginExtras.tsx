@@ -10,6 +10,7 @@ export const agoText = (s: number) => { const t = ageLabel(s); return t === "now
 import { flat, pluginName } from "../lib/plugin";
 import { scopeInfo } from "../lib/scopes";
 import { HoldButton, NO_INDENT } from "./common";
+import { BRAND } from "../brand";
 import "../fidelity-settings.css";
 import "./cards.css";
 
@@ -35,7 +36,7 @@ function ChangeBox({ box, file, label, busy, onApply }: { box: Box; file: string
   const name = baseName(file);
   return (
     <div ref={ref} className="row" style={{ display: "block" }} role="group" aria-label={`Changes to ${name}`}>
-      <div className="t12 l2">{pv.lines.length === 0 ? `Nothing to change in ${file}.` : <>{file}: <span className="num editCount"><span className="add">+{pv.add}</span> <span className="del">−{pv.del}</span></span> lines, only Peeka's hook. The first time, a copy of the original is kept as {name}.bak-peeka.</>}</div>
+      <div className="t12 l2">{pv.lines.length === 0 ? `Nothing to change in ${file}.` : <>{file}: <span className="num editCount"><span className="add">+{pv.add}</span> <span className="del">−{pv.del}</span></span> lines, only Peeka's hook. The first time, a copy of the original is kept as {name}.bak-{BRAND.exeName}.</>}</div>
       {pv.lines.length > 0 && <pre className="code glass diffLines" style={{ margin: "8px 0" }} aria-label="Changes">{pv.lines.map((l, i) => <div key={i} className={l[0] === "+" ? "add" : l[0] === "-" ? "del" : undefined}>{l}</div>)}</pre>}
       {pv.more > 0 && <div className="t12 l3 num">{pv.more} more lines</div>}
       {pv.lines.length > 0 && <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}><button className="btn kk primary" disabled={busy} onClick={() => onApply(pv.fingerprint, ref.current?.offsetHeight ?? 0)}>{`${label} now`}</button></div>}

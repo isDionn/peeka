@@ -16,6 +16,7 @@
   opacity: var(--glow-intensity); transition: opacity .8s ease;
 }
 .cut > .glowHost .glowField, .glowSlice .glowField { top: calc(-1 * var(--BAR)); }   /* the island starts at the strip's bottom edge */
+.cut > .glowHost .glowField { left: var(--gx, 50%); }   /* a side panel's body: --gx = the screen's centre line in its box (common.tsx Panel) */
 .glowCopy { --glow-speed: 1; }   /* each copy keeps the speed it was started with (read by Glow.tsx) */
 :is(.glowField, .glowCopy)[data-glow-state="busy"]      { --glow-intensity: .95; --glow-speed: 1.8; }
 :is(.glowField, .glowCopy)[data-glow-state="attention"] { --glow-intensity: 1;   --glow-speed: 2.8; }

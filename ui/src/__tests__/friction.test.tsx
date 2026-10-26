@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeBridge } from "../bridge.fake";
 import { SURFACES_J, COMPASS, APPROVAL_LOW } from "../plugin.fixtures";
 import { Island } from "../components/Island";
-import { FirstRunCard, modulesKw, TimerStart } from "../components/IslandCards";
+import { FirstRunCard, MOD_NARROW, TimerStart } from "../components/IslandCards";
 import { ComposerCard, resetComposerDraft } from "../components/Plugin";
 import { onX, sendX } from "../lib/xwin";
 import { resetMascotRegistry } from "../mascot/useSingleMascot";
@@ -129,10 +129,8 @@ describe("Y3: peeks open Modules on their own tab", () => {
 
 describe("Y4: the tab bar never shifts and is the same on every tab", () => {
   const css: string = readFileSync("src/components/cards.css", "utf8");
-  it("every tab other than General has the same width; only General is wide", () => {
-    const pages = ["music", "clipboard", "shelf", "calendar", "timer", "system", "notifications", "plugin"];
-    expect(new Set(pages.map((p) => modulesKw(p, 1920)))).toEqual(new Set([620]));
-    expect(modulesKw("general", 1920)).toBeGreaterThan(620);
+  it("every tab has the same width, General included (Places is drawn for 620)", () => {
+    expect(MOD_NARROW).toBe(620);
   });
   it("the corner group has a fixed width (498) on the island center line, and × is always at the same screen point (independent of card width)", () => {
     expect(css).toMatch(/\.modTop \{[^}]*justify-content: flex-end;[^}]*width: 498px/);
@@ -276,8 +274,8 @@ describe("System history", () => {
 });
 
 describe("General home: the empty-state line fits", () => {
-  it("text and pills get equal columns, so \"Nothing needs you right now\" isn't cut next to the reserved ghost spot (VM v0.3.4)", () => {
-    expect(readFileSync("src/components/cards.css", "utf8")).toMatch(/\.genHome \{[^}]*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\);/);
+  it("the Now box spans two of three columns, so \"Nothing needs you\" isn't cut next to the reserved ghost spot (VM v0.3.4)", () => {
+    expect(readFileSync("src/components/cards.css", "utf8")).toMatch(/\.genHome \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);[^}]*"now now music"/);
   });
 });
 

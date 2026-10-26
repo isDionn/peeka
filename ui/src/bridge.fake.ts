@@ -2,6 +2,7 @@
 import type { BtDevice, WifiNetwork, ClaudeChatDone, ClaudeChatState, AgentBridge, Attached, TrayIconX, CalendarNext, Alert, AssistantCounts, BridgeState, PermissionEvent, RecentItem, AlertsView, AllCommands, AllEvents, CallArgs, CommandName, Commands, ClipChange, ClipItem, ClipPlain, ComposerEvent, ConsentAnswer, LockState, MirrorState, MirrorView, Notice, TrayIcon, ShelfItem, TimerState, PrivacyState, RecapWeek, ConsentRequest, ModuleEntry, PluginCommands, PluginInfo, SurfacesView, Media, MonitorInfo, PinnedApp, SearchResult, Settings, Status, Audio, SysmonTick, VolumeOsd, WindowInfo } from "./bridge";
 import { APP_NAMES, iconOf } from "./fakeIcons";
 import { EMPTY_SURFACES, MODULES, PLUGINS } from "./plugin.fixtures";
+import { BRAND } from "./brand";
 
 const DEFAULT_CALENDAR: CalendarNext = { detail: "2:45 PM, 30 min, video call", next: [{ time: "4:00 PM", title: "Weekly planning", source: "Calendar" }, { time: "6:00 PM", title: "Evening recap", source: "Assistant routine" }] };
 const ref = (appId: string) => ({ appId, name: APP_NAMES[appId] ?? appId, icon: iconOf(appId) });
@@ -34,7 +35,7 @@ const TRACKS = [
 
 type W4Names = "search_index_state" | "search_open" | "search_ask" | "clip_list" | "clip_copy" | "clip_pin" | "clip_delete" | "clip_clear" | "clip_reveal" | "clip_share" | "clip_edit" | "clip_drag" | "clip_visible" | "lock_state" | "lock_now" | "lock_release";
 type W5Names = "window_preview" | "share_open" | "shelf_list" | "shelf_ask" | "timer_get" | "timer_start" | "timer_control" | "privacy_get" | "tray_open" | "mirror_state" | "mirror_enable" | "mirror_disable" | "mirror_list" | "mirror_dismiss" | "mirror_open_app" | "mirror_ask";
-type W7Names = "recent_files" | "open_recent" | "set_start_items" | "open_start_menu" | "open_calendar" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "agent_bridges" | "agent_bridge_install" | "agent_bridge_remove" | "agent_bridge_preview" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "window_pick" | "cc_focus_terminal" | "cc_diff" | "cc_diff_open" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus";
+type W7Names = "recent_files" | "open_recent" | "set_start_items" | "app_show_in_folder" | "launch_app_admin" | "open_start_menu" | "open_calendar" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "agent_bridges" | "agent_bridge_install" | "agent_bridge_remove" | "agent_bridge_preview" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "window_pick" | "cc_focus_terminal" | "cc_diff" | "cc_diff_open" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus";
 /** Peeka Phase C: clipboard, download and copy-code commands; Settings > About demo restart. */
 /** The Modules card's Claude chat. */
 type W9Names = "claude_chat_state" | "claude_chat_send" | "claude_chat_stop" | "claude_chat_new";
@@ -105,7 +106,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     { id: "codex", name: "Codex CLI", file: "~\\.codex\\hooks.json", present: true, installed: false, healthy: false, lastEventAgoS: null },
     { id: "cursor", name: "Cursor", file: "~\\.cursor\\hooks.json", present: false, installed: false, healthy: false, lastEventAgoS: null },
     { id: "gemini", name: "Gemini CLI", file: "~\\.gemini\\settings.json", present: true, installed: false, healthy: false, lastEventAgoS: null },
-    { id: "copilot", name: "GitHub Copilot CLI", file: "~\\.copilot\\hooks\\peeka.json", present: false, installed: false, healthy: false, lastEventAgoS: null },
+    { id: "copilot", name: "GitHub Copilot CLI", file: `~\\.copilot\\hooks\\${BRAND.exeName}.json`, present: false, installed: false, healthy: false, lastEventAgoS: null },
   ];
   let agents = structuredClone(AGENTS0);
   const setAgent = (id: string, on: boolean) => { const a = agents.find((x) => x.id === id); if (!a) throw "unknown"; a.installed = on; a.healthy = on; return { ...a }; };
@@ -180,6 +181,8 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     list_windows: () => windows.map((w) => ({ ...w })), // like Rust: every strip lists every monitor's windows
     get_pins: pinned,
     set_pins: ({ appIds }) => { pins = [...appIds]; emit("pins_changed", null); return pinned(); },
+    import_taskbar_pins: () => { pins = [...new Set([...pins, "explorer", "terminal", "discord"])]; emit("pins_changed", null); return pinned(); },
+    show_desktop: () => { log.push({ cmd: "show_desktop", args: null }); },
     activate_window: ({ hwnd }) => { windows.forEach((w) => (w.active = w.hwnd === hwnd)); emit("windows_changed", { monitor: windows.find((w) => w.hwnd === hwnd)?.monitor ?? "m1" }); },
     close_window: ({ hwnd }) => { const m = windows.find((w) => w.hwnd === hwnd)?.monitor ?? "m1"; windows = windows.filter((w) => w.hwnd !== hwnd); emit("windows_changed", { monitor: m }); },
     new_window: ({ appId }) => { windows.push({ ...ref(appId), hwnd: nextHwnd++, title: ref(appId).name, active: false, monitor: "m1" }); emit("windows_changed", { monitor: "m1" }); },
@@ -271,6 +274,9 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   let plugins: PluginInfo[] = structuredClone(PLUGINS);
   let modules: ModuleEntry[] = structuredClone(MODULES);
   let turn = 0;
+  /** Assistant slots: the fake main assistant's answers (`setAnswer`; none = every request is `invalid`, like Peeka's empty brand list). */
+  let answer: ((method: string, params: Record<string, unknown>) => unknown) | null = null;
+  let pageReq = 0;
   const log: { cmd: string; args: unknown }[] = [];
   const setSurfaces = (v: Partial<SurfacesView>) => { surfaces = { ...EMPTY_SURFACES, ...v }; emit("plugin_surfaces_changed", surfaces); };
   const plug: { [K in keyof PluginCommands]: (a: PluginCommands[K]["args"]) => PluginCommands[K]["ret"] } = {
@@ -289,6 +295,17 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       return { turn: t };
     },
     composer_voice: () => { log.push({ cmd: "composer_voice", args: null }); },
+    assistant_request: ({ method, params }) => {
+      if (!answer) throw "invalid";
+      if (lock.locked) throw "denied";
+      const id = ++pageReq, a = answer;
+      log.push({ cmd: "assistant_request", args: { method, params } });
+      setTimeout(() => Promise.resolve().then(() => a(method, params)).then(
+        (result) => emit("assistant_reply", { id, result }),
+        (e) => emit("assistant_reply", { id, error: { code: typeof e === "number" ? e : -32603 } }),
+      ), 0);
+      return { id };
+    },
     consent_get: () => consent,
     consent_answer: (a: ConsentAnswer) => { log.push({ cmd: "consent_answer", args: a }); consent = null; emit("consent_changed", null); },
     plugin_list: () => structuredClone(plugins),
@@ -466,6 +483,8 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     recent_files: () => structuredClone(RECENT),
     open_recent: (a) => { log.push({ cmd: "open_recent", args: a }); },
     set_start_items: ({ items }) => { log.push({ cmd: "set_start_items", args: { items } }); settings = { ...settings, startItems: structuredClone(items) }; emit("settings_changed", structuredClone(settings)); return structuredClone(settings); },
+    app_show_in_folder: (a) => { if (a.appId.startsWith("aumid:")) throw "invalid"; log.push({ cmd: "app_show_in_folder", args: a }); },
+    launch_app_admin: (a) => { if (a.appId.startsWith("aumid:")) throw "invalid"; log.push({ cmd: "launch_app_admin", args: a }); },
     open_start_menu: () => { log.push({ cmd: "open_start_menu", args: null }); },
     open_calendar: () => { log.push({ cmd: "open_calendar", args: null }); },
     quit_app: (a) => { log.push({ cmd: "quit_app", args: a }); },
@@ -481,7 +500,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     claude_bridge_install: ({ fingerprint }) => { if (settings.demo || fingerprint !== "fp") throw "refused"; log.push({ cmd: "claude_bridge_install", args: { fingerprint } }); bridgeState = { ...bridgeState, installed: true, healthy: true }; return { ...bridgeState }; },
     claude_bridge_remove: ({ fingerprint }) => { if (settings.demo || fingerprint !== "fp") throw "refused"; log.push({ cmd: "claude_bridge_remove", args: { fingerprint } }); bridgeState = { ...bridgeState, installed: false, healthy: false }; return { ...bridgeState }; },
     agent_bridge_preview: ({ remove }) => {
-      const hook = ['      "Stop": [', '        {', '          "hooks": [', '            {', '              "type": "command",', '              "command": "C:\Users\me\AppData\Local\Peeka\peeka.exe",', '              "args": ["--cc-hook"]', '            }', '          ]', '        }', '      ]'];
+      const hook = ['      "Stop": [', '        {', '          "hooks": [', '            {', '              "type": "command",', '              "command": "C:\Users\me\AppData\Local\Peeka\peeka.exe",', '              "args": ["' + BRAND.hookArg + '"]', '            }', '          ]', '        }', '      ]'];
       const lines = [' {', ' "model": "opus",', ...hook.map((l) => (remove ? "-" : "+") + l), ' }'];
       return { fingerprint: "fp", add: remove ? 0 : hook.length, del: remove ? hook.length : 0, lines, more: 0 };
     },
@@ -525,7 +544,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       return () => { set.delete(cb as never); };
     },
     now: () => fixed ?? new Date(),
-    reset: () => { reset(); audioRefuse = false; wifiNets = structuredClone(WIFI0); btDevs = structuredClone(BT0); filesIndex = true; scanDenied = false; picked = null; surfaces = EMPTY_SURFACES; consent = null; shelf = []; timer = null; privacy = { mic: [], camera: [], screen: false }; previewDelay = 0; mirror = { registered: false, access: "unknown", history: true, enabled: false, on: false, blocker: null }; notices = []; quiet = false; agents = structuredClone(AGENTS0); plugins = structuredClone(PLUGINS); modules = structuredClone(MODULES); log.length = 0; turn = 0; if (chatTimer) clearInterval(chatTimer); chatTimer = null; chatState = { available: true, version: "2.1.290", signedIn: true, busy: false }; chatError = null; chatHistory = 0; },
+    reset: () => { reset(); audioRefuse = false; wifiNets = structuredClone(WIFI0); btDevs = structuredClone(BT0); filesIndex = true; scanDenied = false; picked = null; surfaces = EMPTY_SURFACES; consent = null; shelf = []; timer = null; privacy = { mic: [], camera: [], screen: false }; previewDelay = 0; mirror = { registered: false, access: "unknown", history: true, enabled: false, on: false, blocker: null }; notices = []; quiet = false; agents = structuredClone(AGENTS0); plugins = structuredClone(PLUGINS); modules = structuredClone(MODULES); log.length = 0; turn = 0; answer = null; pageReq = 0; if (chatTimer) clearInterval(chatTimer); chatTimer = null; chatState = { available: true, version: "2.1.290", signedIn: true, busy: false }; chatError = null; chatHistory = 0; },
     /** Test and preview hooks: trigger by hand what Rust would do. */
     emit,
     /** Fidelity 3: the main assistant's bridge state and the "first connection" card. */
@@ -537,6 +556,8 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     /** Claude chat: Claude Code missing / not signed in (`state`), or the next replies end with this error. */
     setClaudeChat: (p: Partial<ClaudeChatState> & { error?: string | null }) => { const { error, ...st } = p; chatState = { ...chatState, ...st }; if (error !== undefined) chatError = error; },
     setSurfaces,
+    /** Assistant slots: the fake main assistant answers `assistant_request` (a thrown number = that error code). */
+    setAnswer: (f: ((method: string, params: Record<string, unknown>) => unknown) | null) => { answer = f; },
     /** Set a consent window request (`expiresAt` defaults to now + 112 s). */
     setConsent: (c: ConsentRequest | null) => { consent = c && { ...c, expiresAt: c.expiresAt || Date.now() + 112_000 }; emit("consent_changed", null); },
     /** The owner's clicks (answers sent to the plugin). */

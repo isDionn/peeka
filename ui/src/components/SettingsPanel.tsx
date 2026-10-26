@@ -7,6 +7,7 @@ import { sendX } from "../lib/xwin";
 import { AppIcon, HoldButton, Kbd, NO_INDENT, radioKeys, Row, Switch } from "./common";
 import { Modules, Plugins } from "./PluginSettings";
 import { PluginExtras } from "./PluginExtras";
+import { BRAND } from "../brand";
 import "../fidelity-settings.css";
 
 export type SettingsPage = "appearance" | "shortcuts" | "plugins" | "modules" | "clipboard" | "mascot";
@@ -56,6 +57,17 @@ function MirrorSetting() {
   );
 }
 
+/** Owner RC5: the Windows taskbar's pins, added after the strip's own (nothing removed, no duplicates). */
+function ImportPins() {
+  const [res, setRes] = useState<string | null>(null);
+  const run = () => bridge.call("import_taskbar_pins").then((p) => setRes(`Done. ${p.length} app${p.length === 1 ? "" : "s"} pinned on the strip`), () => setRes("Couldn't import right now"));
+  return (
+    <Row title="Windows taskbar pins" sub={res ?? "Pins the apps from your Windows taskbar here too. Nothing is removed"}>
+      <button className="btn kk glass" onClick={run}>Import</button>
+    </Row>
+  );
+}
+
 /** Settings › Appearance (mockup ayg): two cards. Settings outside the mockup (volume keys, script endpoint, Windows notifications, autostart, taskbar mode) are the only UI for owner decisions; they live under "More settings". */
 function Appearance({ settings }: { settings: Settings }) {
   const [more, setMore] = useState(false);
@@ -79,6 +91,7 @@ function Appearance({ settings }: { settings: Settings }) {
             ? <button className="btn kk glass" onClick={() => bridge.call("taskbar_set_mode", { mode: "full" }).catch(() => undefined)}>Hide taskbar</button>
             : <button className="btn kk glass" onClick={() => bridge.call("restore_taskbar")}>Restore taskbar</button>}
         </Row>
+        <ImportPins />
         <Row title="Lock Peeka" sub="Hides Clipboard and plugin cards">
           <button className="btn kk glass" onClick={() => bridge.call("lock_now").catch(() => undefined)}><Lock />Lock</button>
         </Row>
@@ -257,7 +270,9 @@ function About({ settings, onQuit }: { settings: Settings; onQuit?: () => void }
       <div className="t17 b6">About</div>
       <div className="list glass" style={NO_INDENT}>
         <Row title="Peeka" sub="A strip and island that replace the Windows taskbar. Assistants connect to it as plugins." />
-        <Row title="Updates" sub="Opens the latest release on GitHub. Peeka never checks on its own"><button className="btn kk glass" onClick={() => bridge.call("open_windows_settings", { uri: "https://github.com/isDionn/peeka/releases/latest" }).catch(() => undefined)}>Check for updates</button></Row>
+        {BRAND.updatesUrl
+          ? <Row title="Updates" sub="Opens the latest release on GitHub. Peeka never checks on its own"><button className="btn kk glass" onClick={() => bridge.call("open_windows_settings", { uri: BRAND.updatesUrl! }).catch(() => undefined)}>Check for updates</button></Row>
+          : <Row title="Updates" sub="No update channel; this build never checks on its own"><span /></Row>}
         <Row title="Emergency shortcut" sub="Restores the taskbar"><Kbd keys={settings.shortcuts.emergency} /></Row>
         <Diagnostics />
         <Row title="Demo mode" sub={settings.demo ? "Sample data, nothing is saved. Peeka restarts normally" : "Try Peeka with sample data. Nothing is saved; Peeka restarts"}><button className="btn kk glass" style={{ width: 92 }} onClick={() => bridge.call("demo_restart", { on: !settings.demo }).catch(() => undefined)}>{settings.demo ? "Stop demo" : "Try demo"}</button></Row>

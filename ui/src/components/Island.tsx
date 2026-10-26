@@ -36,16 +36,18 @@ const SHADOW_SIDE = 72, SHADOW_BOTTOM = 110;
 export const ISLAND_TINT = "island";
 import { ApprovalBump, ApprovalCard, ApprovalCenter, ApprovalShort, ComposerCard, Lead, ProtrusionBump, ProtrusionCenter } from "./Plugin";
 import { LockCard, LockCenter, ClipboardCenter, ClipboardView, ShotBump, ShotCenter, STRIP_TXT, stripKind } from "./Pano";
-import { Bars, FirstRunCard, ModulesCard, modulesKw, MusicBump, MusicCard, OsdBump } from "./IslandCards";
+import { Bars, FirstRunCard, MOD_NARROW, ModulesCard, MusicBump, MusicCard, OsdBump } from "./IslandCards";
 import { IslandLine, AlertBumpFid, AlertCenter, AssistantOfflineCard, DndRest, LoadingBody, HiddenCenter, JobDoneCenter, MeetingCard, MeetingCenter, OfflineRest, ShelfOpenCenter, ShelfSuggestRow } from "./Fidelity";
 import { announceLine, announceNotif, announceWave } from "../lib/lineChan";
 import { AMBER, CYAN, lineOf } from "../lib/line";
 import { installKbModality } from "../lib/kbModality";
 import { useFirstConnect, useIslandHidden, useRecap } from "../hooks.fidelity";
+import { ext } from "../ext";
+import { request as assistantRequest, useAssistantEvents } from "../lib/assistant";
 import { EmptyBoard, ErrorCard, ErrorCenter, FirstConnectCard, FirstConnectCenter, LoadingCenter, RecapCard, RecapCenter } from "./CardsExtra";
 
 /** Cards the user opens. Peeks that appear on their own (volume, alert, new track) stay below these. */
-export type IslandView = "diff" | "music-card" | "modules" | "noassistant" | "welcome" | "approval-card" | "composer" | "clipboard" | "shelf" | "meeting" | "firstconnect" | "recap" | "error";
+export type IslandView = "diff" | "music-card" | "modules" | "noassistant" | "welcome" | "approval-card" | "composer" | "ext" | "clipboard" | "shelf" | "meeting" | "firstconnect" | "recap" | "error";
 export interface IslandInit {
   view?: IslandView | null;
   /** Preview: self-closing peeks (volume, new track) stay open so screenshots are stable. */
@@ -126,8 +128,8 @@ function Marquee({ text }: { text: string }) {
 }
 
 /** Card layer: focus moves in on open, Tab cycles inside, Esc calls `onClose`, focus returns to the opener on unmount. Peeks don't take focus (they appear on their own). */
-const NO_MODULES_BTN = new Set(["modules", "lock", "welcome", "firstconnect", "recap", "ky"]);
-function Layer({ spec, onClose, onModules, measure }: { spec: Spec; onClose: () => void; onModules: () => void; measure: (el: HTMLDivElement | null) => void }) {
+const NO_MODULES_BTN = new Set(["modules", "lock", "welcome", "firstconnect", "recap", "ky", "ext"]);
+function Layer({ spec, onClose, onModules, measure, onBack }: { spec: Spec; onClose: () => void; onModules: () => void; measure: (el: HTMLDivElement | null) => void; /** The extension card is tucked under this one: "Back to <label>". */ onBack?: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useFocusTrap(ref, onClose, spec.mode === "card", () => document.querySelector<HTMLElement>(".islandCenter"));
   const set = useCallback((el: HTMLDivElement | null) => { ref.current = el; measure(el); }, [measure]);
@@ -138,7 +140,7 @@ function Layer({ spec, onClose, onModules, measure }: { spec: Spec; onClose: () 
   return (
     <div ref={set} className={"islandInner m" + spec.mode + (isCard && !mods ? " conBar" : "")} role={isCard ? "dialog" : "group"} aria-label={spec.label} style={{ width: isCard ? spec.kw : "max-content" }}>
       {spec.node}
-      {isCard && !mods && (<div className="cardBar">{!NO_MODULES_BTN.has(spec.key) && <button className="close" title="Modules" aria-label="Modules" onClick={onModules}><LayoutGrid /></button>}{close}</div>)}
+      {isCard && !mods && (<div className="cardBar">{onBack && <button className="close" style={{ padding: "0 10px" }} onClick={onBack}>Back to {ext()?.label}</button>}{!NO_MODULES_BTN.has(spec.key) && <button className="close" title="Modules" aria-label="Modules" onClick={onModules}><LayoutGrid /></button>}{close}</div>)}
     </div>
   );
 }
@@ -234,9 +236,8 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const { alerts, top } = useAlerts();
   const [user, setUser] = useState<IslandView | null>(init?.view !== undefined ? init.view : firstRunDone() || autoStarted() ? null : "welcome");
   const [modStart, setModStart] = useState<string | undefined>(); // music peek/center: Modules opens on the Music tab
-  const [modPage, setModPage] = useState("general"); // the Modules card's active tab: the card width follows it
   const [modName, setModName] = useState("General"); // active tab name: the card's accessible name (F-03)
-  const onModPage = useCallback((p: string, n: string) => { setModPage(p); setModName(n); }, []);
+  const onModPage = useCallback((_p: string, n: string) => setModName(n), []);
   const lock = useLock();
   const main = useMainAssistant();
   const plugins = usePlugins();
@@ -354,7 +355,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const approvalTop = surf.approvals.find((a) => a.id === surf.approvalTop) ?? null;
   const approvalCard = surf.approvals.find((a) => a.id === detailId) ?? approvalTop ?? surf.approvals[0] ?? null;
   // while Peeka is locked, the Clipboard and Modules cards don't open; the lock card stands in (ADR-0063 §6); no screenshot peek either
-  const view: IslandView | "lock" | null = lock.locked && (user === "diff" || user === "recap" || user === "clipboard" || user === "shelf" || user === "modules" || user === "music-card") ? "lock" : user === "meeting" && !surf.protrusion ? null : user;
+  const view: IslandView | "lock" | null = lock.locked && (user === "diff" || user === "recap" || user === "clipboard" || user === "shelf" || user === "modules" || user === "music-card" || user === "ext") ? "lock" : user === "meeting" && !surf.protrusion ? null : user;
   // presentation mode / busy (Windows, `input_tick`): automatic peeks (screenshot, Bluetooth, charging, music) stay quiet; Rust's attention budget already filters approvals, volume and alerts
   const calm = input.presentation || input.busy;
   const shotNow = shot && !lock.locked && !calm ? shot : null;
@@ -412,13 +413,32 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const [mkAside, setMkAside] = useState(false);
   const meetingItem = surf.protrusion?.icon === "calendar" ? surf.protrusion : null;
   const sys = useSysmon(kind === "modules");
-  useEffect(() => { if (kind !== "modules") { setModPage("general"); setModName("General"); setModStart(undefined); } }, [kind]);
+  useEffect(() => { if (kind !== "modules") { setModName("General"); setModStart(undefined); } }, [kind]);
   const owner = useRef(surf.composer);
   owner.current = surf.composer;
 
   /* ---- events ---- */
   const userRef = useRef(user);
   userRef.current = user;
+  // Assistant slots (Y2): an extension card may take Ctrl+Space; music or clipboard opened over it tucks it away and their
+  // card offers "Back to <label>"; closing that card brings it back at the same size. Every way in opens it compact except ext-go {full}.
+  const card = ext()?.card;
+  const askTo = (): IslandView => (card?.takesAsk ? "ext" : owner.current ? "composer" : "noassistant");
+  const [extFull, setExtFull] = useState(false);
+  const [extTarget, setExtTarget] = useState<unknown>(undefined);
+  const [tucked, setTucked] = useState(false);
+  const extEvents = useAssistantEvents(!!card);
+  const prevUser = useRef(user);
+  useEffect(() => {
+    if (!card) return;
+    const was = prevUser.current;
+    prevUser.current = user;
+    if (user === "music-card" || user === "clipboard") { if (was === "ext") setTucked(true); }
+    else setTucked(false);
+    if (user === null) { setExtFull(false); setExtTarget(undefined); }
+  }, [user, card]);
+  const extOpen = user === "ext";
+  useEffect(() => { if (card) sendX({ t: "ext-open", open: extOpen }); }, [extOpen, card]);
   /** Ctrl+Space: any open strip panel (Ctrl+K...) closes, the ask box opens on top and takes focus (friction 2 / R2-Y3). */
   const openAsk = (to: IslandView) => {
     sendX({ t: "island-click" });
@@ -457,7 +477,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       bridge.on("job_done", (e) => { away.done(); const t = Date.now(); doneAt.current = doneAt.current.filter((x) => t - x < 3_600_000); if (doneAt.current.length >= 3) return; doneAt.current.push(t); setDone(e); }),
       bridge.on("clip_changed", (c) => { if (c.reason === "added" && c.item && c.item.kind !== "password" && stripKind(c.item)) setShot(c.item); }), // every image, file and link; plain text and passwords don't open it
       bridge.on("shortcut", (e) => {
-        if (e.name === "ask") { const to = owner.current ? "composer" : "noassistant"; if (userRef.current === to) setUser(null); else openAsk(to); }
+        if (e.name === "ask") { const to = askTo(); if (userRef.current === to) setUser(null); else openAsk(to); }
         else if (e.name === "focus_island") { const t = stage.current?.querySelector<HTMLElement>(".dangling"); (t && focusables(t)[0]) ? focusables(t)[0].focus() : center.current?.focus(); }
       }),
     ];
@@ -469,7 +489,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   useEffect(() => { if (!osd || pin || hold) return; const t = setTimeout(() => setOsd(null), OSD_MS); return () => clearTimeout(t); }, [osd, pin, hold]);
   // from the strip page: open panel label and "show intro again"
   // panel-open: opening a strip panel closes the open card (Y5)
-  useEffect(() => onX((m) => { if (m.t === "ghost") setMkAside(m.on); else if (m.t === "panel") setPanelLabel(m.panel); else if (m.t === "panel-open") setUser((u) => { if (u === "welcome") markFirstRun(); return null; }); else if (m.t === "firstrun") setUser("welcome"); else if (m.t === "welcome?") sendX({ t: "welcome", open: userRef.current === "welcome" }); else if (m.t === "ask") openAsk(owner.current ? "composer" : "noassistant"); else if (m.t === "to-island") { const l = tabStops(); focusViaKeys(m.end ? l[l.length - 1] : l[0]); } }), []);
+  useEffect(() => onX((m) => { if (m.t === "ghost") setMkAside(m.on); else if (m.t === "panel") setPanelLabel(m.panel); else if (m.t === "panel-open") setUser((u) => { if (u === "welcome") markFirstRun(); return null; }); else if (m.t === "firstrun") setUser("welcome"); else if (m.t === "welcome?") sendX({ t: "welcome", open: userRef.current === "welcome" }); else if (m.t === "ask") openAsk(askTo()); else if (m.t === "card" && card) setUser(m.view); else if (m.t === "ext-go" && card) { openAsk("ext"); setExtFull(!!m.full); setExtTarget(m.target); } else if (m.t === "to-island") { const l = tabStops(); focusViaKeys(m.end ? l[l.length - 1] : l[0]); } }), []);
   // while the welcome card is open the strip doesn't open the setup wizard (one thing at a time): open/closed is sent to the strip on every change
   const welcomeOpen = user === "welcome";
   useEffect(() => { sendX({ t: "welcome", open: welcomeOpen }); }, [welcomeOpen]);
@@ -565,7 +585,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     return () => { document.removeEventListener("focusin", fin); document.removeEventListener("focusout", fout); };
   }, []);
   useEffect(() => { setInText(isTextEntry(document.activeElement)); }, [user]); // a field removed with its card fires no focusout
-  const asking = user === "composer" || (inText && user !== null); // a field that kept focus in a closed card doesn't count
+  const asking = user === "composer" || user === "ext" || (inText && user !== null); // a field that kept focus in a closed card doesn't count
   useEffect(() => {
     if (!asking) return;
     bridge.call("typing_focus", { label: "island", on: true }).catch(() => undefined);
@@ -655,6 +675,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   /* ---- Esc: one step back per press (card → its peek → resting) ---- */
   const back = useCallback(() => {
     if (more) return setMore(false);
+    if (tucked && (user === "music-card" || user === "clipboard")) return setUser("ext");
     if (user === "music-card") { setUser(null); if (media) setMusicAuto(true); return; }
     if (user === "welcome") markFirstRun(); // Esc / × / clicking outside counts as "Skip": the card shouldn't come back on every launch
     if (user === "recap") ackRecap(); // closing it any way counts: not again this week
@@ -678,7 +699,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     if (charge) return setCharge(false);
     if (musicAuto) return setMusicAuto(false);
     if (pinned) return setPinned(null);
-  }, [user, osd, done, alert, shot, timerDone, closeTimerDone, netNote, dismissNet, summary, kind, musicAuto, media, battTier, burst, quota, stopped, dl, edit, cpuHigh, bt, charge, dismissBt, more, pinned, ackRecap]);
+  }, [user, osd, done, alert, shot, timerDone, closeTimerDone, netNote, dismissNet, summary, kind, musicAuto, media, battTier, burst, quota, stopped, dl, edit, cpuHigh, bt, charge, dismissBt, more, pinned, ackRecap, tucked]);
   useEffect(() => {
     const down = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.defaultPrevented) back(); };
     document.addEventListener("keydown", down);
@@ -722,9 +743,11 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       case "approval": return approvalTop && { key: "approval:" + approvalTop.id, mode: "bump", label: approvalTop.title, node: <ApprovalBump a={approvalTop} dropMs={surf.dropStripMs} onlyDetail={surf.dropStripMs !== null} generic={priv} onDetail={() => { setDetailId(approvalTop.id); setUser("approval-card"); }} /> };
       case "plugin": return surf.protrusion && { key: "plugin:" + surf.protrusion.plugin.id, mode: "bump", label: surf.protrusion.title, node: <ProtrusionBump item={surf.protrusion} /> };
       case "approval-card": return approvalCard && { key: "approval-card:" + approvalCard.id, mode: "card", kw: 620, label: approvalCard.title, node: <ApprovalCard a={approvalCard} generic={priv} /> };
+      case "ext": return card ? { key: "ext", mode: "card", kw: extFull && card.full ? Math.min(card.full.width, innerWidth - 2 * SHADOW_SIDE) : card.compactWidth, label: ext()!.label,
+        node: <card.Card size={extFull ? "full" : "compact"} setSize={(s) => setExtFull(s === "full")} target={extTarget} clearTarget={() => setExtTarget(undefined)} onClose={back} surfaces={surf} events={extEvents} request={assistantRequest} /> } : null;
       case "composer": return surf.composer && { key: "composer", mode: "card", kw: 620, label: "Ask", node: <ComposerCard owner={surf.composer} turns={composer.turns} send={composer.send} autoShelf={autoShelf} picked={picked} /> };
       case "music-card": return musicCard && { key: "music-card", mode: "card", kw: 520, label: "Music", node: musicCard };
-      case "modules": return { key: "modules", mode: "card", kw: modPage === "general" && !surf.tabs.length && !surf.summary.length ? 620 : modulesKw(modPage, screen.width, innerWidth - 2 * SHADOW_SIDE) /* the island window is narrower than the screen (0.3.4: General was 418 px, its content cut) */, label: "Modules: " + modName, node: <ModulesCard start={modStart} meeting={meetingItem} onPage={onModPage} onClose={back} media={media} pos={pos} sys={sys.tick} cpu={sys.cpu} surf={surf} shelf={shelf} main={main} onApproval={openApproval} timer={timer} /> };
+      case "modules": return { key: "modules", mode: "card", kw: MOD_NARROW /* every tab, General included (owner: Places is 620 wide) */, label: "Modules: " + modName, node: <ModulesCard start={modStart} meeting={meetingItem} onPage={onModPage} onClose={back} media={media} pos={pos} sys={sys.tick} cpu={sys.cpu} surf={surf} shelf={shelf} main={main} onApproval={openApproval} timer={timer} generic={priv} battery={batt} sessN={nSess} sessList={sessList} lastCc={lastCc} limited={limited} /> };
       case "meeting": return meetingItem && { key: "meeting", mode: "card", kw: 520, label: "Meeting", node: <MeetingCard item={meetingItem} /> };
       case "recap": return recap && { key: "recap", mode: "card", kw: 520, label: "Your week", node: <RecapCard week={recap} onDone={() => { ackRecap(); setUser(null); }} /> };
       case "firstconnect": return { key: "firstconnect", mode: "card", kw: 520, label: `${mainP ? pluginName(mainP) : "Assistant"} connected`, node: <FirstConnectCard onDone={() => { ackFc(); setUser(null); }} /> };
@@ -863,7 +886,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   /** One rule (Y1/Y3/O11): clicking a peek opens Modules on its own tab; clicking the center with a card open closes the card. */
   const onCenter = () => {
     if (hidden && restShown) bridge.call("island_hide", { on: false }).catch(() => undefined);
-    else if (kind === "rest" || kind === "hov") setUser(asleep ? "noassistant" : "modules");
+    else if (kind === "rest" || kind === "hov") setUser(asleep ? (card?.takesAsk ? "ext" : "noassistant") : "modules");
     else if (kind === "panel") return;
     else if (kind === "jobdone") { setDone(null); announceNotif(); }
     else if (kind === "away") openNotifs();
@@ -896,7 +919,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   // side bubble: activities after the main strip. None while a card is open, presenting/busy, or the island is hidden. While locked, only a generic icon.
   const bubbleCtx = { away: summary ? awayText : null, net: netNote, media, timer, alert, prot, done, locked: priv, battery: batt, burst, stopped, dl, cpu: cpuHigh, edit };
   const sideItems = calm || mode === "card" || (hidden && restShown) ? [] : plan.secondary.map((a) => bubbleItem(a.kind, bubbleCtx));
-  const centerMax = Math.max(360, Math.min(424, Math.round(innerWidth * 0.4))); // center content is never wider than ~40% of the screen or 424 px (R2-Y1; strip tabs fit up to 176 px left of the island, at most 36 px overlap); overflow gets an ellipsis
+  const centerMax = Math.max(360, Math.min(424, Math.round(innerWidth * 0.4))); // center content is never wider than ~40% of the screen or 424 px (R2-Y1; Strip.tsx ISLAND_HALF keeps the tabs left of its widest center); overflow gets an ellipsis
 
   return (
     <div className="islandStage" ref={stage} onKeyDown={crossKey} data-spring={box.moving ? "" : undefined}
@@ -905,7 +928,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       <div className="srOnly" role="alert" aria-live="assertive" aria-atomic="true">{kind === "approval" ? say : ""}</div>
       <button ref={center} className="islandCenter" data-hit aria-expanded={mode === "card" ? true : bump ? undefined : false} aria-label={ariaOverride ?? (bump ? `${say}. Open Modules` : `${parts.join(", ")}${mode === "card" ? "" : ". Open card"}`)}
         style={{ width: mw + 24, transform: "translateX(-50%)" }} data-hv={kind === "hov" || bumpHover ? "" : undefined}
-        title={bumpHover ? "Open Modules" : undefined} onClick={(e) => { if (!(e.target as Element).closest?.(".mascot")) return afterPick(onCenter); const act = moodShown === "error" && restShown ? () => setUser("error") : owner.current ? () => openAsk("composer") : onCenter; setTimeout(() => afterPick(act), SLAP_OPEN_MS); }}
+        title={bumpHover ? "Open Modules" : undefined} onClick={(e) => { if (!(e.target as Element).closest?.(".mascot")) return afterPick(onCenter); const act = moodShown === "error" && restShown ? () => setUser("error") : card?.takesAsk ? () => openAsk("ext") : owner.current ? () => openAsk("composer") : onCenter; setTimeout(() => afterPick(act), SLAP_OPEN_MS); }}
         onPointerEnter={() => hoverIntent(true)} onPointerLeave={() => { hoverIntent(false); setMkHover(false); }}
         onPointerOver={(e) => { const on = !!(e.target as Element).closest?.(".mascot-hit"); if (on && !mkHover) loadCounts(); setMkHover(on); }}>
         {centerOld !== null && <span className="islandMascot leaving" data-leaving aria-hidden="true" style={{ maxWidth: centerMax }}>{centerOld.node}</span>}
@@ -929,7 +952,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
           <div className="tone" ref={toneEl} />
           <div className="glowHost"><GlowField monitor={ISLAND_TINT} /></div>
           {shapeOld !== null && <div className="islandInner leaving" data-leaving aria-hidden="true" style={{ width: shapeOld.width ?? "max-content" }} ref={(el) => { if (el) el.inert = true; }}>{shapeOld.node}</div>}
-          {spec && <Layer key={spec.key} spec={spec} onClose={back} onModules={toModules} measure={setShapeEl} />}
+          {spec && <Layer key={spec.key} spec={spec} onClose={back} onModules={toModules} measure={setShapeEl} onBack={tucked && (user === "music-card" || user === "clipboard") ? () => setUser("ext") : undefined} />}
           <IslandLine s={ls} hidden={box.h < 0.4} />
         </div>
         {slices.map((el, i) => createPortal(<GlowField monitor={ISLAND_TINT} />, el, "s" + i))}

@@ -15,6 +15,7 @@ import { AppIcon, AppLetter, WinLogo } from "./common";
 import "./strip-items.css";
 import { GlowField } from "./Glow";
 import { PromotedTray } from "./TrayList";
+import { ExtStripKey } from "./ExtStripKey";
 import { IslandHiddenGlyph } from "./IslandHidden";
 import { useIslandHidden } from "../hooks.fidelity";
 import { cap99 } from "../lib/plugin";
@@ -165,8 +166,9 @@ export interface StripProps {
   center?: React.ReactNode;
 }
 
-/** Half the island window's width + gap (c1: left edge 169 px from the midline). */
-const ISLAND_HALF = 176;
+/** Half the island's widest resting center (Island.tsx: centerMax 424 + 24 padding): tabs past it sat under the island's
+ *  click area, so a click on the last logo opened an island card (owner, RC5). */
+const ISLAND_HALF = 224;
 
 export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMenu, onReorder, center }: StripProps) {
   const now = useNow();
@@ -178,7 +180,7 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
   // window preview: opens after ~250 ms of hover, closes ~200 ms after leaving (same approach as island hover intent)
   const [pv, setPv] = useState<{ item: StripItem; x: number; from?: HTMLElement } | null>(null);
   // name bubble (logos only, owner): with the same hover intent as the preview; an app with windows shows its name on the preview instead
-  const [tip, setTip] = useState<{ name: string; x: number } | null>(null);
+  const [tip, setTip] = useState<{ name: string; title?: string; x: number } | null>(null);
   const pvTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const hover: HoverFn = useCallback((item, el, kb) => {
     clearTimeout(pvTimer.current);
@@ -187,7 +189,8 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
     if (!el || (kb && !document.documentElement.hasAttribute("data-kb"))) return;
     const r = el.getBoundingClientRect(), x = r.left + r.width / 2;
     pvTimer.current = setTimeout(() => {
-      if (item.windows.length && !kb) { setTip(null); setPv({ item, x }); } else { setPv(null); setTip({ name: item.name, x }); }
+      // owner (RC5): one window is not worth a big preview card; the bubble carries its title on a second line
+      if (item.windows.length > 1 && !kb) { setTip(null); setPv({ item, x }); } else { setPv(null); setTip({ name: item.name, title: item.windows.length === 1 ? item.windows[0].title : undefined, x }); }
     }, pv || tip ? 0 : 250);
   }, [pv, tip]);
   const pickByKey: OpenPick = useCallback((item, el) => {
@@ -295,6 +298,7 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
       <div className="side">
         {monitor.primary && (
           <>
+            <ExtStripKey surfaces={surf} />
             <PromotedTray monitor={monitor.id} />
             <button className={"key keyIcon" + (openPanel === "tray" ? " shown" : "")} title="Hidden icons" aria-label="Hidden icons" aria-haspopup="dialog" {...trigger("tray")}><ChevronDown /></button>
             <button className={"key statusGroup" + (openPanel === "status" ? " shown" : "")} aria-haspopup="dialog" aria-label={statusLabel(status)} title="Volume, network, battery and more" {...trigger("status")}>
@@ -308,11 +312,13 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
         <button className={"key" + (openPanel === "calendar" ? " shown" : "")} title="Calendar" aria-label={`${label}, Calendar`} aria-haspopup="dialog" {...trigger("calendar")}>
           <span className="l2">{date}</span><span className="b6 num">{time}</span>
         </button>
+        {/* owner RC5: the thin corner target Windows has at the far right; Win+D, a second click brings the windows back */}
+        <button className="key showDesk" title="Show desktop" aria-label="Show desktop" onClick={() => { bridge.call("show_desktop").catch(() => undefined); }} />
       </div>
       {monitor.primary && <Waves />}
     </header>
     {monitor.primary && <StripLine shift={slide ? shift : 0} />}
-    {tip && !(pv && live) && <span className="stripTip" data-paint role="tooltip" style={{ left: tip.x }}>{tip.name}</span>}
+    {tip && !(pv && live) && <span className="stripTip" data-paint role="tooltip" style={{ left: tip.x }}>{tip.name}{tip.title && <span className="tipSub">{tip.title}</span>}</span>}
     {pv && live && <WindowPreview item={live} x={pv.x} onEnter={() => clearTimeout(pvTimer.current)} onLeave={() => hover(undefined)} onPick={(w) => { setPv(null); bridge.call("activate_window", { hwnd: w.hwnd }); }} />}
     </>
   );

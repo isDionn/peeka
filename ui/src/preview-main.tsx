@@ -8,6 +8,7 @@ import { SURFACES_J, VOICE_ASSISTANT, VOICE_YOU, VOICE_SPEAKING, VOICE_THINKING,
 import { setClipboardDrag } from "./components/Pano";
 import { param } from "./main-common";
 import { MODULES, PLUGINS, APPROVAL_CHOICE, APPROVAL_HIGH, APPROVAL_LOW, COMPASS, CONSENT, DICTATION, RECORDING, PROTRUSION, SURFACES_FULL, TICKET } from "./plugin.fixtures";
+import { ext } from "./ext";
 import "./preview.css";
 
 // Preview URL params: ?state=<id> picks the mockup state; ?locked=1, ?time=2026-10-16T14:32, ?noplugins=1, ?mic=1, ?previewDelay=<ms>,
@@ -165,6 +166,10 @@ function MultiMonitor() {
   );
 }
 
+// Assistant slots (ext.ts): the extension's fake answers and its own extra ?state= keys; none in Peeka itself.
+const extPreview = ext()?.preview;
+if (extPreview?.answer) fakeBridge.setAnswer(extPreview.answer);
+extPreview?.states?.[state]?.(fakeBridge);
 createRoot(document.getElementById("root")!).render(
   state === "k" ? <MultiMonitor /> : state === "eo" ? <div className="screen"><div className="wallpaper" /><Shell monitor={monitor} center={<div className="islandWindow"><Island monitor={monitor} init={{ view: null }} /></div>} /><ConsentWindow /></div> : <div className="screen"><div className="wallpaper" /><Shell monitor={monitor} init={SHELL_STATES[state]} center={monitor === "m1" ? <Center monitor={monitor} init={{ view: null, ...ISLAND_STATES[state] }} /> : undefined} /></div>,
 );

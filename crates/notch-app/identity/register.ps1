@@ -10,8 +10,12 @@
 # What it does: copies AppxManifest.xml and three PNG logos (made from ..\icons\icon.ico) into
 # %LOCALAPPDATA%\notch-identity, then Add-AppxPackage -Register ... -ExternalLocation <ExeDir>. Nothing is installed
 # or copied next to peeka.exe; unregister.ps1 undoes it.
-param([string]$ExeDir = (Join-Path $PSScriptRoot '..\..\target\release'))
+# The exe, package and folder names come from the brand file (-Brand, default the repo's brand\peeka.json).
+param([string]$ExeDir = (Join-Path $PSScriptRoot '..\..\target\release'),
+      [string]$Brand = (Join-Path $PSScriptRoot '..\..\..\brand\peeka.json'))
 $ErrorActionPreference = 'Stop'
+$b = Get-Content -Raw $Brand | ConvertFrom-Json
+$exe = "$($b.exe_name).exe"
 
 $dev = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' -Name AllowDevelopmentWithoutDevLicense -ErrorAction SilentlyContinue
 if (-not $dev -or $dev.AllowDevelopmentWithoutDevLicense -eq 0) {
@@ -19,15 +23,17 @@ if (-not $dev -or $dev.AllowDevelopmentWithoutDevLicense -eq 0) {
     exit 1
 }
 $ExeDir = (Resolve-Path $ExeDir).Path
-if (-not (Test-Path (Join-Path $ExeDir 'peeka.exe'))) {
-    Write-Host "peeka.exe not found: $ExeDir  (pass the folder that holds peeka.exe with -ExeDir)"
+if (-not (Test-Path (Join-Path $ExeDir $exe))) {
+    Write-Host "$exe not found: $ExeDir  (pass the folder that holds $exe with -ExeDir)"
     exit 1
 }
 
-$stage = Join-Path $env:LOCALAPPDATA 'notch-identity'
+$stage = Join-Path $env:LOCALAPPDATA "$($b.code_name)-identity"
 $assets = Join-Path $stage 'Assets'
 New-Item -ItemType Directory -Force $assets | Out-Null
-Copy-Item (Join-Path $PSScriptRoot 'AppxManifest.xml') $stage -Force
+$appx = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'AppxManifest.xml'))
+$appx = $appx.Replace('Name="Notch.Mirror" Publisher="CN=Notch"', "Name=`"$($b.mirror.package)`" Publisher=`"$($b.mirror.publisher)`"").Replace('Executable="peeka.exe"', "Executable=`"$exe`"")
+[IO.File]::WriteAllText((Join-Path $stage 'AppxManifest.xml'), $appx)
 
 Add-Type -AssemblyName System.Drawing
 $ico = Join-Path $PSScriptRoot '..\icons\icon.ico'
@@ -42,5 +48,5 @@ foreach ($logo in @(@('StoreLogo.png', 50), @('Square44x44Logo.png', 44), @('Squ
 }
 
 Add-AppxPackage -Register (Join-Path $stage 'AppxManifest.xml') -ExternalLocation $ExeDir
-Get-AppxPackage -Name 'Notch.Mirror' | Select-Object Name, Version, InstallLocation
+Get-AppxPackage -Name $b.mirror.package | Select-Object Name, Version, InstallLocation
 Write-Host 'Registered. Quit and restart Peeka, then turn on Settings > Notifications > Windows notification mirror.'

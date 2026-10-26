@@ -5,6 +5,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[build-dependencies]
+# build.rs reads the brand file (brand/peeka.json); already in Cargo.lock.
+serde_json.workspace = true
+
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true

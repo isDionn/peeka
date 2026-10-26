@@ -388,10 +388,102 @@ pub fn close_app(ctl: &dyn AppControl, items: &[AppItem], app_id: &str) -> Resul
     all.then_some(()).ok_or(AppError::Refused)
 }
 
+/// The shell items in the Windows taskbar's `Explorer\Taskband` `Favorites` value, in taskbar order: per pin
+/// `[0][u32 length][ITEMIDLIST]`, ended by `0xFF` (Windows 10 / 11). A malformed entry ends the list there.
+pub fn taskband_items(blob: &[u8]) -> Vec<&[u8]> {
+    let mut out = vec![];
+    let mut at = 0;
+    while blob.get(at) == Some(&0) {
+        let Some(len) = blob.get(at + 1..at + 5).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize) else { break };
+        let Some(item) = blob.get(at + 5..at + 5 + len) else { break };
+        out.push(item);
+        at += 5 + len;
+    }
+    out
+}
+
+/// One Windows taskbar pin, from its shell item's desktop parsing name.
+#[derive(Debug, PartialEq, Eq)]
+pub enum TaskbarPin {
+    /// An Apps-folder item (packaged apps): its AUMID.
+    App(String),
+    /// A shortcut file (`User Pinned\TaskBar\*.lnk`, or a Start Menu one): its path.
+    Shortcut(String),
+}
+
+/// The shell names an Apps-folder item by its bare AUMID, or as `shell:::{folder}\Apps\<AUMID>` (seen on Windows 11).
+pub fn taskbar_pin(parsing: &str) -> Option<TaskbarPin> {
+    let p = parsing.trim();
+    if p.to_ascii_lowercase().ends_with(".lnk") {
+        return Some(TaskbarPin::Shortcut(p.to_string()));
+    }
+    let aumid = if p.starts_with("shell:::") || p.starts_with("::") { p.rsplit('\\').next().unwrap_or("") } else { p };
+    let file_path = aumid.contains(":\\") || aumid.starts_with("\\\\");
+    (!aumid.is_empty() && !aumid.starts_with(':') && !file_path).then(|| TaskbarPin::App(aumid.to_string()))
+}
+
+/// A pinned shortcut's id, the way the strip will see its window: the id a running app already has among the shortcut's
+/// AUMID and target exe; else its AUMID (how Windows groups it); else its target exe; else the shortcut itself.
+/// `target` = None for a shortcut with arguments: only the shortcut itself starts it right (a `.bat` run by cmd.exe).
+pub fn shortcut_id(lnk: &str, aumid: Option<&str>, target: Option<&str>, running: &[String]) -> String {
+    // File Explorer sets its AUMID per process, never on a window: the strip knows its windows by exe
+    let by_aumid = app_id(aumid, "").filter(|id| id.starts_with("aumid:") && id != "aumid:Microsoft.Windows.Explorer");
+    let by_exe = target.filter(|t| exe_name(t).ends_with(".exe")).and_then(|t| app_id(None, t));
+    let seen = |id: &Option<String>| id.as_ref().is_some_and(|id| running.iter().any(|r| r.eq_ignore_ascii_case(id)));
+    let id = if !seen(&by_aumid) && seen(&by_exe) { by_exe } else { by_aumid.or(by_exe) };
+    id.unwrap_or_else(|| format!("lnk:{lnk}"))
+}
+
+/// `pins` first and untouched; then each imported pin whose app is not pinned yet, in the taskbar's order. Never removes.
+pub fn add_pins(pins: &[Pin], imported: Vec<Pin>) -> Vec<Pin> {
+    let mut out = pins.to_vec();
+    for p in imported {
+        if !out.iter().any(|o| o.app_id.eq_ignore_ascii_case(&p.app_id)) {
+            out.push(p);
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::fake::FakeAppControl;
+
+    #[test]
+    fn taskbar_pins_keep_windows_order_and_add_only_new_ones() {
+        // two entries, then the end marker; a third entry cut short is ignored
+        let mut blob = vec![0, 3, 0, 0, 0, 1, 2, 3, 0, 2, 0, 0, 0, 9, 9, 0xFF];
+        assert_eq!(taskband_items(&blob), [&[1u8, 2, 3][..], &[9, 9][..]]);
+        blob.truncate(15);
+        blob.extend([0, 9, 0, 0, 0, 1]);
+        assert_eq!(taskband_items(&blob).len(), 2, "a cut entry ends the list");
+        assert!(taskband_items(&[]).is_empty());
+
+        // the parsing names Windows 11 gave on the owner's PC: a bare AUMID, an Apps-folder path, a shortcut file
+        let app = |s: &str| Some(TaskbarPin::App(s.into()));
+        assert_eq!(taskbar_pin("Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"), app("Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"));
+        assert_eq!(taskbar_pin(r"shell:::{AD1405D2-30CF-4877-8468-1EE1C52C759F}\Apps\Microsoft.Todos_8wekyb3d8bbwe!App"), app("Microsoft.Todos_8wekyb3d8bbwe!App"));
+        assert_eq!(taskbar_pin("OperaSoftware.OperaGXWebBrowser.1755079229"), app("OperaSoftware.OperaGXWebBrowser.1755079229"));
+        assert_eq!(taskbar_pin(r"C:\U\TaskBar\Discord.LNK"), Some(TaskbarPin::Shortcut(r"C:\U\TaskBar\Discord.LNK".into())));
+        assert_eq!(taskbar_pin(r"C:\x\notes.txt"), None);
+        assert_eq!(taskbar_pin("::{20D04FE0-3AEA-1069-A2D8-08002B30309D}"), None, "a bare shell folder is no app");
+
+        let lnk = r"C:\U\TaskBar\Browser.lnk";
+        assert_eq!(shortcut_id(lnk, Some("Browser.Profile"), Some(r"C:\B\b.exe"), &[]), "aumid:Browser.Profile", "Windows' grouping");
+        let running = [r"exe:c:\b\b.exe".to_string()];
+        assert_eq!(shortcut_id(lnk, Some("Browser.Profile"), Some(r"C:\B\b.exe"), &running), r"exe:c:\b\b.exe", "a running window wins");
+        assert_eq!(shortcut_id(lnk, None, Some(r"C:\B\b.exe"), &[]), r"exe:c:\b\b.exe");
+        assert_eq!(shortcut_id(lnk, None, Some(r"C:\B\run.bat"), &[]), format!("lnk:{lnk}"), "not an exe: the shortcut opens itself");
+        let explorer = shortcut_id(lnk, Some("Microsoft.Windows.Explorer"), Some(r"C:\Windows\explorer.exe"), &[]);
+        assert_eq!(explorer, r"exe:c:\windows\explorer.exe", "Explorer's windows carry no AUMID");
+
+        let pin = |id: &str| Pin { app_id: id.into(), name: id.into(), relaunch: None };
+        let mine = [pin(r"exe:c:\p.exe"), pin("aumid:Mine")];
+        let taskbar = vec![pin("aumid:New1"), pin("AUMID:mine"), pin(r"exe:c:\p.exe"), pin("aumid:New2"), pin("aumid:New1")];
+        let ids: Vec<_> = add_pins(&mine, taskbar).into_iter().map(|p| p.app_id).collect();
+        assert_eq!(ids, [r"exe:c:\p.exe", "aumid:Mine", "aumid:New1", "aumid:New2"], "existing first, no duplicates, nothing removed");
+    }
 
     /// 0.3.4 on the owner's PC: unpinned apps showed "explorer", "claude", "blender.5.2".
     #[test]

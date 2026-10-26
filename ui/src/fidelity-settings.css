@@ -2,8 +2,16 @@
 
 /* T1/T2: tray, a small 4x2 grid under the strip (mockup .trayFly) */
 html .body.trayGrid { padding: 6px; gap: 0; }
-.trayIconGrid { display: grid; grid-template-columns: repeat(4, 40px); gap: 2px; }
-.trayIconGrid button { width: 40px; height: 40px; border-radius: 6px; display: grid; place-items: center; position: relative; color: var(--l1); }
+.trayIconGrid .appGrid { grid-template-columns: repeat(4, 40px); gap: 2px; }
+.trayIconGrid button { width: 40px; height: 40px; padding: 0; border-radius: 6px; display: grid; place-items: center; position: relative; color: var(--l1); }
+/* groups (StartGrid compact): plain icons, a folder is Start's 2x2 tile; the open folder sits in flow over the grid so the panel grows to fit it */
+.trayIconGrid .appCell .lt:not(.folderLt) { background: none; }
+.trayIconGrid .startGrid { position: relative; display: grid; }
+.trayIconGrid .startGrid > * { grid-area: 1 / 1; }
+.trayIconGrid .startFolder { position: relative; width: 176px; padding: 5px; }
+.trayIconGrid .startFolderName { height: 28px; margin-bottom: 4px; font-size: 13px; }
+.trayIconGrid .startFolder .appGrid { grid-template-columns: repeat(4, 40px); }
+.lt.folderLt .appLetter { width: 14px !important; height: 14px !important; font-size: 8px; }
 .trayIconGrid button svg.lucide { width: 16px; height: 16px; }
 .trayIconGrid button :is(.appIcon, .appLetter) { width: 16px; height: 16px; }
 .trayIconGrid .appLetter, .favTray .appLetter { font-size: 10px; }

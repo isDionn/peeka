@@ -11,7 +11,7 @@ use crate::plugins::host::{AttachKind, Attachment, OwnerErr};
 /// The only ms-settings pages `open_windows_settings` opens: exactly the strip's and panels' fixed links, taken
 /// straight from the page with no search behind them (nothing else, no prefix match). Ctrl+K has its own, larger
 /// list (`search::SETTINGS`), opened only after Notch listed the page.
-pub const SETTINGS_URIS: [&str; 9] = [
+pub const SETTINGS_URIS: [&str; 10] = [
     "ms-settings:",
     "ms-settings:network-wifi",
     "ms-settings:bluetooth",
@@ -22,8 +22,14 @@ pub const SETTINGS_URIS: [&str; 9] = [
     "ms-settings:privacy-notifications",
     // Fidelity 3: "Windows notification settings".
     "ms-settings:notifications",
+    // Start's "Uninstall": Windows's own Installed apps page (Peeka never uninstalls anything itself).
+    "ms-settings:appsfeatures",
     // About > "Check for updates": opens the releases page in the browser; Peeka itself makes no request.
-    "https://github.com/isDionn/peeka/releases/latest",
+    // A brand without an update channel repeats the first entry (the list never grows).
+    match crate::brand::UPDATES_URL {
+        Some(u) => u,
+        None => "ms-settings:",
+    },
 ];
 
 pub fn settings_uri(uri: &str) -> Option<&'static str> {
@@ -202,6 +208,7 @@ mod tests {
     #[test]
     fn the_settings_allowlist_is_exact() {
         assert_eq!(settings_uri("ms-settings:notifications"), Some("ms-settings:notifications"));
+        assert_eq!(settings_uri("ms-settings:appsfeatures"), Some("ms-settings:appsfeatures"));
         assert_eq!(settings_uri("ms-settings:notifications-x"), None);
         assert_eq!(settings_uri("ms-settings:notification"), None);
         assert_eq!(settings_uri("https://example.com"), None);
