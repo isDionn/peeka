@@ -1,10 +1,10 @@
-import { Spring, SpringGroup, SPRINGS, type SpringParams } from "./spring";
-
-export interface Rect { x: number; y: number; w: number; h: number }
+import { Spring, SpringGroup, SPRINGS } from "./spring";
 
 /** The current shape handed to the layers (shoulder, shadow, halo) each frame. Coordinates are relative to the host box. */
 export interface ShapeState {
   w: number; h: number; tw: number; th: number;
+  /** the host box: the target when settled; while moving, the larger of the old and new size (so nothing is cut) */
+  bw: number; bh: number;
   /** the body's left edge inside the host */
   offsetX: number;
   /** bottom corner radius (current / target) */
@@ -17,34 +17,37 @@ export interface ShapeState {
   /** strip color to card color blend 1..0 (1 - h/70) */
   kt: number;
   hidden: boolean;
+  moving: boolean;
 }
 export type ShapeLayer = (s: ShapeState) => void;
 
 export interface ShapeOptions {
-  /** fixed window: the body is clipped inside this box and never resized */
-  maxW: number;
-  maxH: number;
   anchor?: "center" | "left" | "right";
   /** bottom corner radius; default peek → card (min(h·0.6, 34, 15 + max(0,h−40)·0.3)) */
   radius?: (h: number) => number;
-  /** starting width when opening from a closed peek (the content in the middle of the strip) */
-  restW?: number;
   layers?: ShapeLayer[];
-  /** whenever the clickable rectangle changes (CSS px, relative to the viewport, rounded) */
-  onRect?: (r: Rect) => void;
+  /** card-colour layer inside the body: fades in as the shape grows (at peek height the body is strip-coloured) */
+  tone?: HTMLElement | null;
+  /** the host box changed, or the motion started / stopped: a few times per animation, never per frame */
+  onBox?: (bw: number, bh: number, moving: boolean) => void;
 }
 
 export const notchRadius = (h: number) => Math.min(h * 0.6, 34, 15 + Math.max(0, h - 40) * 0.3);
-/** top-right card */
-export const sideRadius = (h: number) => Math.min(h * 0.6, 28, 15 + h * 0.1);
+/** Shoulder fillet follows the corner: at most 60 % of it and never over 12 px (polish audit #3; the island line gap uses the same rule). */
+export const shoulderOf = (r: number) => Math.min(12, r * 0.6);
+
+/** Clip for the body while it moves: straight top, bottom corners matching `corner-shape: squircle` (a cubic with 1.1 r handles: measured against
+ *  Chromium's own squircle at DPR 1 and 1.5, at most 1 colour level apart), so the corner doesn't change when the clip goes at rest. */
+export function bodyPath(x: number, w: number, h: number, r: number): string {
+  const k = r * 1.1, R = x + w, n = (v: number) => Math.round(v * 100) / 100;
+  return `path("M${n(x)} 0H${n(R)}V${n(h - r)}C${n(R)} ${n(h - r + k)} ${n(R - r + k)} ${n(h)} ${n(R - r)} ${n(h)}H${n(x + r)}C${n(x + r - k)} ${n(h)} ${n(x)} ${n(h - r + k)} ${n(x)} ${n(h - r)}Z")`;
+}
 
 export interface Shape {
-  /** new target size; springs on from the current size and velocity */
-  to(w: number, h: number, preset?: SpringParams): void;
+  /** new target size; springs on from the current size and velocity (growing: SPRINGS.open, shrinking: SPRINGS.close) */
+  to(w: number, h: number): void;
   /** instantly, without the spring */
   snap(w: number, h: number): void;
-  /** the current clickable rectangle (w or h = 0 if empty) */
-  rect(): Rect;
   /** advance one frame without rAF (tests) */
   advance(dt: number): boolean;
   readonly moving: boolean;
@@ -52,66 +55,73 @@ export interface Shape {
 }
 
 /**
- * Grows and shrinks the `body` element inside a fixed-size `host` with clip-path (the window never resizes).
- * Writes only clip-path; no layout. Reports the current click area through `onRect` every frame.
+ * Grows and shrinks the `body` inside `host` (polish audit #1). The host box is resized only when the target changes and once when the motion ends;
+ * every frame writes only the body's clip-path and the layers' transform / opacity: no layout, no React render.
+ * At rest the clip is removed, so the body's own squircle corners (`--r` on the host) show.
  */
-export function createShape(host: HTMLElement, body: HTMLElement, o: ShapeOptions): Shape {
-  const { maxW, maxH, anchor = "center", radius = notchRadius, restW = 120, layers = [] } = o;
-  host.style.width = `${maxW}px`;
-  host.style.height = `${maxH}px`;
-  body.style.width = `${maxW}px`;
-  body.style.height = `${maxH}px`;
-  body.classList.add("nm-shape");
-  const ws = new Spring(restW, SPRINGS.card), hs = new Spring(0, SPRINGS.card);
-  let last: Rect | null = null;
+export function createShape(host: HTMLElement, body: HTMLElement, o: ShapeOptions = {}): Shape {
+  const { anchor = "center", radius = notchRadius, layers = [] } = o;
+  const ws = new Spring(0, SPRINGS.open), hs = new Spring(0, SPRINGS.open);
+  let bw = -1, bh = -1, moving = false;
+  const corner = (w: number, h: number) => Math.min(radius(h), w / 2, h);
 
   const state = (): ShapeState => {
-    const h = Math.max(0, hs.x), w = Math.min(maxW, Math.max(0, ws.x));
-    const th = hs.t, tw = ws.t;
-    const offsetX = anchor === "center" ? (maxW - w) / 2 : anchor === "left" ? 0 : maxW - w;
-    return {
-      w, h, tw, th, offsetX,
-      r: Math.min(radius(h), w / 2, h),
-      rt: Math.min(radius(th), tw / 2, th),
-      f: Math.min(16, 8 + h * 0.12, h * 0.8),
-      go: Math.min(1, h / 80),
-      kt: Math.max(0, 1 - h / 70),
-      hidden: h < 0.4,
-    };
+    const h = Math.max(0, hs.x), w = Math.max(0, ws.x), th = hs.t, tw = ws.t, r = corner(w, h);
+    const offsetX = anchor === "center" ? (bw - w) / 2 : anchor === "left" ? 0 : bw - w;
+    return { w, h, tw, th, bw, bh, offsetX, r, rt: corner(tw, th), f: shoulderOf(r), go: Math.min(1, h / 80), kt: Math.max(0, 1 - h / 70), hidden: h < 0.4 && th < 0.4, moving };
   };
-  const rect = (): Rect => {
-    const s = state(), b = host.getBoundingClientRect();
-    if (s.hidden) return { x: Math.round(b.left + s.offsetX), y: Math.round(b.top), w: 0, h: 0 };
-    return { x: Math.round(b.left + s.offsetX), y: Math.round(b.top), w: Math.round(s.w), h: Math.round(s.h) };
+  const setBox = (w: number, h: number) => {
+    w = Math.ceil(w); h = Math.ceil(h);
+    if (w === bw && h === bh) return false;
+    bw = w; bh = h;
+    host.style.width = `${w}px`;
+    host.style.height = `${h}px`;
+    return true;
   };
   const apply = () => {
     const s = state();
-    body.style.visibility = s.hidden ? "hidden" : "visible";
-    body.style.clipPath = `inset(0 ${maxW - s.w - s.offsetX}px ${maxH - s.h}px ${s.offsetX}px round 0 0 ${s.r}px ${s.r}px)`;
+    host.style.visibility = s.hidden ? "hidden" : "visible";
+    body.style.clipPath = s.moving ? bodyPath(s.offsetX, s.w, s.h, s.r) : "";
+    if (o.tone) o.tone.style.opacity = String(1 - s.kt);
     for (const l of layers) l(s);
-    if (o.onRect) {
-      const r = rect();
-      if (!last || r.x !== last.x || r.y !== last.y || r.w !== last.w || r.h !== last.h) o.onRect((last = r));
-    }
   };
-  const group = new SpringGroup([ws, hs], apply);
-  apply();
+  const notify = () => o.onBox?.(bw, bh, moving);
+  const group = new SpringGroup([ws, hs], () => {
+    if (moving && ws.settled && hs.settled) { moving = false; setBox(ws.t, hs.t); notify(); }
+    apply();
+  });
+  const target = (w: number, h: number) => {
+    const rt = corner(w, h);
+    host.style.setProperty("--r", `${rt}px`);
+    host.style.setProperty("--f", `${shoulderOf(rt)}px`);
+  };
 
   return {
-    to(w, h, preset = SPRINGS.card) {
-      if (hs.x < 1) ws.snap(restW); // when closed the width doesn't fly to the target, it starts from the middle content
-      ws.retarget(Math.min(maxW, w), preset);
-      hs.retarget(Math.min(maxH, h), preset);
+    to(w, h) {
+      if (w === ws.t && h === hs.t) return;
+      target(w, h);
+      const closed = hs.x < 0.4 && hs.t < 0.4;
+      if (closed && h < 0.4) { this.snap(w, h); return; } // resting: the width follows without motion
+      const grow = h > hs.x + 0.5 || (Math.abs(h - hs.x) <= 0.5 && w > ws.x);
+      const p = grow ? SPRINGS.open : SPRINGS.close;
+      ws.retarget(w, p);
+      hs.retarget(h, p);
+      const changed = setBox(Math.max(closed ? 0 : bw, w, ws.x), Math.max(closed ? 0 : bh, h, hs.x));
+      if (!moving) { moving = true; notify(); } else if (changed) notify();
+      apply();
       group.kick();
     },
     snap(w, h) {
-      ws.snap(Math.min(maxW, w));
-      hs.snap(Math.min(maxH, h));
+      target(w, h);
+      ws.snap(w);
+      hs.snap(h);
+      const was = moving;
+      moving = false;
+      if (setBox(w, h) || was) notify();
       apply();
     },
-    rect,
     advance: (dt) => group.advance(dt),
-    get moving() { return group.moving; },
+    get moving() { return moving; },
     destroy: () => group.stop(),
   };
 }

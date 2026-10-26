@@ -22,7 +22,9 @@ try { & { $cmd } *> '$out' } catch { `$_ | Out-String | Add-Content '$out' }
         # Limited: PS Direct gets a UAC-filtered token, which may not register Highest tasks.
         $principal = New-ScheduledTaskPrincipal -UserId "$env:COMPUTERNAME\$user" -LogonType Interactive -RunLevel Limited
         try {
-            Register-ScheduledTask -TaskName $id -Action $action -Principal $principal -Force | Out-Null
+            # The VM reports a battery; default task settings leave the task Queued forever while it runs on it.
+            $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+            Register-ScheduledTask -TaskName $id -Action $action -Principal $principal -Settings $settings -Force | Out-Null
             Start-ScheduledTask -TaskName $id
             $deadline = (Get-Date).AddSeconds($timeout)
             Start-Sleep -Milliseconds 500

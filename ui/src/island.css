@@ -5,40 +5,43 @@
 /* the 40 px hanging ghost reaches below the strip: above a bump (.dangling, z 7: copy peek row, Shelf handle) so its body isn't cut at the strip edge (VM v0.3.4) */
 .islandStage > .islandCenter:has(.mascot[data-hang]) { z-index: 8; }
 .islandCenter:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-.islandMascot { position: absolute; left: 50%; top: 0; height: var(--BAR); transform: translateX(-50%); display: flex; align-items: center; gap: 12px; white-space: nowrap; animation: islandIn .28s var(--ease) 40ms backwards; }
+.islandMascot { position: absolute; left: 50%; top: 0; height: var(--BAR); transform: translateX(-50%); display: flex; align-items: center; gap: 12px; white-space: nowrap; animation: islandIn var(--d-move) var(--ease) 40ms backwards; }
 .islandMascot .ms svg.lucide, .ikK svg { width: 15px; height: 15px; }
 .ikK { display: inline-grid; place-items: center; }
-.islandInner { position: absolute; top: 0; left: 50%; transform: translateX(-50%); animation: islandIn .28s var(--ease) 40ms backwards; }
-.islandMascot.leaving, .islandInner.leaving { animation: islandOut .13s var(--ease) forwards; pointer-events: none; }
-@keyframes islandIn { from { opacity: 0; filter: blur(6px); } to { opacity: 1; filter: none; } }
-@keyframes islandOut { from { opacity: 1; filter: none; } to { opacity: 0; filter: blur(4px); } }
+.islandInner { position: absolute; top: 0; left: 50%; transform: translateX(-50%); animation: islandIn var(--d-move) var(--ease) 40ms backwards; }
+.islandMascot.leaving, .islandInner.leaving { animation: islandOut var(--d-exit) var(--ease-in) forwards; pointer-events: none; }
+/* content enters / leaves with a fade and a 3 px drop, no blur (a blur repaints every frame; polish audit #6); the exit is shorter and eases in */
+@keyframes islandIn { from { opacity: 0; translate: 0 -3px; scale: .98; } }
+@keyframes islandOut { to { opacity: 0; translate: 0 2px; scale: .985; } }
+/* hover on the center / a peek: brightness as a CSS transition (was a JS spring writing a 0.5 px drop per frame, which softened the text at 1x; polish audit #7) */
+.islandCenter { transition: filter var(--d-fast) var(--ease-move); }
+.islandCenter[data-hv] { filter: brightness(1.2); }
 /* no staggered entry on a card carrying a flying item: the flight measurement mustn't start from a shifted spot */
 .body:has([data-share]) { animation: none; }
 .islandHit { position: absolute; left: 50%; top: var(--BAR); transform: translateX(-50%); opacity: 0; pointer-events: none; }
 button.peek { color: inherit; cursor: pointer; width: 44px; height: 14px; display: grid; place-items: center; padding: 0 0 2px; position: relative; }
 .islandInner.mpeek { width: 100%; text-align: center; display: grid; justify-items: center; }
-#halo { left: 50%; }
 
 .grid.module { grid-template-columns: 1fr 1fr; }
 .grid.module:has(> .box:only-child) { grid-template-columns: 1fr; }
 .titleBtn { display: inline-flex; align-items: center; gap: 6px; color: inherit; font: inherit; letter-spacing: inherit; min-height: 24px; }
 .titleBtn svg.lucide:last-child { width: 12px; height: 12px; opacity: .7; }
-.notif .mini { opacity: 0; transition: opacity .16s ease; }
+.notif .mini { opacity: 0; transition: opacity var(--d-fast) var(--ease-move); }
 .notif:is(:hover, :focus-within) .mini { opacity: 1; }
 .controls button:disabled, .mini:disabled { opacity: .35; pointer-events: none; }
 .dangling input[type=range]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
 
 /* browser preview: island window centered on the strip, 760x620 */
-.islandWindow { position: absolute; left: 50%; top: 0; width: 760px; height: 620px; margin-left: -380px; pointer-events: none; }
+.islandWindow { position: absolute; left: 50%; top: 0; width: 760px; height: 620px; margin-left: -380px; pointer-events: none; z-index: 1; }   /* above the strip's glow slice (z 1, earlier in the DOM), as the real island window is */
 
 /* Side bubble (owner decision 2026-10-17): a 30 px round second live job to the island's right. Positioned from the island's edge (not in flow): the island never shifts. */
 .sideBubble { position: absolute; top: 0; width: var(--BAR); height: var(--BAR); z-index: 8; transform-origin: 0 50%; color: var(--l1); }
 .sideBtn { position: relative; display: block; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 50%; overflow: hidden; background: var(--strip); color: inherit; cursor: pointer;
-  box-shadow: inset 0 0 0 .5px var(--edge), 0 2px 8px rgba(0,0,0,.28); transition: transform .14s var(--ease), filter .14s ease; }
+  box-shadow: inset 0 0 0 .5px var(--edge), 0 2px 8px rgba(0,0,0,.28); transition: transform var(--d-press) var(--ease), filter var(--d-fast) var(--ease-move); }
 .sideBtn:active { transform: scale(.94); }
 @media (hover: hover) and (pointer: fine) { .sideBtn:hover { filter: brightness(1.28); } }
 .sideBtn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.sideFace { position: absolute; inset: 0; display: grid; place-items: center; animation: islandIn .28s var(--ease) backwards; }
+.sideFace { position: absolute; inset: 0; display: grid; place-items: center; animation: islandIn var(--d-move) var(--ease) backwards; }
 .sideFace > svg.lucide { width: 14px; height: 14px; }
 .sideCover { width: 100%; height: 100%; object-fit: cover; display: block; }
 .sideRing { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); fill: none; stroke-width: 2; pointer-events: none; }
@@ -51,9 +54,9 @@ button.peek { color: inherit; cursor: pointer; width: 44px; height: 14px; displa
   font: 700 10px/16px var(--font); font-variant-numeric: tabular-nums; cursor: pointer; box-shadow: 0 0 0 2px var(--strip); }
 .sidePlus::before { content: ""; position: absolute; inset: -4px; }
 .sidePlus:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.sideList { position: absolute; top: calc(100% + 10px); right: 0; z-index: 2; display: flex; flex-direction: column; gap: 2px; min-width: 200px; max-width: 280px; padding: 6px; border-radius: 16px;
-  background: rgba(24, 24, 28, .96); box-shadow: inset 0 .5px 0 rgba(255,255,255,.14), 0 8px 28px rgba(0,0,0,.4); transform-origin: 100% 0; animation: islandIn .18s var(--ease) backwards; }
-.sideRow { display: flex; align-items: center; gap: 10px; width: 100%; height: 32px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent; color: var(--l1); font: 500 13px/1 var(--font); text-align: left; white-space: nowrap; cursor: pointer; }
+.sideList { position: absolute; top: calc(100% + 10px); right: 0; z-index: 2; display: flex; flex-direction: column; gap: 2px; min-width: 200px; max-width: 280px; padding: 6px; border-radius: var(--rPlat);
+  background: rgba(24, 24, 28, .96); box-shadow: inset 0 .5px 0 rgba(255,255,255,.14), 0 8px 28px rgba(0,0,0,.4); transform-origin: 100% 0; animation: islandIn var(--d-fast) var(--ease) backwards; }
+.sideRow { display: flex; align-items: center; gap: 10px; width: 100%; height: 32px; padding: 0 10px; border: 0; border-radius: var(--rInner); background: transparent; color: var(--l1); font: 500 13px/1 var(--font); text-align: left; white-space: nowrap; cursor: pointer; }
 .sideRow > svg.lucide { width: 15px; height: 15px; flex: none; }
 .sideRow .sideName { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* a coding agent's accent in the sessions list (only when agents are mixed; never while locked) */
@@ -64,7 +67,7 @@ button.peek { color: inherit; cursor: pointer; width: 44px; height: 14px; displa
 /* "N sessions" chip (Claude Code, >= 2): absolutely positioned to the island's left, not in flow; the island doesn't shift. */
 .sessionChip { position: absolute; top: 0; height: var(--BAR); z-index: 8; display: flex; align-items: center; color: var(--l1); }
 .sessionBtn { height: 26px; padding: 0 11px; border: 0; border-radius: 13px; background: var(--strip); color: inherit; font: 600 12px/1 var(--font); white-space: nowrap; cursor: pointer;
-  box-shadow: inset 0 0 0 .5px var(--edge), 0 2px 8px rgba(0,0,0,.28); transition: transform .14s var(--ease), filter .14s ease; }
+  box-shadow: inset 0 0 0 .5px var(--edge), 0 2px 8px rgba(0,0,0,.28); transition: transform var(--d-press) var(--ease), filter var(--d-fast) var(--ease-move); }
 .sessionBtn:active { transform: scale(.96); }
 @media (hover: hover) and (pointer: fine) { .sessionBtn:hover { filter: brightness(1.28); } }
 .sessionBtn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }

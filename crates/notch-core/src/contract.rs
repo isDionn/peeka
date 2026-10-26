@@ -159,6 +159,11 @@ pub const COMMANDS: &[&str] = &[
     // Ctrl+Alt+Shift+D / Settings > About: one local text file for bug reports (`notch_core::diagnostics`)
     "save_diagnostics",
     "diagnostics_open_folder",
+    // Long-press pickers on the Wi-Fi / Bluetooth tiles (`notch_win::wifi`, `notch_win::bluetooth`)
+    "wifi_networks",
+    "wifi_connect",
+    "bt_devices",
+    "bt_set",
 ];
 
 /// Every event Rust emits to the pages. Payloads: see the header of `crates/notch-app/src/app.rs`.
@@ -207,6 +212,7 @@ pub const EVENTS: &[&str] = &[
     "claude_chat_delta",
     "claude_chat_done",
     "diagnostics_saved",
+    "screen_tint",
 ];
 
 fn ts_list(out: &mut String, name: &str, items: &[&str]) {

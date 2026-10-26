@@ -212,7 +212,7 @@ describe("the peek stays open while the cursor is on it", () => {
 /* ---------------- 6. Opening a panel leaves one top layer; one Esc closes it ---------------- */
 describe("opening a panel while a card is open leaves a single layer", () => {
   const CARDS = [["modules", "j"], ["clipboard", "h"], ["shelf", "g"], ["chat", "s"], ["music", "b2"], ["approval", "c2"]];
-  const PANELS = ["start", "search", "status", "tray"]; // the clock opens Windows's calendar, not a Peeka panel
+  const PANELS = ["start", "search", "status", "tray", "calendar"]; // the clock opens Peeka's month calendar (RC4)
   for (const [name, d] of CARDS) {
     for (const k of PANELS) {
       it(`${k} panel while the ${name} card is open`, T, () => on(P(d), async (page) => {
@@ -232,7 +232,7 @@ describe("opening a panel while a card is open leaves a single layer", () => {
 /* ---------------- 7. No overflow at 1366x768 ---------------- */
 describe("1366x768: the panel bottom edge is on screen or scrollable", () => {
   const VIEW = { width: 1366, height: 768 };
-  const SURF = [["Start", "w2"], ["Status", "o"], ["Notifications", "m"], ["Hidden icons", "tepsi"], ["Search", "ara0"], ["Search (with results)", "ara1"], ["Cleanup approval", "mt"], ["Settings Appearance", "ayg"], ["Settings Shortcuts", "ayk"], ["Settings Plugins", "aye"], ["Settings Modules", "aym"], ["Settings Clipboard", "ayp"], ["Settings Mascot", "ays"], ["Quit Peeka", "y"], ["Setup", "kur"],
+  const SURF = [["Start", "w2"], ["Status", "o"], ["Notifications", "m"], ["Hidden icons", "tepsi"], ["Calendar", "takvim"], ["Search", "ara0"], ["Search (with results)", "ara1"], ["Cleanup approval", "mt"], ["Settings Appearance", "ayg"], ["Settings Shortcuts", "ayk"], ["Settings Plugins", "aye"], ["Settings Modules", "aym"], ["Settings Clipboard", "ayp"], ["Settings Mascot", "ays"], ["Quit Peeka", "y"], ["Setup", "kur"],
     ["card: Modules", "j"], ["card: clipboard", "h"], ["card: shelf", "g"], ["card: chat", "s"], ["card: chat with reply", "d2"], ["card: music", "b2"], ["card: approval", "c2"], ["card: approval with options", "c3"], ["card: meeting", "f"], ["card: welcome", "ilk"]];
   const measure = (page) => page.evaluate(() => {
     const el = document.querySelector('[data-panel]:not([aria-hidden="true"])') ?? document.querySelector('#island [role="dialog"]');

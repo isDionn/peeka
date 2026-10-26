@@ -73,6 +73,10 @@ pub struct Settings {
     /// `downloads`). On by default because it reads no content; the owner can switch it off.
     #[serde(default = "yes")]
     pub watch_downloads: bool,
+    /// The glow takes its colour from a tiny band under the strip (`tint`; pixels only in memory). On by default; an old
+    /// file gets it on.
+    #[serde(default = "yes")]
+    pub screen_tint: bool,
 }
 
 /// 1: colour icons became the default; a version-0 `"color_icons": false` was the old default, not a choice.
@@ -116,6 +120,7 @@ impl Default for Settings {
             mirror: false,
             celebrate: true,
             watch_downloads: true,
+            screen_tint: true,
         }
     }
 }
@@ -140,6 +145,7 @@ pub struct UiSettings {
     pub color_icons: bool,
     pub celebrate: bool,
     pub watch_downloads: bool,
+    pub screen_tint: bool,
     /// Read-only here; the page changes it with `taskbar_set_mode` ("full" | "auto" | "off").
     pub taskbar_hide: HideMode,
 }
@@ -170,6 +176,7 @@ pub struct UiPatch {
     pub color_icons: Option<bool>,
     pub celebrate: Option<bool>,
     pub watch_downloads: Option<bool>,
+    pub screen_tint: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -213,6 +220,7 @@ pub fn to_ui(s: &Settings, name_icon: impl Fn(&str) -> Option<(String, String)>)
         color_icons: s.color_icons,
         celebrate: s.celebrate,
         watch_downloads: s.watch_downloads,
+        screen_tint: s.screen_tint,
         taskbar_hide: s.taskbar_hide,
     }
 }
@@ -253,6 +261,9 @@ pub fn apply_patch(
     }
     if let Some(v) = patch.watch_downloads {
         next.watch_downloads = v;
+    }
+    if let Some(v) = patch.screen_tint {
+        next.screen_tint = v;
     }
     if let Some(v) = patch.clip_media {
         next.clip_media = v;
@@ -375,11 +386,12 @@ mod tests {
         assert_eq!((json["autostart"].as_bool(), json["taskbarHide"].as_str()), (Some(true), Some("full")));
         assert_eq!((json["mascotPranks"].as_bool(), json["colorIcons"].as_bool()), (Some(true), Some(true)));
         assert_eq!((json["celebrate"].as_bool(), json["watchDownloads"].as_bool()), (Some(true), Some(true)));
+        assert_eq!(json["screenTint"].as_bool(), Some(true));
         let p: UiPatch =
-            serde_json::from_str(r#"{"colorIcons":false,"mascotPranks":false,"celebrate":false,"watchDownloads":false}"#)
+            serde_json::from_str(r#"{"colorIcons":false,"mascotPranks":false,"celebrate":false,"watchDownloads":false,"screenTint":false}"#)
                 .unwrap();
         let n = apply_patch(&s, p, |_: &str| None, |_: &str| None).unwrap();
-        assert!(!n.color_icons && !n.mascot_pranks && !n.celebrate && !n.watch_downloads);
+        assert!(!n.color_icons && !n.mascot_pranks && !n.celebrate && !n.watch_downloads && !n.screen_tint);
 
         let ok = |_: &str| None;
         let none = |_: &str| None;
@@ -426,6 +438,7 @@ mod tests {
         assert!(s.capture_volume_keys && !s.alerts_api, "an old file gets keys on, the HTTP adapter off");
         assert!(s.autostart, "an old file starts with Windows too");
         assert!(s.watch_downloads, "an old file gets the download watch on (names only)");
+        assert!(s.screen_tint, "an old file gets the screen tint on");
         assert!(s.color_icons && s.version == VERSION, "an old file gets colour icons");
         tmp.write("settings.json", b"{nope");
         assert_eq!(load(&path), Settings::default());

@@ -12,7 +12,7 @@
 //! Wave 3 (`plugins.rs`): `plugins_changed`, `consent_changed`, `plugin_surfaces_changed`, `composer_event`,
 //! `plugin_stream`; the consent window loads `consent.html` (label `consent`). Wave 4: `lock_changed`
 //! (`notch_core::lock::LockState`), `clip_changed` (`clip_history.rs`). Wave 5 (`extras.rs`): `privacy_changed`,
-//! `input_tick`, `timer_changed`, `shelf_changed`, `shelf_drag`, `bluetooth_connected`, `music_stopped`, `download_done`, `cpu_high`, `fullscreen_screens` (`{island, strips}`: what the fullscreen app hides, per monitor), `approval_badge` (`{monitor, count}` or null: an approval waits while the cursor is on another monitor's strip). Wave 6 (`mirror.rs`): `notifications_changed`
+//! `input_tick`, `timer_changed`, `shelf_changed`, `shelf_drag`, `bluetooth_connected`, `music_stopped`, `download_done`, `cpu_high`, `fullscreen_screens` (`{island, strips}`: what the fullscreen app hides, per monitor), `approval_badge` (`{monitor, count}` or null: an approval waits while the cursor is on another monitor's strip). `screen_tint` (`notch_core::tint::ScreenTint`, every 2 s per strip monitor unless paused). Wave 6 (`mirror.rs`): `notifications_changed`
 //! (`notch_core::mirror::MirrorView`). Commands: see `commands.rs`.
 
 use std::collections::HashMap;
@@ -238,6 +238,10 @@ pub fn run() {
             crate::commands::report_hit_rects,
             crate::commands::save_diagnostics,
             crate::commands::diagnostics_open_folder,
+            crate::commands::wifi_networks,
+            crate::commands::wifi_connect,
+            crate::commands::bt_devices,
+            crate::commands::bt_set,
             crate::commands::taskbar_set_mode,
             crate::commands::get_media,
             crate::commands::media_control,

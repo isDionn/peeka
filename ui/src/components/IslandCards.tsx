@@ -79,17 +79,20 @@ export function MusicCard({ media, pos, calm = false }: { media: Media; pos: num
         <div style={{ minWidth: 0 }}>
           <div className="t20 b6" data-share="title" title={trackTitle(media)} style={{ width: "max-content", maxWidth: "100%" }}>{trackTitle(media)}</div>
           <div className="t15 b4 l2 queue" title={sub}>{sub}</div>
-          <div className="progress t11 l2 num queue">
-            <span style={{ minWidth: timeSlot(d) + "ch" }}>{fmtTime(val)}</span>
-            <input type="range" min={0} max={d || 1} step={1} value={Math.min(val, d || 1)} disabled={!media.canSeek || !d} aria-label="Track position" aria-valuetext={`${fmtTime(val)} of ${fmtTime(d)}`}
-              style={{ "--y": d ? (Math.min(val, d) / d) * 100 + "%" : "0%" } as CSSProperties}
-              onChange={(e) => setScrub(+e.target.value)} onPointerUp={commit} onKeyUp={commit} onBlur={commit} />
-            <span style={{ textAlign: "right", minWidth: timeSlot(d) + 1 + "ch" }}>{d ? "-" + fmtTime(d - val) : ""}</span>
-          </div>
           <div className="controls queue">
             <button className="filled" title="Previous" aria-label="Previous track" disabled={!media.canPrevious} onClick={prev}><SkipBack fill="currentColor" /></button>
             <button className="large filled" title={media.playing ? "Pause" : "Play"} aria-label={media.playing ? "Pause" : "Play"} onClick={toggle}><PlayIcon playing={media.playing} /></button>
             <button className="filled" title="Next" aria-label="Next track" disabled={!media.canNext} onClick={next}><SkipForward fill="currentColor" /></button>
+          </div>
+          {/* the progress row opens under the controls on hover / keyboard focus: at rest the card is shorter, and the controls never move (cards.css) */}
+          <div className="progWrap">
+            <div className="progress t11 l2 num queue">
+              <span style={{ minWidth: timeSlot(d) + "ch" }}>{fmtTime(val)}</span>
+              <input type="range" min={0} max={d || 1} step={1} value={Math.min(val, d || 1)} disabled={!media.canSeek || !d} aria-label="Track position" aria-valuetext={`${fmtTime(val)} of ${fmtTime(d)}`}
+                style={{ "--y": d ? (Math.min(val, d) / d) * 100 + "%" : "0%" } as CSSProperties}
+                onChange={(e) => setScrub(+e.target.value)} onPointerUp={commit} onKeyUp={commit} onBlur={commit} />
+              <span style={{ textAlign: "right", minWidth: timeSlot(d) + 1 + "ch" }}>{d ? "-" + fmtTime(d - val) : ""}</span>
+            </div>
           </div>
         </div>
         {main && <Lead plugin={{ id: main.id, name: main.name, main: true }} mascot={media.playing && !calm ? "music" : "ready"} size={56} />}

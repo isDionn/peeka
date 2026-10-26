@@ -14,7 +14,7 @@ import "./preview.css";
 // ?index=off, ?notice=1, ?mirror=ok|dev|reg|denied, ?monitor=<id>. State ids (b1, yb, kl...) are the mockup's frame ids.
 const disk = (await fakeBridge.call("list_alerts")).items.find((a) => a.id === "disk");
 const SHELL_STATES: Record<string, ShellInit> = {
-  a: {}, aye: { panel: "plugins" }, aym: { panel: "modules" }, m: { panel: "notif" }, mt: { panel: "cleanup", review: disk }, o: { panel: "status" }, w2: { panel: "start" }, ara0: { panel: "search" }, ara1: { panel: "search", query: "screen", sel: 1 }, ara2: { panel: "search", query: "xqz" }, ayp: { panel: "clipboard" }, ays: { panel: "mascot" }, ayg: { panel: "appearance" }, tepsi: { panel: "tray" }, ayk: { panel: "shortcuts" }, y: { panel: "quit" },
+  a: {}, aye: { panel: "plugins" }, aym: { panel: "modules" }, m: { panel: "notif" }, mt: { panel: "cleanup", review: disk }, o: { panel: "status" }, w2: { panel: "start" }, ara0: { panel: "search" }, ara1: { panel: "search", query: "screen", sel: 1 }, ara2: { panel: "search", query: "xqz" }, ayp: { panel: "clipboard" }, ays: { panel: "mascot" }, ayg: { panel: "appearance" }, tepsi: { panel: "tray" }, takvim: { panel: "calendar" }, ayk: { panel: "shortcuts" }, y: { panel: "quit" },
   // Fidelity 3: sr strip menu, p1 app menu (kur, y1, y2, gz below with a special layout)
   kur: { panel: "setup", setup: true, setupStep: 1 }, y1: { panel: "tray" },
   sr: { menu: { kind: "strip", x: 960 } }, p1: { menu: { kind: "app", appId: "discord", x: 626 } },
@@ -119,6 +119,7 @@ if (state === "kl") fakeBridge.setLocked(true, "manual");
 if (param("locked", "") !== "") fakeBridge.setLocked(true, "manual"); // any state while locked (music or an alert on the locked strip)
 if (param("noplugins", "") !== "") fakeBridge.setPlugins([]);
 if (param("index", "") === "off") fakeBridge.setFilesIndex(false);
+// RC4 wave 2: takvim = the clock's month calendar panel open (Shell)
 // Wave 6: ?notice=1 Windows notification (m), ?mirror=ok|off|denied Settings toggle on plus a blocker (off = no readable notification history: "unavailable") (ayg)
 if (param("notice", "") !== "") {
   fakeBridge.pushNotice({ id: "win.1", app: "Teams", title: "Emma Clarke", body: "Meeting moved to 3:00 PM, could you share the deck too?", tile: "data:image/svg+xml;charset=utf-8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" rx="3"/></svg>') });

@@ -154,15 +154,18 @@ describe("island: keyboard and focus", () => {
 });
 
 describe("notification list", () => {
-  it("the clock opens Windows's calendar (open_calendar), not a Peeka panel; the clock doesn't move", async () => {
+  it("the clock opens Peeka's own calendar panel (not Win+N); the link inside calls open_calendar; the clock doesn't move", async () => {
     render(<Shell monitor="m1" />);
     await settle();
     const clock = await screen.findByRole("button", { name: /Calendar$/ });
     fireEvent.click(clock);
     await settle();
+    expect(fakeBridge.log.filter((l) => l.cmd === "open_calendar")).toHaveLength(0);
+    const dlg = screen.getByRole("dialog", { name: "Calendar" });
+    expect(clock.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: /Windows calendar/ }));
     expect(fakeBridge.log.filter((l) => l.cmd === "open_calendar")).toHaveLength(1);
-    expect(screen.queryByRole("dialog", { name: "Notifications" })).toBeNull();
-    expect(clock.isConnected).toBe(true);
+    expect(dlg.isConnected && clock.isConnected).toBe(true);
   });
   it("opens when the island asks, focus enters the card; Esc closes it", async () => {
     render(<Shell monitor="m1" />);

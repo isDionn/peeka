@@ -2,8 +2,8 @@
 
 /** `SPRINGS.card|protrusion|pill|press…` presets; `Spring` a single spring (retarget keeps velocity); `SpringGroup` runs rAF only while moving. */
 export { Spring, SpringGroup, SPRINGS, advance, type SpringParams } from "./spring";
-/** `createShape(host, body, {maxW,maxH,onRect,layers})`: peek ↔ card via clip-path in a fixed window; `.to(w,h)`, `.rect()`. */
-export { createShape, notchRadius, sideRadius, type Shape, type ShapeLayer, type ShapeOptions, type ShapeState, type Rect } from "./shape";
+/** `createShape(host, body, {layers,tone,onBox})`: peek ↔ card via clip-path, the host box changes only with the target; `.to(w,h)`. */
+export { createShape, notchRadius, shoulderOf, type Shape, type ShapeLayer, type ShapeOptions, type ShapeState } from "./shape";
 /** `mountShoulders(layersEl)`: liquid shoulder + shadow + halo layer; pass the result's `.layer` to `createShape({layers})`, `.setAmbient(color)` sets the halo color. CSS included. */
 export { mountShoulders, type ShoulderLayers } from "./shoulder";
 /** `createFlight().capture()` → the DOM changes → `.play()`: `data-share` elements (song title, cover) fly from the strip to the card. */

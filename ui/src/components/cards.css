@@ -12,7 +12,7 @@
 .modTop .seg .segb { flex: none; width: 32px; padding: 0; justify-content: center; }
 .modTop .seg .segb.on { background: none; box-shadow: none; }
 /* active tab pill: slides under the icon, IslandCards measures its position */
-.segPill { position: absolute; z-index: 0; left: 0; top: 2px; height: 28px; border-radius: 12px; corner-shape: squircle; background: rgba(255,255,255,.13); box-shadow: inset 0 .5px 0 rgba(255,255,255,.16); transition: transform .25s cubic-bezier(.32,.72,0,1), width .25s cubic-bezier(.32,.72,0,1); pointer-events: none; }
+.segPill { position: absolute; z-index: 0; left: 0; top: 2px; height: 28px; border-radius: 12px; corner-shape: squircle; background: rgba(255,255,255,.13); box-shadow: inset 0 .5px 0 rgba(255,255,255,.16); transition: transform var(--d-move) var(--ease-move), width var(--d-move) var(--ease-move); pointer-events: none; }
 .segTip { position: absolute; top: calc(100% + 4px); transform: translateX(-50%); z-index: 5; padding: 4px 8px; border-radius: 8px; background: var(--e1); color: var(--l1); font: 11px/13px var(--font); white-space: nowrap; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
 /* If it doesn't fit the row scrolls; edges fade based on scroll position (no scroll, no fade). The gear sits outside the row, fixed. */
 @property --fl { syntax: "<length>"; inherits: false; initial-value: 0px; }
@@ -87,7 +87,7 @@
 
 /* ---- friction 2 + consistency + accessibility ---- */
 /* approval button while guarded (useGuard): dimmed, clicks are swallowed */
-[data-wait] { opacity: .5; transition: opacity .15s ease; }
+[data-wait] { opacity: .5; transition: opacity var(--d-fast) var(--ease-move); }
 .srOnly { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 
 /* center content is ~40% of the screen (width from Island, max-width inline); long titles get an ellipsis, the artist shrinks first (R2-Y1) */
@@ -110,7 +110,7 @@
 /* Modules: the card hugs its tab (owner: no empty surface under a short tab like System); General 404 = 14 + 32 + 12 + body 330 + 16 is the cap */
 /* capped (R1-10): long tabs (Clipboard, plugins) scroll inside, the card doesn't grow; the clip reaches the card edge (2 px on top for the focus ring, the card padding on the left and bottom; the scrollbar stays put) so the cover glow fades out instead of being cut */
 .modBody { max-height: 330px; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; padding: 2px 2px 16px 16px; margin: -2px -2px -16px -16px; box-sizing: content-box;
-  animation: modIn .13s ease-out both, modMore linear both; animation-timeline: auto, scroll(self); }
+  animation: modIn var(--d-fast) var(--ease) both, modMore linear both; animation-timeline: auto, scroll(self); }
 /* more below: a tab taller than the cap fades out over its last 40 px so the cut row reads as "scroll"; at the end only the empty 16 px padding fades.
    Driven by its own scroll position; a tab that fits has an inactive scroll timeline, so no mask at all (its glass keeps its blur). */
 @keyframes modMore {
@@ -123,21 +123,20 @@
 
 /* while the card springs to size, expensive painting pauses: frosted glass, big shadow and halo (they return once the card settles) */
 [data-spring] .dangling .glass { -webkit-backdrop-filter: none; backdrop-filter: none; }
-[data-spring] .dangling { box-shadow: inset .5px 0 0 var(--edgeVis), inset -.5px 0 0 var(--edgeVis), inset 0 -.5px 0 var(--edgeVis), 0 6px 14px rgba(0,0,0,.2); }
-.islandStage #halo { transition: --amb1 .8s ease, --ambO .8s ease, opacity .2s ease; }
-[data-spring] #halo { opacity: 0; }
+/* strip panels sit on a flat surface, so the frosted blur showed nothing, but anything moving inside a group (the Status list's spinner) repainted it every frame (rounds.md, RC4 open item 3) */
+.dangling[data-panel] .glass { -webkit-backdrop-filter: none; backdrop-filter: none; }
 
 /* R1-4: an answered approval row stays as a placeholder, then collapses with a height animation */
-.row.rowDone { overflow: hidden; max-height: 46px; transition: max-height .26s var(--ease), opacity .26s ease, padding .26s var(--ease), min-height .26s var(--ease); }
+.row.rowDone { overflow: hidden; max-height: 46px; transition: max-height var(--d-move) var(--ease), opacity var(--d-move) var(--ease-move), padding var(--d-move) var(--ease), min-height var(--d-move) var(--ease); }
 .row.rowDone.go { max-height: 0; min-height: 0; padding-block: 0; opacity: 0; }
 
 /* General home: one calm surface, no box-in-box, no borders. Left: the 56 px ghost beside a one-line "now" headline, the dock of icon-only
    shortcuts to the other modules under them. Right: up to three pills (36 px, radius 18) for things with something to say.
    Fixed geometry: the surface is 160 px tall whatever the content (= three pills + padding; dock bottom = last pill bottom), so nothing moves when data arrives.
    One accent: Peeka indigo (live state words, the dock's hover). Hover/press animate only opacity and transform. */
-.genHome { --acc: color-mix(in srgb, var(--indigo) 60%, white); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 32px; grid-template-areas: "now pills" "dock pills"; column-gap: 24px; row-gap: 12px; height: 160px; flex: none; padding: 20px; border-radius: var(--rPlat); corner-shape: squircle;
+.genHome { --acc: color-mix(in srgb, var(--indigo) 60%, white); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 32px; grid-template-areas: "now pills" "dock pills"; column-gap: 24px; row-gap: 12px; height: 160px; flex: none; padding: 20px var(--insetGroup); border-radius: var(--rPlat); corner-shape: squircle;
   background: radial-gradient(90% 120% at 0% 100%, color-mix(in srgb, var(--indigo) 16%, transparent), transparent 70%), var(--glass); box-shadow: var(--panelEdge), 0 12px 32px rgba(0,0,0,.2); }
-.genHome + .general3 { margin-top: 12px; }
+.genHome + .general3 { margin-top: 0; }   /* .modBody's 12 px gap is the gutter (it was 12 + 12 = 24 above the boxes, 8 between them) */
 .genNow { grid-area: now; display: flex; align-items: center; gap: 12px; min-width: 0; }
 .genText { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .genLine { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -145,8 +144,8 @@
 .genPills { grid-area: pills; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .genDock { grid-area: dock; display: flex; gap: 4px; margin-left: -8px; }   /* -8: the first icon lines up with the ghost's edge */
 
-.genHome button { color: inherit; font: inherit; text-align: left; border: 0; cursor: pointer; position: relative; isolation: isolate; transition: transform .12s var(--ease); }
-.genHome button::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--hover); opacity: 0; transition: opacity .16s var(--ease); }
+.genHome button { color: inherit; font: inherit; text-align: left; border: 0; cursor: pointer; position: relative; isolation: isolate; transition: transform var(--d-press) var(--ease); }
+.genHome button::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--hover); opacity: 0; transition: opacity var(--d-fast) var(--ease-move); }
 @media (hover:hover) and (pointer:fine) { .genHome button:hover::before { opacity: 1; } }
 .genHome button:active { transform: scale(.97); }
 
@@ -181,3 +180,12 @@
 /* P1: Deny is the safe choice on an approval: its icon is neutral, orange stays the card's only accent */
 [data-approval] .btn.destructive svg.lucide { color: var(--l2); }
 [data-recap] .recapCopy { min-width: 112px; } /* "Copy image" / "Copied": same width */
+
+/* Music card (RC4): at rest no progress row, the card is shorter. On hover (the island's own hover state, Rust's cursor poll included) or keyboard
+   focus the row opens under the controls: its height jumps once (the shape engine springs the card open), the row fades and slides in.
+   Top-aligned so the controls never move while it opens; leaving, the row fades first and collapses after it (the card springs shut). */
+.body > .player { align-items: start; }
+.player .progWrap { display: grid; grid-template-rows: minmax(0, 0fr); overflow: hidden; opacity: 0; translate: 0 -3px;
+  transition: grid-template-rows 0s var(--d-exit), opacity var(--d-exit) var(--ease-in), translate var(--d-exit) var(--ease-in); }
+#island[data-hover] .player .progWrap, html[data-kb] #island .player:focus-within .progWrap { grid-template-rows: minmax(0, 1fr); opacity: 1; translate: none;
+  transition: grid-template-rows 0s, opacity var(--d-move) var(--ease) 60ms, translate var(--d-move) var(--ease) 60ms; }

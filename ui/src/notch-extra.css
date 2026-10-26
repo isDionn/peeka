@@ -24,8 +24,8 @@ body { -webkit-user-select: none; user-select: none; }
 
 /* panels */
 .cut > .inner.middle { left: 0; }
-.body { animation: inputIn .38s var(--ease) both; }
-@keyframes inputIn { from { opacity: 0; filter: blur(6px); transform: translateY(5px) scale(.985); } to { opacity: 1; filter: none; transform: none; } }
+.body { animation: inputIn var(--d-move) var(--ease) both; }
+@keyframes inputIn { from { opacity: 0; transform: translateY(5px) scale(.985); } to { opacity: 1; transform: none; } }   /* no animated blur (polish audit #6) */
 .dangling { z-index: 7; }
 .dangling[aria-hidden="true"] { pointer-events: none; }
 .allApps { max-height: 184px; overflow: auto; }
@@ -40,13 +40,13 @@ body { -webkit-user-select: none; user-select: none; }
 .sectionHead > span:first-child { flex: 1; }
 
 /* context menu: close to the 0.26 / 0.80 spring, scale .94 and from 4 px above */
-.context.open { visibility: visible; animation: contextOpen .26s var(--ease) both; }
+.context.open { visibility: visible; animation: contextOpen var(--d-move) var(--ease) both; }
 @keyframes contextOpen { from { opacity: 0; transform: translateY(-4px) scale(.94); } to { opacity: 1; transform: none; } }
 
 /* status card sliders: 4 px track, the thumb grows on press (the mockup's .hudTrack look, real range input) */
 input[type=range].hud { -webkit-appearance: none; appearance: none; flex: 1; width: auto; height: 16px; background: transparent; cursor: pointer; }
 input[type=range].hud::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--l1) 0 var(--y, 0%), rgba(255,255,255,.16) var(--y, 0%) 100%); }
-input[type=range].hud::-webkit-slider-thumb { -webkit-appearance: none; width: 4px; height: 4px; border-radius: 50%; background: transparent; transition: transform .16s var(--ease); }
+input[type=range].hud::-webkit-slider-thumb { -webkit-appearance: none; width: 4px; height: 4px; border-radius: 50%; background: transparent; transition: transform var(--d-press) var(--ease); }
 input[type=range].hud:active::-webkit-slider-thumb { transform: scale(3); background: #fff; }
 .dsat { gap: 10px; }
 .controlGrid .boxBtn:focus-visible { outline-offset: 2px; }
@@ -107,7 +107,7 @@ html[data-narrow] .pin.openPinned { position: relative; }
 .islandCenter, .islandMascot, .islandMascot > .ms { overflow: visible; }
 /* Count bubble: below the strip (30 px) and the hanging body (42 px); passes clicks through, doesn't cover strip items. */
 .mkBubble { position: absolute; left: 50%; top: 48px; transform: translateX(-50%); z-index: 8; pointer-events: none; white-space: nowrap; padding: 4px 10px; border-radius: 10px;
-  background: rgba(24, 24, 28, .94); color: var(--l1); font-size: 12px; line-height: 16px; box-shadow: inset 0 .5px 0 rgba(255,255,255,.14), 0 4px 14px rgba(0,0,0,.35); animation: islandIn .18s var(--ease) backwards; }
+  background: rgba(24, 24, 28, .94); color: var(--l1); font-size: 12px; line-height: 16px; box-shadow: inset 0 .5px 0 rgba(255,255,255,.14), 0 4px 14px rgba(0,0,0,.35); animation: islandIn var(--d-fast) var(--ease) backwards; }
 .mkBubble.demoNote { top: 76px; }
 .demoBadge { position: absolute; top: 6px; z-index: 8; pointer-events: none; padding: 0 7px; height: 18px; line-height: 18px; border-radius: 9px; font-size: 11px; font-weight: 600;
   background: rgba(255, 159, 10, .2); color: var(--orange, #FF9F0A); }

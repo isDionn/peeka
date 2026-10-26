@@ -1,23 +1,22 @@
 /* Liquid shoulder, shadow and halo (mockup yon-3d-son.html, §0i items 6 and 9). Animates transform + opacity only. */
 @property --nm-amb { syntax: "<color>"; inherits: true; initial-value: #000000; }
 
-.nm-host { position: relative; overflow: visible; }
 .nm-layers { position: absolute; inset: 0; pointer-events: none; }
-.nm-shape { position: absolute; left: 0; top: 0; z-index: 3; }
 
 .nm-halo, .nm-shadow, .nm-shoulder { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
 .nm-halo {
   z-index: 1; opacity: 0; border-radius: 40%;
   background: radial-gradient(closest-side, color-mix(in srgb, var(--nm-amb) 85%, transparent), transparent);
-  filter: blur(36px);
+  filter: blur(36px); will-change: transform;
   transition: --nm-amb 0.8s ease, opacity 0.8s ease;
 }
+/* the card's hairline (sides and bottom only: the top meets the strip) and its shadow, drawn once at the target size and scaled */
 .nm-shadow {
-  z-index: 2; opacity: 0;
-  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.085), 0 1px 2px rgba(0, 0, 0, 0.18),
+  z-index: 2; opacity: 0; corner-shape: squircle; will-change: transform, opacity;
+  box-shadow: -.5px 0 0 var(--edge), .5px 0 0 var(--edge), 0 .5px 0 var(--edge), 0 1px 2px rgba(0, 0, 0, 0.18),
     0 10px 28px rgba(0, 0, 0, 0.24), 0 28px 72px rgba(0, 0, 0, 0.3);
 }
-/* 16 px base; scale f/16. Concave curve: strip color, quarter-circle cutout. */
-.nm-shoulder { z-index: 4; width: 16px; height: 16px; will-change: transform; }
-.nm-shoulder.l { background: radial-gradient(circle at 0 100%, transparent 15.4px, var(--strip, #0a0a0b) 16px); }
-.nm-shoulder.r { background: radial-gradient(circle at 100% 100%, transparent 15.4px, var(--strip, #0a0a0b) 16px); }
+/* 12 px fillet + 1 px into the body, scaled f/12. Concave curve: strip color, quarter-circle cut out with a 1 px soft edge. */
+.nm-shoulder { z-index: 4; width: 13px; height: 12px; background: var(--strip, #0a0a0b); will-change: transform; }
+.nm-shoulder.l { -webkit-mask: radial-gradient(circle 12px at 0 100%, transparent 11px, #000 12px); mask: radial-gradient(circle 12px at 0 100%, transparent 11px, #000 12px); }
+.nm-shoulder.r { -webkit-mask: radial-gradient(circle 12px at 100% 100%, transparent 11px, #000 12px); mask: radial-gradient(circle 12px at 100% 100%, transparent 11px, #000 12px); }

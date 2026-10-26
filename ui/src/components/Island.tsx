@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ArrowUpRight, Clipboard, FileText, LayoutGrid, Lock, Search, Settings as SettingsIcon, ShieldCheck, Volume2, VolumeX, X } from "lucide-react";
 import { bridge, UNSUPPORTED_EVENT, type Alert, type Attached, type ApprovalItem, type AssistantCounts, type BluetoothEvent, type CcEdit, type ClipPlain, type CpuHigh, type DownloadDone, type Media, type MusicStopped, type ProtrusionItem, type Status, type TimerState, type VolumeOsd } from "../bridge";
 import { timerLeft, useAlerts, useBluetooth, useComposer, useConsent, useHitRects, useInput, useLock, useMainAssistant, useMedia, useMirror, useNow, usePlugins, useMeetingReminder, useSecond, useSettings, useShelf, useShelfDrag, useStatus, useSurfaces, useSysmon, useTimer } from "../hooks";
@@ -15,12 +16,13 @@ import { createCcMood } from "../mascot/ccMood";
 import { BtBump, BtCenter, ChargeBump, ChargeCenter, LowBatteryBump, LowBatteryCenter, ShelfBump, ShelfCard, ShelfCenter, TimerBump, TimerCenter, TimerDoneBump, TimerDoneCenter, NetBump, NetCenter, AwayBump, AwayCenter } from "./Extras";
 import { announceCenterClock } from "../lib/centerClock";
 import { clockParts } from "../lib/clock";
-import { coverColors } from "../lib/coverColor";
 import { fly } from "../lib/flight";
 import { trackKey, trackTitle } from "../lib/media";
 import { focusables, useFocusTrap } from "../lib/useFocusTrap";
 import { isTextEntry } from "../lib/justPressed";
-import { SPRINGS } from "../motion/spring";
+import { createShape, shoulderOf, type Shape } from "../motion/shape";
+import { mountShoulders, type ShoulderLayers } from "../motion/shoulder";
+import { GlowField } from "./Glow";
 import { AWAY_IDLE_MS, awayLabel, createAway, SUMMARY_MS, type AwayCounts } from "../lib/away";
 import { useNetNotice, type NetNote } from "../lib/netNotice";
 import { pickPrimary, timerKind, type ActivityKind } from "../lib/priority";
@@ -30,7 +32,6 @@ import { BurstBump, BurstCenter, CpuBump, CpuCenter, DiffCard, DownloadBump, Dow
 
 /** Keep the card shadow (notch-extra.css: 0 28px 72px) from being clipped by the window region: this much room at the sides and bottom (CSS px). */
 const SHADOW_SIDE = 72, SHADOW_BOTTOM = 110;
-import { useSpring } from "../motion/useSpring";
 import { ApprovalBump, ApprovalCard, ApprovalCenter, ApprovalShort, ComposerCard, Lead, ProtrusionBump, ProtrusionCenter } from "./Plugin";
 import { LockCard, LockCenter, ClipboardCenter, ClipboardView, ShotBump, ShotCenter, STRIP_TXT, stripKind } from "./Pano";
 import { Bars, FirstRunCard, ModulesCard, modulesKw, MusicBump, MusicCard, OsdBump } from "./IslandCards";
@@ -95,7 +96,6 @@ const autoStarted = () => new URLSearchParams(location.search).get("autostart") 
 type Kind = "rest" | "hov" | "edit" | "music" | "alert" | "osd" | "approval" | "plugin" | "shot" | "lock" | "charge" | "lowbat" | "burst" | "quota" | "musicstop" | "download" | "cpu" | "bt" | "timer" | "timerdone" | "net" | "away" | "shelfdrag" | "panel" | "jobdone" | "ky" | "kh" | "kb" | "diag" | IslandView;
 interface Spec { key: string; mode: "peek" | "bump" | "card"; kw?: number; label: string; node: ReactNode }
 
-const HOVER_SPRING = { response: 0.3, damping: 1 };
 const OSD_MS = 1800;
 // clicking the mascot: the slap shows first, the ask box/Modules opens ~180 ms later (squash peak + spring back)
 const SLAP_OPEN_MS = 180;
@@ -257,7 +257,6 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const [osd, setOsd] = useState<VolumeOsd | null>(init?.osd ?? null);
   const [musicAuto, setMusicAuto] = useState(!!init?.autoMusic);
   const [seen, setSeen] = useState<ReadonlySet<string>>(new Set());
-  const [tint, setTint] = useState<[string, string] | null>(null);
   const surf0 = useSurfaces();
   // meeting reminder from the assistant's calendar (row 22): stands in when there's no plugin peek; generic text when locked or presenting
   const reminder = useMeetingReminder(lock.locked || input.presentation);
@@ -651,10 +650,6 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     return () => clearInterval(t);
   }, [media?.playing, kind]);
 
-  // cover colors only on the card (ambient layer, halo)
-  const cover = media?.art ?? null;
-  useEffect(() => { let live = true; coverColors(cover).then((c) => { if (live) setTint(c); }); return () => { live = false; }; }, [cover]);
-
   /* ---- Esc: one step back per press (card → its peek → resting) ---- */
   const back = useCallback(() => {
     if (more) return setMore(false);
@@ -785,13 +780,10 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const mode = spec?.mode ?? "none";
   const tw = mode === "none" ? mw : mode === "peek" ? mw + 40 : mode === "card" ? spec!.kw! : Math.max(mw + 24, sSize.w);
   const th = mode === "none" ? 0 : mode === "peek" ? 14 : sSize.h;
-  const W = Math.max(0, useSpring(tw, SPRINGS.card));
-  const H = Math.max(0, useSpring(th, SPRINGS.card));
   const bumpHover = hover && mode === "bump";
-  const hv = useSpring(kind === "hov" || bumpHover ? 1 : 0, HOVER_SPRING);
   // assistant line: announced to the strip page (cut under the peek); the island line sits on the peek's bottom edge
   const ls = lineOf({ assistantUp, hidden: hidden && restShown, kind, mascot: surf.protrusion?.plugin.main ? surf.protrusion.mascot : null });
-  const lineGap = mode === "none" ? 0 : Math.round(tw / 2 + Math.min(16, 8 + th * 0.12, th * 0.8));
+  const lineGap = mode === "none" ? 0 : Math.round(tw / 2 + shoulderOf(Math.min(th * 0.6, 34, 15 + Math.max(0, th - 40) * 0.3, tw / 2))); // same rule as the shape engine's fillet
   useEffect(() => { announceLine({ color: ls.color, mod: ls.mod, gap: lineGap }); }, [ls.color, ls.mod, lineGap]);
   // new approval, alert or meeting peek: a short wave along the strip (Windows notifications don't make a wave)
   useEffect(() => {
@@ -800,20 +792,33 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     const t = setTimeout(() => announceWave(c), 120);
     return () => clearTimeout(t);
   }, [centerKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  const r = Math.min(H * 0.6, 34, 15 + Math.max(0, H - 40) * 0.3), f = Math.min(16, 8 + H * 0.12, H * 0.8);
-  // card color: from the cover for music (and for Modules while a track plays; the custom properties fade .8 s on a track change), orange for the approval card (mockup c2)
-  const ambient: [string, string] | null = kind === "music-card" ? tint : kind === "approval-card" ? ["#FF9F0A", "#FF9F0A"] : kind === "modules" ? (media?.playing && tint) || ["#5E5CE6", "#5E5CE6"] : kind === "composer" ? ["#63E6E2", "#63E6E2"] : null;
-  const glow = (kind === "modules" && modPage === "music" && tint) || ambient; // the card color stays fixed across tabs; only the cover light follows the cover
-  const shapeStyle = {
-    left: "50%", transform: "translateX(-50%)", width: W, height: H, visibility: mode !== "none" || H >= 0.4 ? "visible" : "hidden",
-    "--r": r + "px", "--f": f + "px", "--vis": Math.min(1, H / 80), "--cardMix": Math.max(0, 1 - H / 70),
-    ...(ambient ? { "--amb1": ambient[0], "--amb2": ambient[1], "--ambO": 1, "--t1": (glow ?? ambient)[0], "--t2": (glow ?? ambient)[1] } : { "--ambO": 0 }),
-  } as unknown as CSSProperties;
-
-  // clickable box: target size right away when growing, old size until the spring ends when shrinking (so clicks aren't lost and the transparent area doesn't swallow them)
-  const box = useRef({ w: 0, h: 0 });
-  const settled = Math.abs(W - tw) < 1 && Math.abs(H - th) < 1;
-  box.current = settled ? { w: tw, h: th } : { w: Math.max(box.current.w, tw), h: Math.max(box.current.h, th) };
+  // the shape engine (motion/shape.ts): springs without React renders, clip-path + transform per frame. The box (and the clickable area) changes only
+  // with the target: target size right away when growing, old size until the spring ends when shrinking (so clicks aren't lost)
+  const islandEl = useRef<HTMLDivElement>(null), cutEl = useRef<HTMLDivElement>(null), layersEl = useRef<HTMLDivElement>(null), toneEl = useRef<HTMLDivElement>(null);
+  const engine = useRef<{ shape: Shape; sh: ShoulderLayers } | null>(null);
+  const [box, setBox] = useState({ w: 0, h: 0, moving: false });
+  const [slices, setSlices] = useState<HTMLElement[]>([]);
+  useLayoutEffect(() => {
+    const sh = mountShoulders(layersEl.current!);
+    const body = cutEl.current!;
+    const shape = createShape(islandEl.current!, body, {
+      tone: toneEl.current,
+      layers: [sh.layer, (s) => {
+        const line = body.querySelector<HTMLElement>(".islandLine");
+        if (line) line.style.transform = `translateY(${s.h - s.bh}px)`; // the line rides the shape's bottom edge, not the box's
+        // each shoulder carries its own slice of the glow (strip colour + the same light as the strip above and the body beside it, one element, so no seam):
+        // undo the shoulder's translate + scale so the slice's origin is the screen's centre line at the strip's bottom edge
+        const k = s.f / 12, tx = [s.offsetX - s.f, s.offsetX + s.w - k];
+        sh.shoulders.forEach((el, i) => { const sl = el.firstElementChild as HTMLElement | null; if (sl && k > 0.01) sl.style.transform = `scale(${1 / k}) translate(${s.bw / 2 - tx[i]}px,0)`; });
+      }],
+      onBox: (w, h, moving) => setBox({ w, h, moving }),
+    });
+    engine.current = { shape, sh };
+    setSlices(sh.shoulders.map((el) => el.appendChild(Object.assign(document.createElement("div"), { className: "glowSlice" }))));
+    return () => { shape.destroy(); sh.destroy(); engine.current = null; };
+  }, []);
+  useLayoutEffect(() => { engine.current?.shape.to(tw, mode === "none" ? 0 : Math.max(th, 1)); }, [tw, th, mode]); // content not measured yet: 1 px keeps it visible (focusable, readable)
+  // no coloured halo under the card any more: one-colour mode (the Drift field is the card's only light), and its 36 px blur would paint into the band Rust samples for the glow colour
 
   // clicking inside the island closes any open strip panel (the strip listens for this message)
   useEffect(() => {
@@ -892,13 +897,12 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const centerMax = Math.max(360, Math.min(424, Math.round(innerWidth * 0.4))); // center content is never wider than ~40% of the screen or 424 px (R2-Y1; strip tabs fit up to 176 px left of the island, at most 36 px overlap); overflow gets an ellipsis
 
   return (
-    <div className="islandStage" ref={stage} onKeyDown={crossKey} data-spring={settled ? undefined : ""}
+    <div className="islandStage" ref={stage} onKeyDown={crossKey} data-spring={box.moving ? "" : undefined}
       onFocus={() => { if (document.documentElement.hasAttribute("data-kb")) setKbIn(true); }} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setKbIn(false); }}>
       <div className="srOnly" role="status" aria-live="polite" aria-atomic="true">{kind === "approval" ? "" : say}</div>
       <div className="srOnly" role="alert" aria-live="assertive" aria-atomic="true">{kind === "approval" ? say : ""}</div>
-      {ambient && <div id="halo" style={{ width: W * 1.1, height: H * 1.15, ["--amb1" as string]: ambient[0], ["--ambO" as string]: 1 }} />}
       <button ref={center} className="islandCenter" data-hit aria-expanded={mode === "card" ? true : bump ? undefined : false} aria-label={ariaOverride ?? (bump ? `${say}. Open Modules` : `${parts.join(", ")}${mode === "card" ? "" : ". Open card"}`)}
-        style={{ width: mw + 24, transform: `translateX(-50%) translateY(${hv * 0.5}px)`, filter: hv > 0.001 ? `brightness(${1 + hv * 0.28})` : undefined }}
+        style={{ width: mw + 24, transform: "translateX(-50%)" }} data-hv={kind === "hov" || bumpHover ? "" : undefined}
         title={bumpHover ? "Open Modules" : undefined} onClick={(e) => { if (!(e.target as Element).closest?.(".mascot")) return afterPick(onCenter); const act = moodShown === "error" && restShown ? () => setUser("error") : owner.current ? () => openAsk("composer") : onCenter; setTimeout(() => afterPick(act), SLAP_OPEN_MS); }}
         onPointerEnter={() => hoverIntent(true)} onPointerLeave={() => { hoverIntent(false); setMkHover(false); }}
         onPointerOver={(e) => { const on = !!(e.target as Element).closest?.(".mascot-hit"); if (on && !mkHover) loadCounts(); setMkHover(on); }}>
@@ -907,22 +911,25 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
         {bumpHover && <span className="openIcon" aria-hidden="true"><ArrowUpRight /></span>}
       </button>
       {mkHover && assistantUp && mainP && restShown && <div className="mkBubble" data-paint role="status">{[jobsN > 0 && `${jobsN} running`, waitN > 0 && `${waitN} awaiting approval`].filter(Boolean).join(" · ") || `${pluginName(mainP)} ready`}</div>}
-      <SideBubble items={sideItems} edge={Math.max(W, mw + 24) / 2 + 8} open={more} setOpen={setMore} onPick={setPinned} onHover={setBubbleHover} />
-      {nSess >= 2 && !calm && mode !== "card" && !(hidden && restShown) && <SessionChip n={nSess} list={sessList} edge={Math.max(W, mw + 24) / 2 + 8} last={lastCc} locked={priv} limited={limited} />}
-      {settings?.demo && <span className="demoBadge" data-paint style={{ left: `calc(50% + ${sideItems.length ? Math.max(W, mw + 24) / 2 + 8 + 30 + 8 : (mw + 24) / 2 + 8}px)` }}>Demo</span>}{/* past the side bubble (30 px) when one is shown */}
+      <SideBubble items={sideItems} edge={Math.max(tw, mw + 24) / 2 + 8} open={more} setOpen={setMore} onPick={setPinned} onHover={setBubbleHover} />
+      {nSess >= 2 && !calm && mode !== "card" && !(hidden && restShown) && <SessionChip n={nSess} list={sessList} edge={Math.max(tw, mw + 24) / 2 + 8} last={lastCc} locked={priv} limited={limited} />}
+      {settings?.demo && <span className="demoBadge" data-paint style={{ left: `calc(50% + ${sideItems.length ? Math.max(tw, mw + 24) / 2 + 8 + 30 + 8 : (mw + 24) / 2 + 8}px)` }}>Demo</span>}{/* past the side bubble (30 px) when one is shown */}
       {demoNot && <div className="mkBubble demoNote" data-paint role="status">Not available in demo mode</div>}
-      {mode !== "none" || H > 0.4 ? <div className="islandHit" data-hit style={{ width: box.current.w, height: box.current.h }} /> : null}
-      {mode !== "none" || H > 0.4 ? <div className="islandHit islandShadow" data-paint style={{ width: box.current.w + 2 * SHADOW_SIDE, height: box.current.h + SHADOW_BOTTOM }} />
+      {mode !== "none" || box.h > 0 ? <div className="islandHit" data-hit style={{ width: box.w, height: box.h }} /> : null}
+      {mode !== "none" || box.h > 0 ? <div className="islandHit islandShadow" data-paint style={{ width: box.w + 2 * SHADOW_SIDE, height: box.h + SHADOW_BOTTOM }} />
         // at rest the hover peek's footprint (same size as its "hov" spec: mw + 40 by 14) is already in the window region, as paint only: a pointer near the
         // ghost or clock grows nothing, so the peek is never drawn half (RC1 owner's PC: a grey band beside the ghost, the rest of the peek missing)
         : restShown ? <div className="islandHit islandShadow" data-paint style={{ width: mw + 40 + 2 * SHADOW_SIDE, height: 14 + SHADOW_BOTTOM }} /> : null}
-      <div id="island" className="dangling" style={shapeStyle} onPointerEnter={() => hoverIntent(true)} onPointerLeave={() => hoverIntent(false)}>
-        <div className="cut">
-          <div className="amb" />
+      <div id="island" ref={islandEl} className="dangling shaped" data-hover={hover ? "" : undefined} onPointerEnter={() => hoverIntent(true)} onPointerLeave={() => hoverIntent(false)}>
+        <div className="nm-layers" ref={layersEl} />
+        <div className="cut" ref={cutEl}>
+          <div className="tone" ref={toneEl} />
+          <div className="glowHost"><GlowField monitor={monitor} /></div>
           {shapeOld !== null && <div className="islandInner leaving" data-leaving aria-hidden="true" style={{ width: shapeOld.width ?? "max-content" }} ref={(el) => { if (el) el.inert = true; }}>{shapeOld.node}</div>}
           {spec && <Layer key={spec.key} spec={spec} onClose={back} onModules={toModules} measure={setShapeEl} />}
+          <IslandLine s={ls} hidden={box.h < 0.4} />
         </div>
-        <IslandLine s={ls} hidden={H < 0.4} />
+        {slices.map((el, i) => createPortal(<GlowField monitor={monitor} />, el, "s" + i))}
       </div>
     </div>
   );

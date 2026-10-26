@@ -97,6 +97,9 @@ function Appearance({ settings }: { settings: Settings }) {
           <Row title="Download complete alert" sub="Watches the Downloads folder. Reads only name and size, never contents">
             <Switch on={settings.watchDownloads} label="Download complete alert" onChange={(v) => bridge.call("set_settings", { patch: { watchDownloads: v } })} />
           </Row>
+          <Row title="Screen colour glow" sub="Peeka reads a tiny blurred strip under the bar in memory to tint the glow. Nothing is saved.">
+            <Switch on={settings.screenTint} label="Screen colour glow" onChange={(v) => bridge.call("set_settings", { patch: { screenTint: v } })} />
+          </Row>
           <Row title="Start with Windows" sub="Peeka starts when you sign in">
             <Switch on={settings.autostart} label="Start with Windows" onChange={(v) => bridge.call("set_settings", { patch: { autostart: v } })} />
           </Row>

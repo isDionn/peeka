@@ -155,3 +155,72 @@ pub fn watch(
     }
     WATCHER.set(watcher).is_ok()
 }
+
+/// Bluetooth LE's protocol id (classic is `BT_CLASSIC_PROTOCOL`).
+#[cfg(windows)]
+const BT_LE_PROTOCOL: &str = "{bb7bb05e-5972-42b5-94fc-76eaa7084d49}";
+
+/// What `devices` listed last: `set` acts only on these ids (id -> container, kind).
+#[cfg(windows)]
+static LISTED: parking_lot::Mutex<Vec<(String, windows::core::GUID, notch_core::pickers::BtKind)>> =
+    parking_lot::Mutex::new(Vec::new());
+
+/// The paired devices (classic and LE; a dual-mode device once), with Windows's battery where it has one. Blocking.
+#[cfg(windows)]
+pub fn devices() -> Vec<notch_core::pickers::BtDevice> {
+    use notch_core::pickers::{bt_kind, BtDevice};
+    use windows::core::HSTRING;
+    use windows::Devices::Enumeration::{DeviceInformation, DeviceInformationKind};
+    crate::com();
+    let protocol = |p: &str| format!("System.Devices.Aep.ProtocolId:=\"{p}\"");
+    let aqs = HSTRING::from(format!(
+        "System.Devices.Aep.IsPaired:=System.StructuredQueryType.Boolean#True AND ({} OR {})",
+        protocol(BT_CLASSIC_PROTOCOL),
+        protocol(BT_LE_PROTOCOL)
+    ));
+    let props = windows_collections::IIterable::<HSTRING>::from(vec![
+        HSTRING::from(KEY_CONNECTED),
+        HSTRING::from(KEY_COD_MAJOR),
+        HSTRING::from(KEY_CONTAINER),
+    ]);
+    let Ok(all) = DeviceInformation::FindAllAsyncWithKindAqsFilterAndAdditionalProperties(
+        &aqs,
+        &props,
+        DeviceInformationKind::AssociationEndpoint,
+    )
+    .and_then(|op| op.get()) else {
+        return vec![];
+    };
+    let (mut out, mut listed) = (Vec::<BtDevice>::new(), vec![]);
+    for info in (0..all.Size().unwrap_or(0)).filter_map(|i| all.GetAt(i).ok()) {
+        let (Ok(id), Ok(name), Ok(props)) = (info.Id(), info.Name(), info.Properties()) else { continue };
+        let Some(container) = prop(&props, KEY_CONTAINER).and_then(|v| v.GetGuid().ok()) else { continue };
+        if listed.iter().any(|(_, c, _)| *c == container) {
+            continue; // the same device over the other protocol
+        }
+        let kind = bt_kind(prop(&props, KEY_COD_MAJOR).and_then(|v| v.GetUInt16().ok()));
+        listed.push((id.to_string(), container, kind));
+        out.push(BtDevice {
+            id: id.to_string(),
+            name: name.to_string(),
+            kind,
+            battery: battery(&container),
+            connected: is_connected(&props).unwrap_or(false),
+        });
+    }
+    *LISTED.lock() = listed;
+    out
+}
+
+/// Connect / disconnect a device `devices` listed: audio devices only (`audio::bt_audio`); Windows offers an app no
+/// way to connect or drop a keyboard, mouse or phone (`unsupported`).
+#[cfg(windows)]
+pub fn set(id: &str, connect: bool) -> Result<(), notch_core::cmd::CmdError> {
+    use notch_core::cmd::CmdError;
+    let (container, kind) =
+        LISTED.lock().iter().find(|(i, _, _)| i == id).map(|(_, c, k)| (*c, *k)).ok_or(CmdError::Unknown)?;
+    if kind != notch_core::pickers::BtKind::Audio {
+        return Err(CmdError::Unsupported);
+    }
+    crate::audio::bt_audio(&container, connect).then_some(()).ok_or(CmdError::Refused)
+}

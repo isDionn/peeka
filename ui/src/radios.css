@@ -1,0 +1,46 @@
+/* Wi-Fi / Bluetooth lists under the Status tiles (StatusCard.tsx): open in place, nothing above moves. */
+.controlGrid .boxBtn { position: relative; transition: transform .45s var(--ease), background-color .15s ease; }
+.controlGrid .boxBtn.holding { transform: scale(.97); }
+.controlGrid .boxBtn.held { transform: scale(1); transition: transform .3s cubic-bezier(.34,1.56,.64,1); }
+.holdRing { position: absolute; width: 32px; height: 32px; pointer-events: none; transform: rotate(-90deg); }
+.holdRing circle { fill: none; stroke-width: 2; }
+.holdRing .trk { stroke: rgba(255,255,255,.16); opacity: 0; animation: ringTrk .12s ease 120ms forwards; }
+.holdRing .arc { stroke: var(--l1); stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; animation: ringArc 400ms linear 120ms forwards; }   /* 120 ms quiet first: a normal click never flashes the ring */
+@keyframes ringTrk { to { opacity: 1; } }
+@keyframes ringArc { to { stroke-dashoffset: 0; } }
+.pkPickHost:empty { display: none; }
+.pkPick .glass { -webkit-backdrop-filter: none; backdrop-filter: none; }   /* the panel behind is a flat gradient, so the blur looked the same and cost ~20 frames in 2 s at 1920 */
+.pkPick { display: grid; gap: 6px; animation: pickIn .22s var(--ease); }
+@keyframes pickIn { from { opacity: 0; transform: translateY(-4px); } }
+.pickHead { display: flex; align-items: center; gap: 8px; height: 28px; padding-left: 4px; }
+.pickScan { width: 13px; height: 13px; color: var(--l3); opacity: 0; transition: opacity .3s ease; }
+.pickScan[data-on] { opacity: 1; }
+.pickDone { margin-left: auto; width: 28px; height: 28px; border-radius: 14px; display: grid; place-items: center; color: var(--l2); }
+.pickDone:hover { background: var(--hover); }
+.pickDone svg { width: 15px; height: 15px; }
+.pickMore { justify-self: start; }
+.netItem { position: relative; }
+.netItem + .netItem::before { content: ""; position: absolute; left: var(--indent, 26px); right: 0; top: 0; height: 1px; background: var(--divider); transform: scaleY(.5); transform-origin: 0 0; }
+.netItem > .row { width: 100%; text-align: left; }
+.bars { display: grid; flex: none; color: var(--l3); }
+.bars > svg { grid-area: 1 / 1; }
+.bars > .fan { opacity: .3; }   /* weak signal: the full fan stays faint behind the lit arcs, so one arc never reads as a broken icon */
+.lockI { width: 12px !important; height: 12px !important; color: var(--l3); flex: none; }
+.netState { margin-left: auto; }
+.netCheck { width: 15px; height: 15px; flex: none; color: var(--l1) !important; }
+.pwForm { display: grid; gap: 6px; padding: 2px 12px 12px 40px; animation: pickIn .2s var(--ease); }
+.pwField { display: flex; align-items: center; height: 34px; padding: 0 3px 0 10px; border-radius: 10px; background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); }
+.pwField:focus-within { box-shadow: inset 0 0 0 2px var(--l1); }
+.pwField:has([aria-invalid="true"]) { box-shadow: inset 0 0 0 2px var(--redText); }
+.pwField input { flex: 1; min-width: 0; height: 100%; background: none; border: 0; outline: none; color: var(--l1); font: 500 13px/1 var(--font); letter-spacing: .02em; }
+.pwField input[aria-invalid="true"] { color: var(--redText); }
+.pwEye { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: var(--l2); }
+.pwEye svg { width: 15px; height: 15px; }
+.pwErr { color: var(--redText); }
+.pwActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; }
+.devName { display: block; }
+.devSub { display: block; margin-top: 2px; }
+.devBtn { min-width: 92px; justify-content: center; }
+.devBtn svg { width: 14px; height: 14px; }
+.pickNote { padding: 2px 4px; }
+.devBtn:disabled { opacity: .45; }   /* non-audio kinds: Windows has no API to connect them */

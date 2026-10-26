@@ -1,5 +1,5 @@
 // Fake back end used outside Tauri: realistic data, in-memory state, the same event path. Used by the preview and tests.
-import type { ClaudeChatDone, ClaudeChatState, AgentBridge, Attached, TrayIconX, CalendarNext, Alert, AssistantCounts, BridgeState, PermissionEvent, RecentItem, AlertsView, AllCommands, AllEvents, CallArgs, CommandName, Commands, ClipChange, ClipItem, ClipPlain, ComposerEvent, ConsentAnswer, LockState, MirrorState, MirrorView, Notice, TrayIcon, ShelfItem, TimerState, PrivacyState, RecapWeek, ConsentRequest, ModuleEntry, PluginCommands, PluginInfo, SurfacesView, Media, MonitorInfo, PinnedApp, SearchResult, Settings, Status, Audio, SysmonTick, VolumeOsd, WindowInfo } from "./bridge";
+import type { BtDevice, WifiNetwork, ClaudeChatDone, ClaudeChatState, AgentBridge, Attached, TrayIconX, CalendarNext, Alert, AssistantCounts, BridgeState, PermissionEvent, RecentItem, AlertsView, AllCommands, AllEvents, CallArgs, CommandName, Commands, ClipChange, ClipItem, ClipPlain, ComposerEvent, ConsentAnswer, LockState, MirrorState, MirrorView, Notice, TrayIcon, ShelfItem, TimerState, PrivacyState, RecapWeek, ConsentRequest, ModuleEntry, PluginCommands, PluginInfo, SurfacesView, Media, MonitorInfo, PinnedApp, SearchResult, Settings, Status, Audio, SysmonTick, VolumeOsd, WindowInfo } from "./bridge";
 import { APP_NAMES, iconOf } from "./fakeIcons";
 import { EMPTY_SURFACES, MODULES, PLUGINS } from "./plugin.fixtures";
 
@@ -38,6 +38,8 @@ type W7Names = "recent_files" | "open_recent" | "start_pins" | "open_start_menu"
 /** Peeka Phase C: clipboard, download and copy-code commands; Settings > About demo restart. */
 /** The Modules card's Claude chat. */
 type W9Names = "claude_chat_state" | "claude_chat_send" | "claude_chat_stop" | "claude_chat_new";
+/** Wi-Fi / Bluetooth long-press pickers (same sample data as Rust demo mode). */
+type W10Names = "wifi_networks" | "wifi_connect" | "bt_devices" | "bt_set";
 type W8Names = "save_diagnostics" | "diagnostics_open_folder" | "demo_restart" | "notif_copy_code" | "clip_open" | "clip_to_shelf" | "clip_preview" | "clip_ocr" | "download_open" | "download_show_in_folder";
 const svg = (inner: string) => "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${inner}</g></svg>`);
 const GLYPH = {
@@ -57,6 +59,17 @@ const RECENT: RecentItem[] = [
   { id: "r2", name: "screen-recording.mp4", sub: "2m ago", kind: "video" }, { id: "r3", name: "meeting-notes.docx", sub: "3h ago", kind: "other" },
   { id: "r4", name: "cover-draft.png", sub: "4d ago", kind: "image" },
 ];
+const WIFI0: WifiNetwork[] = [
+  { ssid: "Home-5G", signal: 92, secure: true, connected: true, known: true },
+  { ssid: "Home-2G", signal: 74, secure: true, connected: false, known: true },
+  { ssid: "Cafe Guest", signal: 58, secure: false, connected: false, known: false },
+  { ssid: "Studio-WPA3", signal: 41, secure: true, connected: false, known: false },
+];
+const BT0: BtDevice[] = [
+  { id: "demo-bt-buds", name: "Buds Pro", kind: "audio", battery: 80, connected: true },
+  { id: "demo-bt-keys", name: "MX Keys", kind: "input", battery: 45, connected: true },
+  { id: "demo-bt-phone", name: "Pixel 8", kind: "phone", battery: 62, connected: false },
+];
 const TRAY: TrayIcon[] = [
   { id: "exe:c:/apps/discord.exe", name: "Discord", exe: "C:/apps/Discord.exe", promoted: true, icon: "" },
   { id: "exe:c:/apps/steam.exe", name: "Steam", exe: "C:/apps/Steam.exe", promoted: false, icon: "" },
@@ -71,6 +84,8 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   let status: Status;
   let audio: Audio;
   let audioRefuse = false;
+  let wifiNets = structuredClone(WIFI0);
+  let btDevs = structuredClone(BT0);
   let settings: Settings;
   const listeners = new Map<string, Set<(p: never) => void>>();
   let track = 0;
@@ -145,7 +160,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     hidden = false; firstConnect = false; recap = null; calendar = structuredClone(DEFAULT_CALENDAR); bridgeState = { installed: true, healthy: true, lastEventAgoS: 120 };
     settings = {
       autostart: true, taskbarHide: "full", clipHistory: true, clipMedia: true, clipPasswordMin: 60,
-      secondaryStrips: true, captureVolumeKeys: true, alertsApi: false, mascotPranks: true, celebrate: true, watchDownloads: true, colorIcons: false,
+      secondaryStrips: true, captureVolumeKeys: true, alertsApi: false, mascotPranks: true, celebrate: true, watchDownloads: true, screenTint: true, colorIcons: false,
       shortcuts: { search: "Ctrl+K", ask: "Ctrl+Space", focus_island: "Ctrl+Shift+Enter", hide_island: "Ctrl+Shift+A", emergency: "Ctrl+Alt+Shift+T" },
       shortcutExceptions: EXCEPTION_APPS.map((appId) => ({ ...ref(appId), name: APP_NAMES[appId] ?? EXCEPTION_NAMES[appId] ?? appId, keys: appId === "vscode" ? "Ctrl+K, Ctrl+Space" : "Ctrl+K" })),
     };
@@ -157,7 +172,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   const emit = <E extends keyof AllEvents>(e: E, p: AllEvents[E]) => listeners.get(e)?.forEach((f) => f(p as never));
   const pinned = (): PinnedApp[] => pins.map(ref);
   let nextHwnd = 100;
-  const handlers: { [K in Exclude<CommandName, W4Names | W5Names | W7Names | W8Names | W9Names>]: (a: Commands[K]["args"]) => Commands[K]["ret"] } = {
+  const handlers: { [K in Exclude<CommandName, W4Names | W5Names | W7Names | W8Names | W9Names | W10Names>]: (a: Commands[K]["args"]) => Commands[K]["ret"] } = {
     recap_get: () => (lock.locked ? null : structuredClone(recap)),
     recap_ack: () => { recap = null; },
     recap_copy_image: ({ png }) => { if (lock.locked) throw "denied"; log.push({ cmd: "recap_copy_image", args: { bytes: png.length } }); },
@@ -410,6 +425,28 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     claude_chat_stop: () => { if (chatState.busy) chatEnd({ ok: false, error: null, stopped: true }); },
     claude_chat_new: () => { if (chatState.busy) chatEnd({ ok: false, error: null, stopped: true }); chatHistory = 0; },
   };
+  const w10: { [K in W10Names]: (a: Commands[K]["args"]) => Commands[K]["ret"] } = {
+    wifi_networks: () => { if (lock.locked) throw "denied"; return structuredClone(wifiNets); },
+    // Like Rust: a secured network without a profile needs a password; the fake also refuses the password "wrong". The password is never logged.
+    wifi_connect: ({ ssid, password }) => {
+      if (lock.locked) throw "denied";
+      log.push({ cmd: "wifi_connect", args: { ssid } });
+      const net = wifiNets.find((w) => w.ssid === ssid);
+      if (!net) return "failed";
+      if ((net.secure && !net.known && !password) || password === "wrong") return "wrong_password";
+      wifiNets = wifiNets.map((w) => ({ ...w, connected: w.ssid === ssid, known: w.known || w.ssid === ssid }));
+      return null;
+    },
+    bt_devices: () => { if (lock.locked) throw "denied"; return structuredClone(btDevs); },
+    bt_set: ({ id, connect }) => {
+      if (lock.locked) throw "denied";
+      const d = btDevs.find((x) => x.id === id);
+      if (!d) throw "unknown";
+      if (d.kind !== "audio") throw "unsupported";
+      log.push({ cmd: "bt_set", args: { id, connect } });
+      btDevs = btDevs.map((x) => (x.id === id ? { ...x, connected: connect } : x));
+    },
+  };
   const w8: { [K in W8Names]: (a: Commands[K]["args"]) => Commands[K]["ret"] } = {
     // The real app restarts; the fake just flips the mode so the preview shows the other state.
     save_diagnostics: () => { log.push({ cmd: "save_diagnostics", args: undefined }); const name = "peeka-diag-2026-10-26_12-00-00.txt"; emit("diagnostics_saved", name); return name; },
@@ -480,7 +517,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
 
   const fake = {
     async call<K extends keyof AllCommands>(cmd: K, ...args: CallArgs<K>) {
-      const h = (cmd in w9 ? w9 : cmd in w8 ? w8 : cmd in w7 ? w7 : cmd in plug ? plug : cmd in clip ? clip : cmd in w5 ? w5 : handlers) as Record<string, (a: unknown) => unknown>;
+      const h = (cmd in w10 ? w10 : cmd in w9 ? w9 : cmd in w8 ? w8 : cmd in w7 ? w7 : cmd in plug ? plug : cmd in clip ? clip : cmd in w5 ? w5 : handlers) as Record<string, (a: unknown) => unknown>;
       return h[cmd]((args[0] ?? undefined) as never) as AllCommands[K]["ret"];
     },
     async on<E extends keyof AllEvents>(evt: E, cb: (p: AllEvents[E]) => void) {
@@ -489,7 +526,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       return () => { set.delete(cb as never); };
     },
     now: () => fixed ?? new Date(),
-    reset: () => { reset(); audioRefuse = false; filesIndex = true; scanDenied = false; picked = null; surfaces = EMPTY_SURFACES; consent = null; shelf = []; timer = null; privacy = { mic: [], camera: [], screen: false }; previewDelay = 0; mirror = { registered: false, access: "unknown", history: true, enabled: false, on: false, blocker: null }; notices = []; quiet = false; agents = structuredClone(AGENTS0); plugins = structuredClone(PLUGINS); modules = structuredClone(MODULES); log.length = 0; turn = 0; if (chatTimer) clearInterval(chatTimer); chatTimer = null; chatState = { available: true, version: "2.1.290", signedIn: true, busy: false }; chatError = null; chatHistory = 0; },
+    reset: () => { reset(); audioRefuse = false; wifiNets = structuredClone(WIFI0); btDevs = structuredClone(BT0); filesIndex = true; scanDenied = false; picked = null; surfaces = EMPTY_SURFACES; consent = null; shelf = []; timer = null; privacy = { mic: [], camera: [], screen: false }; previewDelay = 0; mirror = { registered: false, access: "unknown", history: true, enabled: false, on: false, blocker: null }; notices = []; quiet = false; agents = structuredClone(AGENTS0); plugins = structuredClone(PLUGINS); modules = structuredClone(MODULES); log.length = 0; turn = 0; if (chatTimer) clearInterval(chatTimer); chatTimer = null; chatState = { available: true, version: "2.1.290", signedIn: true, busy: false }; chatError = null; chatHistory = 0; },
     /** Test and preview hooks: trigger by hand what Rust would do. */
     emit,
     /** Fidelity 3: the main assistant's bridge state and the "first connection" card. */
@@ -517,7 +554,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     get sysmonRuns() { return sysmonRuns; },
     get sysmonOn() { return sysmonTimer !== null; },
     /** Commands the fake handles (test: same as the Rust list?). */
-    commands: Object.keys({ ...handlers, ...plug, ...clip, ...w5, ...w7, ...w8, ...w9 }) as string[],
+    commands: Object.keys({ ...handlers, ...plug, ...clip, ...w5, ...w7, ...w8, ...w9, ...w10 }) as string[],
     /** Preview and tests: trigger Rust's clipboard, lock and index events by hand. */
     setLocked: (locked: boolean, reason: LockState["reason"] = locked ? "windows" : null) => { lock = { locked, reason: locked ? reason : null }; emit("lock_changed", { ...lock }); },
     setFilesIndex: (on: boolean) => { filesIndex = on; },

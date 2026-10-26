@@ -67,7 +67,7 @@
 .result .tile.k-pdf,.result .tile.k-video,.result .tile.k-sheet,.result .tile.k-image{background:rgba(255,255,255,.08)!important}
 
 /* Settings: small selected-button capsule */
-.segSmall .segb.on{background:rgba(255,255,255,.14);border-radius:12px;corner-shape:squircle}
+.segSmall .segb.on{background:rgba(255,255,255,.13);border-radius:12px;corner-shape:squircle}
 
 /* filter box (R2-O5): compact instead of the 40-high input box; clicking a row body copies it */
 .clipFilter{height:32px;border-radius:16px;flex:none}

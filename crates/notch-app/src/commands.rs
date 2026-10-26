@@ -570,6 +570,60 @@ pub async fn set_radio(app: AppHandle, n: State<'_, Notch>, kind: Kind, on: bool
     Ok(())
 }
 
+/// The Wi-Fi tile's long-press picker: a fresh scan (up to 4 s), one row per network. `unsupported` = no Wi-Fi
+/// adapter; `denied` while Notch is locked (network names are content). Demo: a fixed list, no radio touched.
+#[tauri::command]
+pub async fn wifi_networks(app: AppHandle) -> Res<Vec<notch_core::pickers::WifiNetwork>> {
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    if crate::app::demo() {
+        return Ok(notch_core::pickers::demo_wifi());
+    }
+    notch_win::wifi::networks().ok_or(CmdError::Unsupported)
+}
+
+/// null = connected (waits up to 20 s). `wrong_password` also means "a password is needed" (a secured network Windows
+/// has no profile for). The password only reaches Windows's profile store (`notch_win::wifi`), never Peeka's files or logs.
+#[tauri::command]
+pub async fn wifi_connect(
+    app: AppHandle,
+    ssid: String,
+    password: Option<String>,
+) -> Res<Option<notch_core::pickers::WifiError>> {
+    use notch_core::pickers::{demo_wifi, WifiError};
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    if ssid.is_empty() || ssid.len() > 32 {
+        return Err(CmdError::Invalid);
+    }
+    if crate::app::demo() {
+        let needs = demo_wifi().iter().any(|w| w.ssid == ssid && w.secure && !w.known);
+        return Ok((needs && password.is_none()).then_some(WifiError::WrongPassword));
+    }
+    Ok(notch_win::wifi::connect(&ssid, password.as_deref()).err())
+}
+
+/// The Bluetooth tile's long-press picker: paired devices with Windows's battery level where it has one.
+#[tauri::command]
+pub async fn bt_devices(app: AppHandle) -> Res<Vec<notch_core::pickers::BtDevice>> {
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    if crate::app::demo() {
+        return Ok(notch_core::pickers::demo_bt());
+    }
+    Ok(notch_win::bluetooth::devices())
+}
+
+/// Connect / disconnect a device `bt_devices` listed (`unknown` otherwise). Audio devices only: `unsupported` for the
+/// rest (Windows has no API for it); `refused` = Windows did not take the request.
+#[tauri::command]
+pub async fn bt_set(app: AppHandle, id: String, connect: bool) -> Res<()> {
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    if crate::app::demo() {
+        let _ = connect; // demo never touches a radio
+        let d = notch_core::pickers::demo_bt().into_iter().find(|d| d.id == id).ok_or(CmdError::Unknown)?;
+        return (d.kind == notch_core::pickers::BtKind::Audio).then_some(()).ok_or(CmdError::Unsupported);
+    }
+    notch_win::bluetooth::set(&id, connect)
+}
+
 #[tauri::command]
 pub fn set_dnd(app: AppHandle, n: State<'_, Notch>, on: bool) -> Res<()> {
     {

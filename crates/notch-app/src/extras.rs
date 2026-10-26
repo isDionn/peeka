@@ -46,6 +46,7 @@ pub fn extras(app: &AppHandle) -> Option<tauri::State<'_, Extras>> {
 /// Called once from `setup`, after `layout` built the island.
 pub fn start(app: &AppHandle) {
     app.manage(Extras::default());
+    tint_feed(app.clone());
 
     let handle = app.clone();
     if !notch_win::privacy::watch(move || privacy_refresh(&handle)) {
@@ -154,6 +155,39 @@ fn privacy_refresh(app: &AppHandle) {
 /// The screen is being shared or recorded (`PrivacyState::screen`): Peeka shows generic labels, as in presentation.
 pub fn sharing(app: &AppHandle) -> bool {
     extras(app).is_some_and(|x| x.privacy.lock().screen)
+}
+
+/// `screen_tint` every 2 s for each monitor with a strip (`notch_core::tint`). Off (setting, demo): null once, never a
+/// sample. Paused (lock, presentation, fullscreen, sharing, clipboard on screen): nothing sent, nothing sampled.
+fn tint_feed(app: AppHandle) {
+    use notch_core::tint::{band, Pause, Tint};
+    std::thread::spawn(move || {
+        notch_win::com();
+        let mut state: std::collections::HashMap<usize, Tint> = Default::default();
+        loop {
+            std::thread::sleep(Duration::from_secs(2));
+            let Some(n) = app.try_state::<Notch>() else { continue };
+            let on = n.settings.lock().screen_tint && !crate::app::demo();
+            let base = Pause {
+                locked: crate::plugins::locked(&app),
+                presence: notch_win::presence::read(),
+                sharing: sharing(&app),
+                clip_open: n.capture.lock().is_open(),
+                covered: false,
+            };
+            let cover = notch_win::apps::foreground_cover_monitor();
+            let strips: Vec<String> = n.strips.lock().keys().cloned().collect();
+            let monitors: Vec<_> =
+                n.monitors.lock().iter().filter(|m| strips.contains(&format!("strip-{}", m.index))).cloned().collect();
+            for m in monitors {
+                let pause = Pause { covered: cover == Some(m.index), ..base };
+                let sample = || notch_win::tint::sample(band(&m));
+                if let Some(t) = state.entry(m.index).or_default().step(&m.index.to_string(), on, &pause, sample) {
+                    let _ = app.emit("screen_tint", t);
+                }
+            }
+        }
+    });
 }
 
 /// `input_tick`: polled once a second (every 3 s after a minute without input), sent only on a change.

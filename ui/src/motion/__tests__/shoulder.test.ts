@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mountShoulders } from "../shoulder";
 import type { ShapeState } from "../shape";
 
-const st = (o: Partial<ShapeState> = {}): ShapeState => ({ w: 200, h: 40, tw: 400, th: 80, offsetX: 100, r: 20, rt: 30, f: 12, go: 0.5, kt: 0.4, hidden: false, ...o });
+const st = (o: Partial<ShapeState> = {}): ShapeState => ({ w: 200, h: 40, tw: 400, th: 80, offsetX: 100, r: 20, rt: 30, f: 12, go: 0.5, kt: 0.4, hidden: false, bw: 400, bh: 80, moving: true, ...o });
 const mount = (sides?: "both" | "left" | "right") => { const c = document.createElement("div"); document.body.append(c); return { c, s: mountShoulders(c, { sides }) }; };
 afterEach(() => { document.body.innerHTML = ""; });
 
@@ -23,8 +23,8 @@ describe("mountShoulders (liquid shoulder, shadow, halo)", () => {
     expect(q(".nm-shadow").style.transform).toBe("translate(100px,0) scale(0.5,0.5)");
     expect(q(".nm-shadow").style.opacity).toBe("0.5");
     expect(parseFloat(q(".nm-halo").style.width)).toBeCloseTo(440); // 400 * 1.1
-    expect(q(".nm-shoulder.l").style.transform).toBe("translate(88px,0) scale(0.75)"); // offsetX - f, f/16
-    expect(q(".nm-shoulder.r").style.transform).toBe("translate(300px,0) scale(0.75)"); // offsetX + w
+    expect(q(".nm-shoulder.l").style.transform).toBe("translate(88px,0) scale(1)"); // offsetX - f, f/12
+    expect(q(".nm-shoulder.r").style.transform).toBe("translate(299px,0) scale(1)"); // offsetX + w, 1 px (scaled) into the body
     // only the measure (spring) changed: the size isn't rewritten, the scale is updated
     q(".nm-shadow").style.width = "1px";
     s.layer(st({ w: 400 }));

@@ -59,6 +59,8 @@ export interface Settings extends ClipSettings {
   celebrate: boolean;
   /** The Downloads folder is watched and `download_done` fires for finished files (name and size only; content isn't read and never goes to plugins). On by default. */
   watchDownloads: boolean;
+  /** The glow takes its colour from a thin band under the strip (`screen_tint`; pixels stay in memory, never stored or given to plugins). On by default. */
+  screenTint: boolean;
   /** Color app icons (decision 14: off by default, monochrome). */
   colorIcons: boolean;
   /** Starts with Windows (HKCU Run, on by default). */
@@ -239,6 +241,14 @@ export interface Commands {
   save_diagnostics: { args: void; ret: string };
   /** Explorer with the last diagnostics file selected; `unknown` before one was saved. */
   diagnostics_open_folder: { args: void; ret: void };
+  /** Wi-Fi long-press picker: a fresh scan (up to 4 s), one row per network, connected first then strongest. `unsupported`: no Wi-Fi adapter; `denied` while locked. */
+  wifi_networks: { args: void; ret: WifiNetwork[] };
+  /** null = connected (waits up to 20 s). `wrong_password` also means a password is needed (secured network without `known`). The password goes only to Windows. `invalid`: empty or >32-byte SSID; `denied` while locked. */
+  wifi_connect: { args: { ssid: string; password?: string }; ret: WifiError | null };
+  /** Bluetooth long-press picker: paired devices. `denied` while locked. */
+  bt_devices: { args: void; ret: BtDevice[] };
+  /** Connect / disconnect a listed device. Audio devices only: `unsupported` for other kinds; `unknown`: not in the last `bt_devices`; `refused`: Windows didn't take it. The state change arrives later (call `bt_devices` again). */
+  bt_set: { args: { id: string; connect: boolean }; ret: void };
   get_media: { args: void; ret: Media | null };
   /** `seek` needs `positionMs`. */
   media_control: { args: { action: "play_pause" | "next" | "previous" | "seek"; positionMs?: number }; ret: void };
@@ -403,6 +413,13 @@ export interface Commands {
 }
 export interface ClaudeChatState { available: boolean; version: string | null; signedIn: boolean; busy: boolean }
 /** `ok` false with `stopped` false carries the CLI's error text (sign-in, limits, timeout). */
+/** A `wifi_networks` row. `signal` 0-100; `known`: Windows has a profile, `wifi_connect` needs no password. */
+export interface WifiNetwork { ssid: string; signal: number; secure: boolean; connected: boolean; known: boolean }
+export type WifiError = "wrong_password" | "failed" | "unsupported";
+/** A paired Bluetooth device (`bt_devices`). `battery` 0-100 or null when Windows has none. */
+export interface BtDevice { id: string; name: string; kind: "audio" | "input" | "phone" | "computer" | "other"; battery: number | null; connected: boolean }
+/** `screen_tint`: left / centre / right colour (#rrggbb) of a thin band under that monitor's strip, every 2 s. `colors` null = sampling off or unavailable (use --glow-color). Nothing is sent while paused (locked, presentation, fullscreen, screen sharing, clipboard on screen): keep the last colours. */
+export interface ScreenTint { monitor: string; colors: [string, string, string] | null }
 export interface ClaudeChatDone { ok: boolean; error: string | null; stopped: boolean }
 export type CommandName = keyof Commands;
 // Must match Rust's list (commands.generated.ts) exactly: tsc stops here if one is missing or extra. Plugin commands and
@@ -485,6 +502,7 @@ export interface Events {
   claude_chat_done: ClaudeChatDone;
   /** The file name `save_diagnostics` just wrote. */
   diagnostics_saved: string;
+  screen_tint: ScreenTint;
 }
 export type EventName = keyof Events;
 

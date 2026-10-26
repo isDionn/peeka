@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { justPressed, isTextEntry } from "../lib/justPressed";
 import { bridge, inTauri, type Alert, type Notice } from "../bridge";
 import { useClips, useHitRects, useLock, useMirror, useMonitor, usePins, useSettings, useStatus, useWindows } from "../hooks";
+import { CalendarPanel } from "./CalendarPanel";
 import { ContextMenu, QuitConfirm } from "./Menus";
 import { NoticeReply, NoticeToast, NotificationList, ReviewCard } from "./Notifications";
 import { SetupPanel, setupDone } from "./SetupWizard";
@@ -168,6 +169,9 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
           <TrayList monitor={monitor.id} onClose={close} />
         </Panel>
       )}
+      <Panel side="right" width={360} label="Calendar" dataKind="calendar" open={panel === "calendar"} onClose={close}>
+        <CalendarPanel />
+      </Panel>
       <Panel side="right" width={400} label="Notifications" dataKind="notif" open={panel === "notif"} onClose={close}>
         <NotificationList onReview={(a) => { setReview(a); setPanel("cleanup"); }} onClose={close} onEmpty={setNotifEmpty} />
       </Panel>

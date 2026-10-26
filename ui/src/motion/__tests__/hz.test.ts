@@ -45,17 +45,17 @@ describe("high Hz: the same motion", () => {
     }
   });
 
-  it("Shape: same settle time, same final rectangle", () => {
+  it("Shape: same settle time, same final box", () => {
     const r = DTS.map((dt) => {
       const host = document.createElement("div"), body = document.createElement("div");
-      host.getBoundingClientRect = () => boxAt(0, 0, 600, 300);
-      const sh = createShape(host, body, { maxW: 600, maxH: 300 });
+      let h = 0;
+      const sh = createShape(host, body, { layers: [(s) => { h = s.h; }] });
       sh.to(560, 240);
-      const o = settle((d) => sh.advance(d), dt, 0.25, () => sh.rect().h);
-      return { ...o, rect: sh.rect() };
+      const o = settle((d) => sh.advance(d), dt, 0.25, () => h);
+      return { ...o, box: [host.style.width, host.style.height] };
     });
     expect(within(r.map((x) => x.t))).toBeLessThanOrEqual(1 / 60 + 0.02);
-    r.forEach((x) => expect(x.rect).toEqual({ x: 20, y: 0, w: 560, h: 240 }));
+    r.forEach((x) => expect(x.box).toEqual(["560px", "240px"]));
     expect(within(r.map((x) => x.at))).toBeLessThan(3.6); // height at 0.25 s (0..240), ≤1.5% difference
   });
 

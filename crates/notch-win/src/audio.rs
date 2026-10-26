@@ -170,3 +170,56 @@ pub fn peaks(m: &windows::Win32::Media::Audio::Endpoints::IAudioMeterInformation
         }
     }
 }
+
+/// Connects (`connect`) or disconnects a paired Bluetooth audio device: Windows's documented one-shot
+/// `KSPROPERTY_ONESHOT_RECONNECT` / `_DISCONNECT` (`KSPROPSETID_BtAudio`) on each audio endpoint whose container is the
+/// device's, reached through the endpoint's topology (endpoint -> connector -> the driver's filter -> `IKsControl`).
+/// No admin rights. True = Windows took the request on at least one endpoint (the link itself follows a moment later).
+#[cfg(windows)]
+pub fn bt_audio(container: &GUID, connect: bool) -> bool {
+    use windows::core::Interface;
+    use windows::Win32::Foundation::PROPERTYKEY;
+    use windows::Win32::Media::Audio::{eAll, IDeviceTopology, IPart, DEVICE_STATE, DEVICE_STATEMASK_ALL};
+    use windows::Win32::Media::KernelStreaming::{
+        IKsControl, KSIDENTIFIER, KSIDENTIFIER_0, KSIDENTIFIER_0_0, KSPROPERTY_ONESHOT_DISCONNECT,
+        KSPROPERTY_ONESHOT_RECONNECT, KSPROPERTY_TYPE_GET, KSPROPSETID_BtAudio,
+    };
+    use windows::Win32::System::Com::StructuredStorage::PropVariantToGUID;
+    use windows::Win32::System::Com::STGM_READ;
+    // PKEY_Device_ContainerId; local like FRIENDLY_NAME above.
+    const CONTAINER: PROPERTYKEY = PROPERTYKEY { fmtid: GUID::from_u128(0x8c7ed206_3f8a_4827_b3ab_ae9e1faefc6c), pid: 2 };
+    let Some(devices) = enumerator() else { return false };
+    let id = if connect { KSPROPERTY_ONESHOT_RECONNECT } else { KSPROPERTY_ONESHOT_DISCONNECT }.0 as u32;
+    let prop = KSIDENTIFIER {
+        Anonymous: KSIDENTIFIER_0 { Anonymous: KSIDENTIFIER_0_0 { Set: KSPROPSETID_BtAudio, Id: id, Flags: KSPROPERTY_TYPE_GET } },
+    };
+    // SAFETY: plain COM calls on objects released on drop; the raw IKsControl pointer is owned by `from_raw` at once.
+    unsafe {
+        let Ok(list) = devices.EnumAudioEndpoints(eAll, DEVICE_STATE(DEVICE_STATEMASK_ALL)) else { return false };
+        let mut ok = false;
+        for i in 0..list.GetCount().unwrap_or(0) {
+            let Ok(d) = list.Item(i) else { continue };
+            let mine = d
+                .OpenPropertyStore(STGM_READ)
+                .and_then(|s| s.GetValue(&CONTAINER))
+                .and_then(|v| PropVariantToGUID(&v))
+                .is_ok_and(|g| g == *container);
+            if !mine {
+                continue;
+            }
+            let ks = (|| -> windows::core::Result<IKsControl> {
+                let topology: IDeviceTopology = d.Activate(CLSCTX_ALL, None)?;
+                let part: IPart = topology.GetConnector(0)?.GetConnectedTo()?.cast()?;
+                let mut raw = std::ptr::null_mut();
+                part.Activate(CLSCTX_ALL.0, &IKsControl::IID, Some(&mut raw))?;
+                Ok(IKsControl::from_raw(raw))
+            })();
+            let mut returned = 0u32;
+            ok |= ks.is_ok_and(|ks| {
+                ks.KsProperty(&prop, std::mem::size_of::<KSIDENTIFIER>() as u32, std::ptr::null_mut(), 0, &mut returned)
+                    .is_ok()
+            });
+        }
+        ok
+    }
+}

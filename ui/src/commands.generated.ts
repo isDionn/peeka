@@ -138,6 +138,10 @@ export const COMMAND_NAMES = [
   "claude_chat_new",
   "save_diagnostics",
   "diagnostics_open_folder",
+  "wifi_networks",
+  "wifi_connect",
+  "bt_devices",
+  "bt_set",
 ] as const;
 export const EVENT_NAMES = [
   "windows_changed",
@@ -184,4 +188,5 @@ export const EVENT_NAMES = [
   "claude_chat_delta",
   "claude_chat_done",
   "diagnostics_saved",
+  "screen_tint",
 ] as const;

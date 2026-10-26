@@ -1,0 +1,23 @@
+/* The clock's month panel (CalendarPanel.tsx): 6 fixed rows, so the panel never changes height between months. */
+.cal { gap: 10px; }
+.calHead { display: flex; align-items: center; gap: 4px; height: 28px; }
+.calTitle { flex: 1; font: 650 15px/20px var(--font); letter-spacing: -.2px; }
+.calToday { height: 26px; padding: 0 10px; border-radius: 13px; background: var(--hover); color: var(--l1); opacity: 0; pointer-events: none; transition: opacity .16s ease; }
+.calToday[data-away] { opacity: 1; pointer-events: auto; }
+.calNav { width: 28px; height: 28px; border-radius: 14px; display: grid; place-items: center; color: var(--l2); }
+.calNav svg { width: 16px; height: 16px; }
+.calNav:hover, .calToday:hover, .calDay:hover { background: var(--selected); }
+.calGrid { display: grid; gap: 2px; }
+.calRow { display: grid; grid-template-columns: repeat(7, 1fr); justify-items: center; }
+.calDow span { height: 22px; line-height: 22px; }
+.calWeeks { display: grid; gap: 2px; animation: calIn .2s var(--ease); }
+.calWeeks[data-step="-1"] { --dx: -6px; }
+.calWeeks[data-step="1"] { --dx: 6px; }
+@keyframes calIn { from { opacity: 0; transform: translateX(var(--dx, 0)); } }
+.calDay { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font: 500 13px/1 var(--font); color: var(--l1); transition: background-color .12s ease; }
+.calDay.out { color: var(--l3); }
+.calDay.sel { box-shadow: inset 0 0 0 1.5px var(--l2); }
+.calDay.today { background: var(--indigo); color: #fff; font-weight: 650; box-shadow: none; }
+.calDay:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+[data-panel="calendar"] .panelClose { top: 16px; }   /* centred on the month row, like a fourth header button */
+.calFoot { display: flex; align-items: last baseline; justify-content: space-between; gap: 12px; padding: 10px 4px 0; box-shadow: inset 0 .5px 0 var(--divider); }

@@ -19,6 +19,7 @@ pub mod lock;
 pub mod media;
 pub mod mirror;
 pub mod model;
+pub mod pickers;
 pub mod plugins;
 pub mod ports;
 pub mod presence;
@@ -37,6 +38,7 @@ pub mod supervise;
 pub mod sysmon;
 pub mod taskbar;
 pub mod timer;
+pub mod tint;
 pub mod tray;
 
 #[cfg(test)]

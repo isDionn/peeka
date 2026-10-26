@@ -4,8 +4,8 @@ import { useFocusTrap } from "../lib/useFocusTrap";
 import { useGuard } from "../lib/useGuard";
 import { GUARD_MS } from "../lib/plugin";
 import { useHold } from "../lib/useHold";
-import { useSpring } from "../motion/useSpring";
-import { SPRINGS } from "../motion/spring";
+import { createShape, type Shape } from "../motion/shape";
+import { mountShoulders } from "../motion/shoulder";
 import { useLayoutEffect, useState } from "react";
 
 /** Icons from Rust may only be PNG/SVG data URLs (they go inside CSS url("...")). */
@@ -61,7 +61,8 @@ export function HoldButton({ label, icon, danger, onDone, className, guarded, au
 }
 
 /**
- * Panel hanging below the strip: height is a real spring, corner and liquid shoulder use the mockup formulas (§0i items 2, 8).
+ * Panel hanging below the strip: the shape engine springs its height (motion/shape.ts: clip-path + transform per frame, no React render);
+ * corner 34 like the island card, liquid shoulder min(12, 0.6 r) (polish audit #1, #3, #4).
  * When closed it springs shut, then unmounts its content. While `open`, focus cycles inside the card, Esc closes and focus returns to the opener.
  */
 /** After a delete/remove the list shifts, so a double-click mustn't land on the next destructive button under the pointer: a second delete within 500 ms is ignored (O5). */
@@ -86,8 +87,17 @@ export function Panel({ side, width, label, open, onClose, dataKind, children, o
   const root = useRef<HTMLDivElement>(null);
   const [content, setContent] = useState(0);
   const mounted = useRef(false);
-  const h = useSpring(open ? content : 0, side === "center" ? SPRINGS.card : SPRINGS.side);
-  if (open) mounted.current = true; else if (h < 0.4) mounted.current = false;
+  const cut = useRef<HTMLDivElement>(null), layers = useRef<HTMLDivElement>(null), tone = useRef<HTMLDivElement>(null);
+  const shape = useRef<Shape | null>(null);
+  const [shown, setShown] = useState(false); // the box still has height (open, or closing)
+  useLayoutEffect(() => {
+    const sh = mountShoulders(layers.current!);
+    const s = createShape(root.current!, cut.current!, { anchor: side, layers: [sh.layer], tone: tone.current, onBox: (_w, bh) => setShown(bh > 0) });
+    shape.current = s;
+    return () => { s.destroy(); sh.destroy(); };
+  }, [side]);
+  useLayoutEffect(() => { shape.current?.to(width, open ? content : 0); }, [width, open, content]);
+  if (open) mounted.current = true; else if (!shown) mounted.current = false;
   useLayoutEffect(() => {
     const el = inner.current;
     if (!el) return;
@@ -98,20 +108,15 @@ export function Panel({ side, width, label, open, onClose, dataKind, children, o
   }, [mounted.current]);
   useFocusTrap(root, onClose, open && content > 0);
 
-  const H = Math.max(0, h);
-  const r = side === "center" ? Math.min(H * 0.6, 34, 15 + Math.max(0, H - 40) * 0.3) : Math.min(H * 0.6, 28, 15 + H * 0.1);
-  const f = Math.min(16, 8 + H * 0.12, H * 0.8);
   const pos: CSSProperties = side === "left" ? { left: offset ?? 8 } : side === "right" ? { right: offset ?? 8 } : { left: "50%", transform: "translateX(-50%)" };
-  const style = {
-    ...pos, width, height: H, visibility: open || H >= 0.4 ? "visible" : "hidden", opacity: H < 0.4 ? 0 : 1, // stays visible while open: a hidden element can't take focus
-    "--r": r + "px", "--f": f + "px", "--vis": Math.min(1, H / 80), "--cardMix": Math.max(0, 1 - H / 70),
-    ...(amb ? { "--amb1": amb, "--amb2": amb, "--ambO": 0.7 } : null),
-  } as CSSProperties;
+  const style = { ...pos, ...(amb ? { "--amb1": amb, "--amb2": amb, "--ambO": 0.7 } : null) } as CSSProperties; // size and visibility: the engine (visible while open: a hidden element can't take focus)
   return (
-    <div ref={root} className={"dangling panel-" + side} style={style} role="dialog" aria-label={label} aria-hidden={!open} data-panel={dataKind}>
+    <div ref={root} className={"dangling shaped panel-" + side} style={style} role="dialog" aria-label={label} aria-hidden={!open} data-panel={dataKind}>
+      <div className="nm-layers" ref={layers} />
       {/* window region: on open, jump straight to target height + shadow room; on close, hold until the spring ends (so the real window doesn't clip) */}
       <div data-hit aria-hidden style={{ position: "absolute", top: 0, left: -PANEL_SHADOW_SIDE, width: width + 2 * PANEL_SHADOW_SIDE, height: content + PANEL_SHADOW_BOTTOM, pointerEvents: "none" }} />
-      <div className="cut">
+      <div className="cut" ref={cut}>
+        <div className="tone" ref={tone} />
         {amb && <div className="amb" />}
         {open && !ownHint && <button className="panelClose mini" title="Close (Esc)" aria-label="Close panel" onClick={onClose}><X /></button>}
         {(open || mounted.current) && (

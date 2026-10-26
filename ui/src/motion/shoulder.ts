@@ -4,17 +4,21 @@ import type { ShapeLayer, ShapeState } from "./shape";
 export interface ShoulderLayers {
   /** pass into `createShape({ layers: [x.layer] })` */
   layer: ShapeLayer;
-  /** cover color (only the halo under the card); null = the halo fades. The color transitions over 0.8 s. */
+  /** halo color (a soft light under the card); null = the halo fades. The color transitions over 0.8 s. */
   setAmbient(color: string | null, amount?: number): void;
+  /** the shoulder elements (left, right; absent sides omitted): content inside one is scaled with it */
+  shoulders: HTMLElement[];
   destroy(): void;
 }
 
 const div = (cls: string) => Object.assign(document.createElement("div"), { className: cls });
+/** Shoulder base size (CSS px): the largest fillet (shape.ts `shoulderOf`), drawn once and scaled down, never up. */
+const BASE = 12;
 
 /**
  * Builds the concave shoulder (a drop flowing from the strip), shadow and halo layers inside an empty `.nm-layers` container.
  * Shoulders scale uniformly; shadow and halo are drawn at the target size and scaled with transform: only transform + opacity per frame.
- * Shoulders overflow the body by 16 px; leave a 16 px margin on every side of the window.
+ * Each shoulder reaches 1 px (scaled) into the body, so the body's edge highlight never shows beside the curve (polish audit #2).
  * `sides`: only "left" on the top-right card (no right shoulder 8 px from the screen edge).
  */
 export function mountShoulders(container: HTMLElement, o: { sides?: "both" | "left" | "right" } = {}): ShoulderLayers {
@@ -39,9 +43,9 @@ export function mountShoulders(container: HTMLElement, o: { sides?: "both" | "le
     shadow.style.transform = `translate(${s.offsetX}px,0) scale(${sx},${sy})`;
     shadow.style.opacity = vis ? "0" : String(s.go);
     halo.style.transform = `translate(${s.offsetX + s.w / 2 - (s.tw * 1.1 * sx) / 2}px,0) scale(${sx},${sy})`;
-    const k16 = s.f / 16;
-    l.style.transform = `translate(${s.offsetX - s.f}px,0) scale(${k16})`;
-    r.style.transform = `translate(${s.offsetX + s.w}px,0) scale(${k16})`;
+    const kf = s.f / BASE;
+    l.style.transform = `translate(${s.offsetX - s.f}px,0) scale(${kf})`;
+    r.style.transform = `translate(${s.offsetX + s.w - kf}px,0) scale(${kf})`;
     l.style.visibility = r.style.visibility = vis ? "hidden" : "visible";
   };
   return {
@@ -50,6 +54,7 @@ export function mountShoulders(container: HTMLElement, o: { sides?: "both" | "le
       if (color) halo.style.setProperty("--nm-amb", color);
       halo.style.opacity = color ? String(amount) : "0";
     },
+    shoulders: [...(sides !== "right" ? [l] : []), ...(sides !== "left" ? [r] : [])],
     destroy: () => [halo, shadow, l, r].forEach((e) => e.remove()),
   };
 }

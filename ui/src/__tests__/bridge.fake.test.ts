@@ -5,6 +5,23 @@ import { collectHitRects } from "../lib/hitRects";
 import { formatCombo } from "../lib/shortcut";
 
 describe("fake bridge", () => {
+  it("Wi-Fi picker: an unknown secured network asks for a password, which is never logged", async () => {
+    const b = createFakeBridge();
+    const nets = await b.call("wifi_networks");
+    expect(nets.some((n) => n.secure && !n.known)).toBe(true);
+    expect(await b.call("wifi_connect", { ssid: "Studio-WPA3" })).toBe("wrong_password");
+    expect(await b.call("wifi_connect", { ssid: "Studio-WPA3", password: "s3cret-pass" })).toBeNull();
+    expect((await b.call("wifi_networks")).find((n) => n.connected)?.ssid).toBe("Studio-WPA3");
+    expect(JSON.stringify(b.log)).not.toContain("s3cret-pass");
+  });
+  it("Bluetooth picker: audio devices switch, the rest are unsupported", async () => {
+    const b = createFakeBridge();
+    const list = await b.call("bt_devices");
+    expect(list).toHaveLength(3);
+    await b.call("bt_set", { id: "demo-bt-buds", connect: false });
+    expect((await b.call("bt_devices"))[0].connected).toBe(false);
+    await expect(b.call("bt_set", { id: "demo-bt-keys", connect: false })).rejects.toBe("unsupported");
+  });
   it("changing status emits status_changed and a read returns the new value", async () => {
     const b = createFakeBridge();
     const seen = vi.fn();

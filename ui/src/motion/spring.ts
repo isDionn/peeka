@@ -5,13 +5,17 @@ export interface SpringParams { response: number; damping: number; eps?: number 
 export const SPRINGS = {
   card: { response: 0.44, damping: 0.78 },
   protrusion: { response: 0.44, damping: 0.78 },
-  pill: { response: 0.34, damping: 0.82 },
+  pill: { response: 0.3, damping: 0.9 },
   press: { response: 0.3, damping: 1, eps: 0.002 },
   quick: { response: 0.32, damping: 0.84 },
   side: { response: 0.4, damping: 0.8 },
   bar: { response: 0.42, damping: 0.9 },
   line: { response: 0.6, damping: 1, eps: 0.002 },
   fly: { response: 0.38, damping: 0.72 },
+  /** island and panels growing: calmer than `card` (polish audit #9) */
+  open: { response: 0.42, damping: 0.86 },
+  /** island and panels shrinking: quicker, critically damped, no settle wobble */
+  close: { response: 0.3, damping: 1 },
 } satisfies Record<string, SpringParams>;
 
 export class Spring {

@@ -1,0 +1,42 @@
+/* Drift glow (RC4, owner's pick; one-colour mode: the cover adds no colour of its own).
+   ONE light field in SCREEN coordinates: origin = the screen's centre line at the top edge. Each window draws its own slice:
+   the strip (y 0-30, full width), the island body and the island's two shoulder fillets (y >= 30). Same layers, same positions,
+   same phase (taken from the wall clock, Glow.tsx), so the slices meet without a seam.
+   - colour: --c1 (left), --c2 (right), --c3 (centre) from Rust's `screen_tint`; each falls back to --glow-color. A colour change never
+     animates a colour: the new colours go into the hidden copy, then the copies cross-fade (opacity, 2.5 s). A speed change does the same.
+   - state:  data-glow-state="idle|busy|attention" sets --glow-intensity (opacity) and --glow-speed (playback rate).
+   - cost:   only transform and opacity animate; softness comes from radial-gradient falloff, no filter. Motion never stops. */
+.glowHost { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.bar > .glowHost { z-index: 1; }   /* above the strip's background, under its buttons (.side is z 2) */
+.glowField {
+  --glow-intensity: .85;
+  --glow-speed: 1;
+  --c1: var(--glow-color); --c2: var(--glow-color); --c3: var(--glow-color);
+  position: absolute; left: 50%; top: 0; width: 0; height: 0;
+  opacity: var(--glow-intensity); transition: opacity .8s ease;
+}
+.cut > .glowHost .glowField, .glowSlice .glowField { top: calc(-1 * var(--BAR)); }   /* the island starts at the strip's bottom edge */
+.glowCopy { --glow-speed: 1; }   /* each copy keeps the speed it was started with (read by Glow.tsx) */
+:is(.glowField, .glowCopy)[data-glow-state="busy"]      { --glow-intensity: .95; --glow-speed: 1.8; }
+:is(.glowField, .glowCopy)[data-glow-state="attention"] { --glow-intensity: 1;   --glow-speed: 2.8; }
+.glowCopy { position: absolute; left: 0; top: 0; transition: opacity 2.5s ease; }
+.glowCopy i { position: absolute; display: block; will-change: transform, opacity; }
+
+/* island: two calm pools (left, behind the cover; right, behind the ghost) and a wash from the strip */
+.glowCopy .p1 { left: -360px; top: 40px; width: 380px; height: 320px; animation: glowPool1 17s ease-in-out infinite;
+  background: radial-gradient(closest-side, color-mix(in srgb, color-mix(in oklab, var(--c1), #fff 22%) 30%, transparent), color-mix(in srgb, var(--c1) 13%, transparent) 50%, transparent); }
+.glowCopy .p2 { left: 10px; top: 70px; width: 360px; height: 320px; animation: glowPool2 23s ease-in-out -9s infinite;
+  background: radial-gradient(closest-side, color-mix(in srgb, color-mix(in oklab, var(--c2), #fff 22%) 26%, transparent), color-mix(in srgb, var(--c2) 11%, transparent) 50%, transparent); }
+.glowCopy .p3 { left: -270px; top: -60px; width: 540px; height: 200px; animation: glowWash 11s ease-in-out infinite;
+  background: radial-gradient(closest-side, color-mix(in srgb, color-mix(in oklab, var(--c3), #fff 22%) 40%, transparent), color-mix(in srgb, var(--c3) 12%, transparent) 60%, transparent); }
+/* strip: the same light runs out along the strip to both sides and fades, centred on the strip's bottom edge (y 30) */
+.glowCopy .sL { left: -1000px; top: -50px; width: 1100px; height: 160px; animation: glowWash 19s ease-in-out infinite;
+  background: radial-gradient(closest-side, color-mix(in srgb, color-mix(in oklab, var(--c1), #fff 22%) 46%, transparent), color-mix(in srgb, var(--c1) 16%, transparent) 50%, transparent); }
+.glowCopy .sR { left: -100px; top: -50px; width: 1100px; height: 160px; animation: glowWash 23s ease-in-out -8s infinite;
+  background: radial-gradient(closest-side, color-mix(in srgb, color-mix(in oklab, var(--c2), #fff 22%) 46%, transparent), color-mix(in srgb, var(--c2) 16%, transparent) 50%, transparent); }
+@keyframes glowPool1 { 0%, 100% { transform: translate(0, 0); opacity: .75; } 33% { transform: translate(28px, 16px); opacity: 1; } 66% { transform: translate(-12px, 26px); opacity: .85; } }
+@keyframes glowPool2 { 0%, 100% { transform: translate(0, 0); opacity: 1; } 40% { transform: translate(-30px, 18px); opacity: .7; } 75% { transform: translate(14px, -10px); opacity: .9; } }
+@keyframes glowWash { 0%, 100% { transform: translateX(-22px); opacity: .7; } 50% { transform: translateX(22px); opacity: 1; } }
+
+/* the island's shoulder fillets carry their own slice (motion/shoulder.ts .nm-shoulder > .glowSlice; Island.tsx undoes the shoulder's scale) */
+.glowSlice { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }

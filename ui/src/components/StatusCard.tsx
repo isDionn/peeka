@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, Battery, BatteryCharging, Bluetooth, Brain, Camera, Check, ChevronDown, LoaderCircle, Mic, MicOff, Monitor, Moon, Power, ShieldAlert, Speaker, Sun, Volume2, VolumeX, Wifi, WifiOff } from "lucide-react";
 import { bridge, type Audio, type AssistantCounts, type MonitorInfo, type Radio, type Status } from "../bridge";
 import { useMainAssistant, usePrivacy, useSurfaces } from "../hooks";
@@ -7,6 +7,7 @@ import { pluginName } from "../lib/plugin";
 import { Mascot } from "../mascot";
 import { NET_LABEL } from "./Strip";
 import { Row } from "./common";
+import { RadioPicker } from "./RadioPicker";
 import "../fidelity-settings.css";
 
 function Slider({ icon, value, label, onChange }: { icon: ReactNode; value: number; label: string; onChange: (v: number) => void }) {
@@ -20,10 +21,30 @@ function Slider({ icon, value, label, onChange }: { icon: ReactNode; value: numb
   );
 }
 
-function Tile({ icon, title, sub, on, label, onClick, first }: { icon: ReactNode; title: string; sub: string; on: boolean; label: string; onClick: () => void; first?: boolean }) {
+const HOLD_MS = 520;
+
+/** `onHold`: a press held 0.52 s (a ring fills around the icon after a quiet 120 ms) or Shift+Enter; a short click stays `onClick`. */
+function Tile({ icon, title, sub, on, label, onClick, onHold, first }: { icon: ReactNode; title: string; sub: string; on: boolean; label: string; onClick: () => void; onHold?: () => void; first?: boolean }) {
+  const [ring, setRing] = useState<{ left: number; top: number } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const held = useRef(false);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const stop = () => { clearTimeout(timer.current); setRing(null); };
+  const down = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (!onHold || e.button !== 0) return;
+    const box = e.currentTarget.getBoundingClientRect(), i = e.currentTarget.querySelector("svg")!.getBoundingClientRect();
+    setRing({ left: i.left - box.left + i.width / 2 - 16, top: i.top - box.top + i.height / 2 - 16 });
+    held.current = false;
+    timer.current = setTimeout(() => { held.current = true; setRing(null); onHold(); }, HOLD_MS);
+  };
   return (
-    <button className={"boxBtn" + (on ? " on" : "")} aria-pressed={on} aria-label={label} data-autofocus={first ? "" : undefined} onClick={onClick}>
+    <button className={"boxBtn" + (on ? " on" : "") + (ring ? " holding" : "")} aria-pressed={on} aria-label={label} data-autofocus={first ? "" : undefined}
+      title={onHold ? `Click to turn ${title} on or off. Press and hold for the list (Shift+Enter).` : undefined}
+      onPointerDown={down} onPointerUp={stop} onPointerLeave={stop} onPointerCancel={stop}
+      onKeyDown={(e) => { held.current = false; if (onHold && e.key === "Enter" && e.shiftKey) { e.preventDefault(); onHold(); } }}
+      onClick={() => { if (held.current) held.current = false; else onClick(); }}>
       {icon}<span className="t12 b6">{title}</span><span className="t11 l2">{sub}</span>
+      {ring && <svg className="holdRing" viewBox="0 0 32 32" aria-hidden="true" style={ring}><circle className="trk" cx="16" cy="16" r="14" /><circle className="arc" cx="16" cy="16" r="14" pathLength="100" /></svg>}
     </button>
   );
 }
@@ -89,6 +110,9 @@ export function StatusCard({ monitor, status, setStatus, onQuit }: { monitor: Mo
   const loadAudio = () => { bridge.call("audio_get").then(setAudio).catch(() => undefined); };
   useEffect(loadAudio, []); // shortcut: read on open and on the switcher's clicks, not live; poll if the owner notices staleness
   const micMuted = audio?.micMuted ?? null;
+  const [pick, setPick] = useState<"wifi" | "bt" | null>(null);
+  const grid = useRef<HTMLDivElement>(null);
+  const closePick = () => { const k = pick; setPick(null); requestAnimationFrame(() => grid.current?.querySelector<HTMLElement>(`[aria-label^="${k === "wifi" ? "Wi-Fi" : "Bluetooth"}"]`)?.focus()); };
   return (
     <div className="body">
       {status.volume !== null && (
@@ -98,11 +122,12 @@ export function StatusCard({ monitor, status, setStatus, onQuit }: { monitor: Mo
       {status.brightness !== null && ( // live value: null when brightness can't be read
         <Slider icon={<Sun />} value={status.brightness} label="Brightness" onChange={(v) => { setStatus({ ...status, brightness: v }); bridge.call("set_brightness", { value: v }); }} />
       )}
-      <div className="controlGrid">
-        {wifi && <Tile first={firstTile === "wifi"} icon={wifi.on ? <Wifi /> : <WifiOff />} title="Wi-Fi" sub={wifi.on ? wifi.name ?? "On" : "Off"} on={wifi.on} label={`Wi-Fi, ${state(wifi.on)}${wifi.name ? ", " + wifi.name : ""}`} onClick={() => radio("wifi", wifi)} />}
-        {bluetooth && <Tile first={firstTile === "bt"} icon={<Bluetooth />} title="Bluetooth" sub={bluetooth.on ? bluetooth.name ?? "On" : "Off"} on={bluetooth.on} label={`Bluetooth, ${state(bluetooth.on)}${bluetooth.name ? ", " + bluetooth.name : ""}`} onClick={() => radio("bluetooth", bluetooth)} />}
+      <div className="controlGrid" ref={grid}>
+        {wifi && <Tile first={firstTile === "wifi"} icon={wifi.on ? <Wifi /> : <WifiOff />} title="Wi-Fi" sub={wifi.on ? wifi.name ?? "On" : "Off"} on={wifi.on} label={`Wi-Fi, ${state(wifi.on)}${wifi.name ? ", " + wifi.name : ""}`} onClick={() => radio("wifi", wifi)} onHold={() => setPick("wifi")} />}
+        {bluetooth && <Tile first={firstTile === "bt"} icon={<Bluetooth />} title="Bluetooth" sub={bluetooth.on ? bluetooth.name ?? "On" : "Off"} on={bluetooth.on} label={`Bluetooth, ${state(bluetooth.on)}${bluetooth.name ? ", " + bluetooth.name : ""}`} onClick={() => radio("bluetooth", bluetooth)} onHold={() => setPick("bt")} />}
         <Tile first={firstTile === "dnd"} icon={<Moon />} title="Do not disturb" sub={status.dnd ? "On" : "Off"} on={status.dnd} label={`Do not disturb, ${state(status.dnd)}`} onClick={() => { setStatus({ ...status, dnd: !status.dnd }); bridge.call("set_dnd", { on: !status.dnd }); }} />
       </div>
+      {pick && <RadioPicker key={pick} kind={pick} onClose={closePick} />}
       <div className="list glass" style={{ "--indent": "28px" } as CSSProperties}>
         {network !== "internet" && ( // no row when all is well (mockup): only connection problems are shown
           <div className="row">

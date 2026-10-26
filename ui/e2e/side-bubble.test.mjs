@@ -97,9 +97,9 @@ describe("side bubble", () => {
       await p.waitForSelector(".sideList");
       const rows = await p.locator(".sideList .sideRow").allTextContents();
       assert.equal(rows.length, 1); assert.match(rows[0], /Timer/);
-      const l = await box(".sideList")(p), b = await bubble(p);
+      const l = await stable(() => box(".sideList")(p)), b = await bubble(p); // after its entry (fade + 3 px drop + 0.98 scale, polish audit #6)
       assert.ok(l.x >= 0 && l.r <= 1280 && l.y > b.y + b.h, "the list is inside the window and below the bubble");
-      assert.ok((await rects(p)).some((x) => !x.paint && x.w >= l.w - 1 && Math.abs(x.x - l.x) <= 1), "the list was not reported to Rust");
+      await until(async () => (await rects(p)).some((x) => !x.paint && x.w >= l.w - 1 && Math.abs(x.x - l.x) <= 1), "the list was not reported to Rust");
       assert.ok(Math.abs((await center(p)).cx - prev.cx) <= 0.5, "the center shifted when the list opened " + JSON.stringify([prev, await center(p)]));
       await p.screenshot({ path: "screenshots/side-bubble-plus.png", clip: { x: 340, y: 0, width: 600, height: 150 } });
       await p.keyboard.press("Escape");

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createFlight } from "../flight";
-import { createShape, type Rect } from "../shape";
+import { bodyPath, createShape, type Shape, type ShapeState } from "../shape";
 import { advance, Spring, SPRINGS } from "../spring";
 
 const run = (s: Spring, sec: number, dt = 1 / 60) => { for (let t = 0; t < sec; t += dt) advance(s, dt); };
@@ -56,64 +56,82 @@ const boxAt = (left: number, top: number, w: number, h: number) =>
   ({ left, top, right: left + w, bottom: top + h, width: w, height: h, x: left, y: top, toJSON() {} }) as DOMRect;
 
 describe("createShape", () => {
-  const setup = () => {
+  const setup = (anchor?: "center" | "left" | "right") => {
     const host = document.createElement("div"), body = document.createElement("div");
-    host.getBoundingClientRect = () => boxAt(100, 30, 600, 300);
-    const rects: Rect[] = [];
-    const sh = createShape(host, body, { maxW: 600, maxH: 300, restW: 200, onRect: (r) => rects.push(r) });
-    return { host, body, sh, rects };
+    const boxes: [number, number, boolean][] = [], states: ShapeState[] = [];
+    const sh = createShape(host, body, { anchor, onBox: (w, h, m) => boxes.push([w, h, m]), layers: [(st) => states.push(st)] });
+    return { host, body, sh, boxes, states };
   };
+  const run = (sh: Shape) => { let n = 0; while (sh.advance(1 / 60) && n++ < 600); return n; };
 
-  it("when closed, an empty rectangle and a hidden body", () => {
-    const { body, sh } = setup();
-    expect(sh.rect()).toEqual({ x: 300, y: 30, w: 0, h: 0 });
-    expect(body.style.visibility).toBe("hidden");
+  it("at rest: the width follows without motion, the host is hidden, no clip", () => {
+    const { host, body, sh, boxes } = setup();
+    sh.to(200, 0);
+    expect(sh.moving).toBe(false);
+    expect(host.style.width).toBe("200px");
+    expect(host.style.visibility).toBe("hidden");
+    expect(body.style.clipPath).toBe("");
+    expect(boxes.at(-1)).toEqual([200, 0, false]);
   });
 
-  it("snap: the centered rectangle is correct relative to the host position; clip-path and onRect", () => {
-    const { body, sh, rects } = setup();
-    sh.snap(400, 120);
-    expect(sh.rect()).toEqual({ x: 100 + 100, y: 30, w: 400, h: 120 });
-    expect(rects.at(-1)).toEqual({ x: 200, y: 30, w: 400, h: 120 });
-    expect(body.style.clipPath).toContain("inset(0 100px 180px 100px round");
-    expect(body.style.visibility).toBe("visible");
+  it("growing: the box jumps to the target at once (one layout), every frame only moves the clip; at the end the clip goes and the corner var is set", () => {
+    const { host, body, sh, boxes, states } = setup();
+    sh.to(200, 0);
+    sh.to(520, 120);
+    expect(host.style.width).toBe("520px");
+    expect(host.style.height).toBe("120px");
+    expect(host.style.getPropertyValue("--r")).toBe("34px");
+    expect(host.style.getPropertyValue("--f")).toBe("12px"); // fillet = min(12, 0.6 r)
+    const n0 = boxes.length;
+    sh.advance(1 / 60);
+    expect(body.style.clipPath).toMatch(/^path\("M/);
+    run(sh);
+    expect(boxes.length - n0).toBe(1); // only the "stopped" notice, not one per frame
+    expect(boxes.at(-1)).toEqual([520, 120, false]);
+    expect(body.style.clipPath).toBe("");
+    // centered: every frame's body sits in the middle of the box
+    for (const st of states) if (st.w) expect(Math.abs(st.offsetX + st.w / 2 - st.bw / 2)).toBeLessThan(0.01);
+    expect(states.at(-1)).toMatchObject({ w: 520, h: 120, moving: false });
   });
 
-  it("to: the window is fixed, the rectangle changes every frame and lands exactly on the target", () => {
-    const { host, body, sh, rects } = setup();
+  it("shrinking: the box keeps the old size until the spring ends (clicks aren't lost), then takes the target; no overshoot on the way down", () => {
+    const { host, sh } = setup();
+    sh.snap(520, 300);
     sh.to(300, 44);
-    expect(sh.rect().w).toBe(0); // no motion yet
-    let n = 0;
-    while (sh.advance(1 / 60) && n++ < 600);
-    expect(sh.rect()).toEqual({ x: 100 + 150, y: 30, w: 300, h: 44 });
-    expect(rects.length).toBeGreaterThan(5);
-    expect(rects.at(-1)).toEqual(sh.rect());
-    expect(host.style.width).toBe("600px"); // the window/host was never resized
-    expect(body.style.width).toBe("600px");
-    // stays centered: every intermediate rectangle's center is at the host center
-    for (const r of rects) if (r.w) expect(Math.abs(r.x + r.w / 2 - 400)).toBeLessThanOrEqual(1);
+    let min = Infinity;
+    for (let i = 0; i < 10; i++) sh.advance(1 / 60);
+    expect(host.style.height).toBe("300px");
+    while (sh.moving) { sh.advance(1 / 60); min = Math.min(min, parseFloat(host.style.height)); }
+    expect(host.style.width).toBe("300px");
+    expect(host.style.height).toBe("44px");
+    expect(min).toBe(44);
   });
 
   it("new target midway: the card → peek return doesn't jump", () => {
-    const { sh } = setup();
+    const { sh, states } = setup();
     sh.snap(300, 44);
     sh.to(560, 260);
     for (let i = 0; i < 8; i++) sh.advance(1 / 60);
-    const mid = sh.rect();
+    const mid = states.at(-1)!.h;
     sh.to(300, 44);
-    const after = (sh.advance(1 / 240), sh.rect());
-    expect(Math.abs(after.h - mid.h)).toBeLessThan(10);
-    let n = 0;
-    while (sh.advance(1 / 60) && n++ < 600);
-    expect(sh.rect().h).toBe(44);
+    sh.advance(1 / 240);
+    expect(Math.abs(states.at(-1)!.h - mid)).toBeLessThan(10);
+    run(sh);
+    expect(states.at(-1)!.h).toBe(44);
   });
 
-  it("right anchor: the right edge sits on the host's right edge", () => {
-    const host = document.createElement("div"), body = document.createElement("div");
-    host.getBoundingClientRect = () => boxAt(0, 0, 400, 200);
-    const sh = createShape(host, body, { maxW: 400, maxH: 200, anchor: "right" });
+  it("right anchor: the body's right edge sits on the host's right edge", () => {
+    const { sh, states } = setup("right");
     sh.snap(340, 100);
-    expect(sh.rect()).toEqual({ x: 60, y: 0, w: 340, h: 100 });
+    expect(states.at(-1)).toMatchObject({ offsetX: 0, bw: 340 });
+    sh.to(300, 100);
+    sh.advance(1 / 60);
+    const st = states.at(-1)!;
+    expect(st.offsetX + st.w).toBeCloseTo(st.bw);
+  });
+
+  it("bodyPath: straight top, both bottom corners rounded with the radius", () => {
+    expect(bodyPath(10, 100, 50, 20)).toBe('path("M10 0H110V30C110 52 112 50 90 50H30C8 50 10 52 10 30Z")');
   });
 });
 

@@ -14,12 +14,13 @@ import { SPRINGS } from "../motion/spring";
 import { useSpring } from "../motion/useSpring";
 import { AppIcon, WinLogo } from "./common";
 import "./strip-items.css";
+import { GlowField } from "./Glow";
 import { PromotedTray } from "./TrayList";
 import { IslandHiddenGlyph } from "./IslandHidden";
 import { useIslandHidden } from "../hooks.fidelity";
 import { cap99 } from "../lib/plugin";
 
-export type PanelKind = "setup" | "start" | "status" | "search" | "appearance" | "shortcuts" | "plugins" | "modules" | "clipboard" | "mascot" | "quit" | "notif" | "cleanup" | "tray";
+export type PanelKind = "setup" | "calendar" | "start" | "status" | "search" | "appearance" | "shortcuts" | "plugins" | "modules" | "clipboard" | "mascot" | "quit" | "notif" | "cleanup" | "tray";
 export type MenuState = { kind: "app"; appId: string; x: number } | { kind: "strip"; x: number };
 
 const GAP = 2;
@@ -269,6 +270,7 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
     <>
     <header ref={bar} className="bar" data-hit aria-label="Peeka strip" onKeyDown={crossKey} style={slide ? { transform: slide } : undefined}
       onContextMenu={(e) => { if (e.target === e.currentTarget || (e.target as HTMLElement).closest(".empty")) { e.preventDefault(); onMenu({ kind: "strip", x: e.clientX }); } }}>
+      {monitor.primary && <div className="glowHost"><GlowField monitor={monitor.id} /></div>}{/* the strip's slice of the Drift glow (the island window draws the rest) */}
       {!monitor.primary && badge > 0 && <span className="approvalBadge" role="status" aria-label={`${badge} awaiting approval`}>{badge > 9 ? "9+" : badge} {badge === 1 ? "approval" : "approvals"}</span>}
       <div className="side" ref={left}>
         <SelectionPill host={left} watch={activeKey} />
@@ -307,7 +309,7 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
             </button>
           </>
         )}
-        <button className="key" title="Calendar" aria-label={`${label}, Calendar`} onClick={() => { bridge.call("open_calendar").catch(() => undefined); }}>
+        <button className={"key" + (openPanel === "calendar" ? " shown" : "")} title="Calendar" aria-label={`${label}, Calendar`} aria-haspopup="dialog" {...trigger("calendar")}>
           <span className="l2">{date}</span>{!centerClock && <span className="b6 num">{time}</span>}
         </button>
       </div>
