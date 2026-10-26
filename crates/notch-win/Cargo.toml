@@ -11,19 +11,19 @@ serde.workspace = true
 serde_json.workspace = true
 parking_lot.workspace = true
 # Both already in Cargo.lock (Tauri's own), so nothing new is downloaded: app icons as PNG data URLs.
-png = "0.17.16"
-base64 = "0.22.1"
+png = "0.18.1"
+base64 = "0.23.1"
 # Wave 4, in Cargo.lock already: the clipboard image fingerprint.
-sha2 = "0.10.9"
+sha2 = "0.11.1"
 # New download (the notification mirror without setup): reads Windows's notification history database read-only.
 # `bundled` compiles SQLite from source, so no system library or import lib is needed.
-rusqlite = { version = "0.37", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 
 [target.'cfg(windows)'.dependencies]
 # Both in Cargo.lock at windows 0.61's own versions: `IIterable`/`IMapView` for the Bluetooth watcher, and
 # `#[implement]` (the volume callback) expands to `windows_core::...`.
-windows-collections = "0.2.0"
-windows-core = "0.61.2"
+windows-collections = "0.3.2"
+windows-core = "0.62.2"
 windows = { workspace = true, features = [
   "ApplicationModel",
   "ApplicationModel_DataTransfer",
