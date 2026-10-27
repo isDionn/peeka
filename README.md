@@ -48,7 +48,12 @@ It runs locally, sends nothing anywhere, and other programs can add their own ca
 ### The shell
 
 - 📏 **Strip**: a top bar that does the taskbar's job: running apps, tray, start and search, system status. Clicking it does not steal focus from the app you are working in. Hover an app to see a live window preview.
-- 🏝️ **Island**: the central pill expands into cards for whatever is happening right now: media, alerts, a running timer, a finished download, a Claude Code session, plugin cards.
+  - App icons only; when they don't fit, a **+N** button shows the rest. Click the app in front to minimise it.
+  - Import your Windows taskbar pins (Settings › Appearance). A pinned app that is running shows once, not twice.
+  - **Start** opens with the Win key and has folders; right-click menus, a **Show desktop** button, hidden tray icons you can reorder and group.
+  - Optional strips on your other monitors; a fullscreen game on one screen leaves the others alone.
+- 🏝️ **Island**: the central pill expands into cards for whatever is happening right now: media, alerts, a running timer, a finished download, a Claude Code session, plugin cards. Its home view, **Places**, keeps every module (music, calendar, timer, clipboard and more) in a fixed spot.
+- ✨ **Drift glow**: a soft light inside the strip and island that takes its colours from what is on your screen.
 - 💬 **Side bubble**: short, quiet messages next to the island instead of full pop-ups.
 - 👻 **Mascot**: a ghost that hangs below the island and reacts to its state.
 - 🧭 **Setup wizard**: three steps on first launch (taskbar, optional notification mirror, Windows banners), available again any time.
@@ -56,7 +61,9 @@ It runs locally, sends nothing anywhere, and other programs can add their own ca
 ### Everyday tools
 
 - 📋 **Clipboard (Pano)**: history of text, images and file paths. Password-like items are recognised, shown blurred, and never handed to plugins; a vault keeps them encrypted with Windows DPAPI.
-- 🎵 **Media**: the current track from Windows media sessions, with play, pause and skip.
+- 🎵 **Media**: the current track from Windows media sessions, with play, pause, skip and seeking (controls appear on hover), plus volume per app.
+- 🗂️ **Shelf**: drop files on it to keep them at hand; they stay until you remove them.
+- 📅 **Calendar, Wi-Fi and Bluetooth**: Peeka's own calendar and network pickers from the strip.
 - 🔔 **Notifications**: an optional mirror of Windows notifications, plus a list of Peeka's own. One-time codes can be copied with one click.
 - ⏱️ **Timer**: a countdown that lives in the island.
 - 🖥️ **System**: CPU and memory, battery thresholds, volume, brightness and Bluetooth or radio changes, shown as brief island events. A download-finished notice shows names and sizes only; files are never opened.
@@ -75,6 +82,8 @@ It runs locally, sends nothing anywhere, and other programs can add their own ca
 - 🔔 **Notification mirror is read-only and off by default.** When you turn it on, Peeka reads your own Windows notification history (read-only, never written, no copy), keeps the cards in memory only, and does not start while Windows' notification access switch is off.
 - 🎙️ **Mic and camera indicator.** A dot shows which apps are using the microphone or camera, read from Windows' own consent store.
 - 📡 **Local listeners only.** A per-user named pipe for plugins, and an optional alert API on `127.0.0.1` that is off by default and needs a per-install key.
+- 🎨 **Screen colours stay in memory.** The Drift glow samples a few pixels under the strip; they are never written to disk, logs or plugins, and sampling pauses while locked, presenting, sharing your screen or in fullscreen. You can turn it off (Settings › Screen colour glow).
+- 🩺 **Diagnostics are local.** Ctrl+Alt+Shift+D saves a text file for bug reports (versions, screen sizes) with no window titles, clipboard, user name or paths; nothing is sent.
 - 📁 Your data (settings, clipboard vault, plugin tokens stored as SHA-256 only) lives in `%LOCALAPPDATA%\notch`.
 
 Plugins may use their own internet connection; Peeka cannot control that, and the approval window says so.
@@ -86,7 +95,7 @@ From the [latest release](https://github.com/isDionn/peeka/releases/latest), dow
 > [!NOTE]
 > The exe is not code-signed yet, so Windows SmartScreen may say "Windows protected your PC". Click **More info → Run anyway**. You can always [build it from source](#build-from-source) instead.
 
-Not happy with it? Press **Restore taskbar** in the Start panel and your normal taskbar is back.
+Not happy with it? Press **Restore taskbar** in Settings › Appearance and your normal taskbar is back.
 
 ## Build from source
 
@@ -140,7 +149,7 @@ The mascot is not: the ghost character and its artwork are © 2026 isDionn, all 
 
 ## Türkçe
 
-Peeka, Windows görev çubuğunun yerine geçen ince bir üst şerit ve ondan açılan "ada" (Dynamic Island benzeri) arayüzüdür. Şerit, ada, yan baloncuk, pano geçmişi, medya, bildirimler, zamanlayıcı, sistem durumu, hayalet maskot, Claude Code bağlayıcısı ve herkese açık eklenti API'si içerir.
+Peeka, Windows görev çubuğunun yerine geçen ince bir üst şerit ve ondan açılan "ada" (Dynamic Island benzeri) arayüzüdür. Şerit, ada, yan baloncuk, pano geçmişi, medya, Raf (Shelf), takvim, Wi-Fi ve Bluetooth seçicileri, uygulama başına ses, bildirimler, zamanlayıcı, sistem durumu, ekran renklerini alan Drift ışığı, hayalet maskot, Claude Code bağlayıcısı ve herkese açık eklenti API'si içerir. Windows görev çubuğundaki sabitlenmiş uygulamalar içe aktarılabilir; Win tuşu Peeka Başlat'ı açar.
 
 - **İndirme:** [Son sürümden](https://github.com/isDionn/peeka/releases/latest) kurulum dosyasını (`Peeka-<sürüm>-setup.exe`) ya da taşınabilir `peeka.exe` dosyasını indirin. Exe henüz imzalı değil; SmartScreen uyarırsa **Ek bilgi → Yine de çalıştır**.
 - **Kaynaktan derleme:** Yukarıdaki adımlar. Gereksinim: WebView2'li Windows 10/11, Rust (MSVC), Node.js ve pnpm. Düz `cargo build` arayüzü gömmez, `custom-protocol` özelliği şarttır.
