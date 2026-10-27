@@ -120,7 +120,7 @@ function Meter({ label, text, ratio }: { label: string; text: string; ratio: num
   return (
     <>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}><span>{label}</span><span className="num b6">{text}</span></div>
-      {ratio !== null && <div className="meter" style={{ "--o": Math.round(ratio * 100) + "%", "--color": "var(--cyan)" } as CSSProperties}><b /></div>}
+      <div className="meter" style={{ "--o": Math.round(Math.max(0, Math.min(1, ratio ?? 0)) * 100) + "%", "--color": "var(--cyan)" } as CSSProperties}><b /></div>
     </>
   );
 }
@@ -155,8 +155,15 @@ export function TimerStart({ timer = null }: { timer?: TimerState | null }) {
   );
 }
 
-const SystemBox = ({ sys, cpu }: { sys: SysmonTick | null; cpu: number[] }) => {
+const SystemBox = ({ sys, cpu, battery }: { sys: SysmonTick | null; cpu: number[]; battery: Status["battery"] }) => {
   const gb = (n: number | null) => (n === null ? dash : (n / 1024 ** 3).toLocaleString("en-US", { maximumFractionDigits: 1 }));
+  const speed = (n: number | null) => n === null ? dash : `${(n / 1024 ** 2).toLocaleString("en-US", { maximumFractionDigits: 1 })} MB/s`;
+  const uptime = (n: number | null) => {
+    if (n === null) return dash;
+    const d = Math.floor(n / 86_400), h = Math.floor(n % 86_400 / 3_600), m = Math.floor(n % 3_600 / 60);
+    return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`;
+  };
+  const charge = battery?.percent == null ? dash : `${battery.percent}%${battery.charging ? " charging" : battery.plugged ? " plugged in" : ""}`;
   return (
     <div className="box glass">
       <h4><Cpu />System</h4>
@@ -165,6 +172,10 @@ const SystemBox = ({ sys, cpu }: { sys: SysmonTick | null; cpu: number[] }) => {
       <div className="spark" aria-hidden="true">{Array.from({ length: 16 }, (_, i) => cpu[cpu.length - 16 + i]).map((v, i) => <i key={i} className={v === undefined ? "empty" : undefined} style={{ height: v === undefined ? "4%" : Math.max(4, v * 2) + "%" }} />)}</div>
       <Meter label="Memory" text={sys?.memUsed == null || sys.memTotal == null ? dash : `${gb(sys.memUsed)} / ${gb(sys.memTotal)} GB`} ratio={sys?.memUsed == null || !sys.memTotal ? null : sys.memUsed / sys.memTotal} />
       <Meter label="GPU" text={sys?.gpu == null ? dash : Math.round(sys.gpu) + "%"} ratio={sys?.gpu == null ? null : sys.gpu / 100} />
+      <Meter label="Network" text={`↓ ${speed(sys?.down ?? null)} · ↑ ${speed(sys?.up ?? null)}`} ratio={null} />
+      <Meter label="C: drive" text={sys?.diskUsed == null || sys.diskTotal == null ? dash : `${gb(sys.diskUsed)} / ${gb(sys.diskTotal)} GB`} ratio={sys?.diskUsed == null || !sys.diskTotal ? null : sys.diskUsed / sys.diskTotal} />
+      <Meter label="Battery" text={charge} ratio={battery?.percent == null ? null : battery.percent / 100} />
+      <Meter label="Uptime" text={uptime(sys?.uptimeS ?? null)} ratio={null} />
     </div>
   );
 };
@@ -367,7 +378,7 @@ function ModulesCardImpl({ media, pos, sys, cpu, surf, shelf, main, meeting, onP
       : p === "music" ? <MusicTab media={media} pos={pos} />
       : p === "calendar" ? (meeting ? <MeetingCard item={meeting} /> : <div className="box glass"><h4><Calendar />Calendar</h4><div className="t13 l2 b4">No upcoming meetings. Meetings come from a calendar plugin.</div></div>)
       : p === "timer" ? <TimerStart timer={timer} />
-      : p === "system" ? <SystemBox sys={sys} cpu={cpu} />
+      : p === "system" ? <SystemBox sys={sys} cpu={cpu} battery={battery} />
       : p === "notifications" ? <AlertsTab />
       : p === "claude" ? <ClaudeChatTab />
       : <>

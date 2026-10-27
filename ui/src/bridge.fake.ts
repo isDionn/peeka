@@ -263,7 +263,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       if (sysmonTimer) return;
       let cpu = 23;
       const GB = 1024 ** 3;
-      const tick = () => { cpu = Math.max(8, Math.min(70, cpu + (Math.random() - 0.5) * 14)); emit("sysmon_tick", { cpu: Math.round(cpu), memUsed: 18.2 * GB, memTotal: 32 * GB, gpu: 11, down: 120_000, up: 30_000, topCpu: "chrome" } satisfies SysmonTick); };
+      const tick = () => { cpu = Math.max(8, Math.min(70, cpu + (Math.random() - 0.5) * 14)); emit("sysmon_tick", { cpu: Math.round(cpu), memUsed: 18.2 * GB, memTotal: 32 * GB, gpu: 11, down: 120_000, up: 30_000, diskUsed: 245 * GB, diskTotal: 512 * GB, uptimeS: 3 * 86_400 + 4 * 3_600 + 12 * 60, topCpu: "chrome" } satisfies SysmonTick); };
       tick(); sysmonTimer = setInterval(tick, 1000);
     },
     sysmon_stop: () => { if (sysmonTimer) clearInterval(sysmonTimer); sysmonTimer = null; },

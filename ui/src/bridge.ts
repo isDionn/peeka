@@ -104,8 +104,8 @@ export interface Alert {
 }
 /** Payload of `list_alerts` and `alerts_changed` (Rust `AlertsView`): sorted list, the one alert that may open the island now, and how long to bring down a hidden strip. */
 export interface AlertsView { items: Alert[]; top: string | null; dropStripMs: number | null }
-/** System monitor sample (Rust `SysmonTick`); unreadable fields are null (nothing made up). Memory in bytes, network in bytes/s. */
-export interface SysmonTick { cpu: number | null; gpu: number | null; memUsed: number | null; memTotal: number | null; down: number | null; up: number | null; /** Program using the most CPU (exe name without ".exe"; all processes of a program are summed); null until the first sample or if nothing passes 1%. Refreshed every ~10 s while the card is open. */ topCpu: string | null }
+/** System monitor sample (Rust `SysmonTick`); unreadable fields are null (nothing made up). Memory and disk are bytes, network is bytes/s. */
+export interface SysmonTick { cpu: number | null; gpu: number | null; memUsed: number | null; memTotal: number | null; down: number | null; up: number | null; diskUsed: number | null; diskTotal: number | null; uptimeS: number | null; /** Program using the most CPU (exe name without ".exe"; all processes of a program are summed); null until the first sample or if nothing passes 1%. Refreshed every ~10 s while the card is open. */ topCpu: string | null }
 /** Volume key or volume change: our own volume indicator only. */
 export interface VolumeOsd { percent: number; muted: boolean; device?: string | null }
 
