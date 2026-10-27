@@ -73,6 +73,7 @@ pub const COMMANDS: &[&str] = &[
     "clip_visible",
     "clip_list",
     "clip_copy",
+    "clipboard_write",
     "clip_pin",
     "clip_delete",
     "clip_clear",

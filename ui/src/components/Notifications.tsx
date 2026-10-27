@@ -5,6 +5,7 @@ import { useAlerts, useInput, useLock, useMainAssistant, useMirror } from "../ho
 import { sendX } from "../lib/xwin";
 import { ageLabel } from "../lib/alerts";
 import { AlertIcon } from "../lib/alertIcon";
+import { groupNotifications } from "../lib/notifications";
 import { NotchIcon } from "./IslandCards";
 import { EmptyBoard } from "./CardsExtra";
 import { Lead } from "./Plugin";
@@ -62,6 +63,7 @@ export function NotificationList({ onReview, onClose, onEmpty }: { onReview: (a:
   const main = useMainAssistant();
   const nowMs = bridge.now().getTime();
   const held = useHeldSlots();
+  const groups = groupNotifications(mirror);
   const rows = [
     ...alerts.map((a) => (
           <div key={a.id} role="listitem" className="notif plat glass">
@@ -77,7 +79,7 @@ export function NotificationList({ onReview, onClose, onEmpty }: { onReview: (a:
             <button className="mini" title="Remove" aria-label={`${a.title}, remove`} onClick={(e) => { if (delOk()) { held.hold(e, a.id); bridge.call("dismiss_alert", { id: a.id }); } }}><X /></button>
           </div>
     )),
-    ...mirror.map((n) => <MirrorCard key={n.id} n={n} onClose={onClose} onHold={held.hold} />),
+    ...groups.map((g) => g.length === 1 ? <MirrorCard key={g[0].id} n={g[0]} onClose={onClose} onHold={held.hold} /> : <NoticeGroup key={g[0].app} items={g} onClose={onClose} onHold={held.hold} />),
   ];
   const empty = !hide && total === 0;
   useEffect(() => { onEmpty?.(empty); }, [empty, onEmpty]);
@@ -90,12 +92,19 @@ export function NotificationList({ onReview, onClose, onEmpty }: { onReview: (a:
       {hide && <div className="noResults" role="status">{lock.locked ? "Peeka is locked" : "Presenting"}: notification content is hidden{total > 0 ? ` (${total})` : ""}</div>}
       {/* while locked only the app name of Windows notifications is drawn; title and body never enter the DOM (Rust still sends them) */}
       {hide && mirror.length > 0 && <div className="notifs" role="list">
-        {mirror.map((n) => <div key={n.id} role="listitem" className="notif plat glass"><span className="app"><b aria-hidden="true">{initial(n.app)}</b></span><div style={{ flex: 1, minWidth: 0 }}><div className="b6">{n.app}</div><div className="t12 l3">{lock.locked ? "Locked" : "Hidden"}</div></div></div>)}
+        {groups.map((g) => <div key={g[0].app} role="listitem" className="notif plat glass"><span className="app"><b aria-hidden="true">{initial(g[0].app)}</b>{g.length > 1 && <span className="badge">{g.length > 9 ? "9+" : g.length}</span>}</span><div style={{ flex: 1, minWidth: 0 }}><div className="b6">{g[0].app}</div><div className="t12 l3">{lock.locked ? "Locked" : "Hidden"}</div></div></div>)}
       </div>}
       {empty && <EmptyBoard title="No notifications" hint="You're all caught up. New alerts land here." mood="sleeping" />}
       {!hide && <div className="notifs" role="list" onPointerLeave={held.clear}>{held.fill(rows)}</div>}
     </div>
   );
+}
+
+/** A grouped app keeps its latest notification under the pointer; older notifications expand below it. */
+function NoticeGroup({ items, onClose, onHold }: { items: Notice[]; onClose?: () => void; onHold: (e: { currentTarget: HTMLElement }, id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const latest = items[0];
+  return <div className="notifGroup"><button type="button" className="notif notifGroupHead plat glass" aria-expanded={open} onClick={() => setOpen((v) => !v)}><span className="app"><b aria-hidden="true">{initial(latest.app)}</b><span className="badge">{items.length > 9 ? "9+" : items.length}</span></span><div className="mBody"><div className="t12 l3 b4">{latest.app}</div><div className="b6">{latest.title}</div>{latest.body && <div className="t12 l2 mText">{latest.body}</div>}</div></button>{open && <div className="notifGroupItems">{items.slice(1).map((n) => <MirrorCard key={n.id} n={n} onClose={onClose} onHold={onHold} />)}</div>}</div>;
 }
 
 /**
