@@ -14,7 +14,7 @@
 
 <p>
   <a href="https://github.com/isDionn/peeka/releases/latest/download/Peeka-setup.exe"><b>Download for Windows</b></a>
-  <br><sub>v0.3.4 · ~4.3 MB · Windows 10/11 · <a href="#download">other downloads and SmartScreen note</a></sub>
+  <br><sub>v0.3.5 · ~4.6 MB · Windows 10/11 · <a href="#download">other downloads and SmartScreen note</a></sub>
 </p>
 
 <img src="docs/images/demo.gif" alt="Peeka trailer: the old taskbar breaks, the Peeka strip and ghost drop in, then music, a Claude Code approval, clipboard and quick peeks in the island" width="100%">
