@@ -335,6 +335,7 @@ pub fn run() {
             crate::commands::claude_bridge_install,
             crate::commands::claude_bridge_remove,
             crate::commands::agent_bridges,
+            crate::commands::agent_usage,
             crate::commands::agent_bridge_install,
             crate::commands::agent_bridge_remove,
             crate::commands::agent_bridge_preview,

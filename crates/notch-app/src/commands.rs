@@ -2059,6 +2059,28 @@ pub struct AgentBridge {
     last_event_ago_s: Option<u64>,
 }
 
+/// Local-only usage snapshots.  We intentionally inspect neither auth files nor
+/// provider APIs; Codex writes these public meter values into its rollout log.
+#[tauri::command]
+pub fn agent_usage() -> Res<Vec<notch_core::plugins::usage::AgentUsage>> {
+    let root = home()?.join(".codex").join("sessions");
+    let mut newest: Option<(std::time::SystemTime, PathBuf)> = None;
+    fn visit(dir: &Path, newest: &mut Option<(std::time::SystemTime, PathBuf)>) {
+        for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() { visit(&path, newest); continue; }
+            if path.extension().and_then(|e| e.to_str()) != Some("jsonl") { continue; }
+            let Ok(modified) = entry.metadata().and_then(|m| m.modified()) else { continue; };
+            if newest.as_ref().is_none_or(|(time, _)| modified > *time) { *newest = Some((modified, path)); }
+        }
+    }
+    visit(&root, &mut newest);
+    let Some((_, path)) = newest else { return Ok(vec![]) };
+    let Ok(text) = std::fs::read_to_string(path) else { return Ok(vec![]) };
+    let windows = text.lines().rev().find_map(|line| { let w = notch_core::plugins::usage::codex_line(line); (!w.is_empty()).then_some(w) });
+    Ok(windows.map(|windows| vec![notch_core::plugins::usage::AgentUsage { agent: "codex", windows }]).unwrap_or_default())
+}
+
 fn home() -> Res<PathBuf> {
     std::env::var_os("USERPROFILE").filter(|d| !d.is_empty()).map(PathBuf::from).ok_or(CmdError::Missing)
 }
