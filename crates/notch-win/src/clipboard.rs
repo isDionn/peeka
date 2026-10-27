@@ -71,7 +71,7 @@ fn is_snipping_tool(exe: &str) -> bool {
 }
 
 #[cfg(windows)]
-pub use win::{clear_if, listen, sequence, write, write_seq};
+pub use win::{clear_if, listen, paste_plain, sequence, write, write_seq};
 
 #[cfg(windows)]
 mod win {
@@ -86,7 +86,7 @@ mod win {
     use windows::core::{w, PCWSTR};
     use windows::Win32::Foundation::{GlobalFree, HANDLE, HGLOBAL, HWND, LPARAM, LRESULT, WPARAM};
     use windows::Win32::System::DataExchange::{
-        AddClipboardFormatListener, CloseClipboard, EmptyClipboard, GetClipboardData, GetClipboardOwner,
+        AddClipboardFormatListener, CloseClipboard, EmptyClipboard, EnumClipboardFormats, GetClipboardData, GetClipboardOwner,
         GetClipboardSequenceNumber, IsClipboardFormatAvailable, OpenClipboard, RegisterClipboardFormatW,
         SetClipboardData,
     };
@@ -94,6 +94,7 @@ mod win {
     use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE};
     use windows::Win32::System::Ole::{CF_DIB, CF_HDROP, CF_UNICODETEXT};
     use windows::Win32::UI::Shell::{DragQueryFileW, HDROP};
+    use windows::Win32::UI::Input::KeyboardAndMouse::{SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_CONTROL, VK_V};
     use windows::Win32::UI::WindowsAndMessaging::{
         CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, RegisterClassW, HWND_MESSAGE, MSG,
         WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLIPBOARDUPDATE, WNDCLASSW,
@@ -443,6 +444,39 @@ mod win {
         };
         let ok = put_all(&items, &markers);
         items.iter_mut().for_each(|(_, data)| wipe(data));
+        ok
+    }
+
+    /// Temporarily replace the clipboard with plain Unicode text, paste into the app that was focused before Peeka,
+    /// then put every eagerly-rendered clipboard format back. Delayed formats cannot safely be replayed.
+    pub fn paste_plain(text: &[u8]) -> bool {
+        let owner = match LISTENER.load(Ordering::SeqCst) { 0 => None, h => Some(HWND(h as _)) };
+        let Some(_open) = Opened::new(owner) else { return false };
+        let mut saved = Vec::new();
+        let mut format = 0u32;
+        loop {
+            // SAFETY: clipboard is open; 0 ends enumeration.
+            format = unsafe { EnumClipboardFormats(format) };
+            if format == 0 { break; }
+            if let Some(block) = locked(format) { saved.push((format, block.bytes().to_vec())); }
+        }
+        // SAFETY: clipboard is open and now exclusively ours.
+        if unsafe { EmptyClipboard() }.is_err() || !put(CF_UNICODETEXT.0 as u32, &utf16_bytes(text)) { return false; }
+        drop(_open);
+        let inputs = [
+            INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: VK_CONTROL, wScan: 0, dwFlags: Default::default(), time: 0, dwExtraInfo: 0 } } },
+            INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: VK_V, wScan: 0, dwFlags: Default::default(), time: 0, dwExtraInfo: 0 } } },
+            INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: VK_V, wScan: 0, dwFlags: KEYEVENTF_KEYUP, time: 0, dwExtraInfo: 0 } } },
+            INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: VK_CONTROL, wScan: 0, dwFlags: KEYEVENTF_KEYUP, time: 0, dwExtraInfo: 0 } } },
+        ];
+        // SAFETY: fixed keyboard INPUT records; SendInput copies them before returning.
+        if unsafe { SendInput(&inputs, std::mem::size_of::<INPUT>() as i32) } != inputs.len() as u32 { return false; }
+        std::thread::sleep(Duration::from_millis(80));
+        let Some(_open) = Opened::new(owner) else { return false };
+        // SAFETY: clipboard is open and exclusively ours.
+        if unsafe { EmptyClipboard() }.is_err() { return false; }
+        let ok = saved.iter().all(|(format, data)| put(*format, data));
+        saved.iter_mut().for_each(|(_, data)| wipe(data));
         ok
     }
 

@@ -2,7 +2,7 @@
 // lives only in this component's state and for at most 5 s (never written to logs, URLs, storage or events).
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { justPressed } from "../lib/justPressed";
-import { AlignLeft, Check, Clipboard, Copy, Eye, EyeOff, File, FileImage, FileSpreadsheet, FileText, FileVideo, Fingerprint, KeyRound, Link, Lock, PanelTop, Pin, ScanText, Scissors, Search, Sparkles, Terminal, Trash2 } from "lucide-react";
+import { AlignLeft, Check, Clipboard, Copy, Eye, EyeOff, File, FileImage, FileSpreadsheet, FileText, FileVideo, Fingerprint, KeyRound, Link, Lock, PanelTop, Pin, ScanText, Scissors, Search, Sparkles, Terminal, Trash2, Type } from "lucide-react";
 import { bridge, type ClipItem, type ClipPassword, type ClipPlain, type LockState, type PluginInfo } from "../bridge";
 import { askLabel, useClips, useInput, useLock, useMainAssistant, useNow } from "../hooks";
 import { ago, fileKind, hexOf, passwordSub, REVEAL_MS, safePreview, safeThumb } from "../lib/clip";
@@ -66,6 +66,7 @@ function Actions({ item, main, variant, revealed, onEye, notify }: { item: ClipI
     <span className={variant === "row" ? "rowAction" : "action"}>
       {pw && btn(revealed ? "Hide" : "Show briefly", revealed ? <EyeOff /> : <Eye />, () => onEye(id), revealed ? "eyeOpen" : "")}
       {btn(pw ? "Copy without showing" : "Copy again", copied ? <Check /> : <Copy />, () => { bridge.call("clip_copy", { id }).then(() => { setCopied(true); notify("Copied"); }).catch(noop); })}
+      {item.kind === "text" && btn("Paste as plain text", <Type />, () => { bridge.call("clip_paste_plain", { id }).then(() => notify("Pasted as plain text")).catch(noop); })}
       {item.kind === "image" && btn("Copy text", <ScanText />, () => { bridge.call("clip_ocr", { id }).then((ok) => notify(ok ? "Text copied" : "No text found")).catch(() => notify("Couldn't read text")); })}
       {!pw && btn(item.pinned ? "Unpin" : "Pin", <Pin />, () => { bridge.call("clip_pin", { id, on: !item.pinned }).catch(noop); }, item.pinned ? "shown" : "", item.pinned)}
       {!pw && btn(main ? askLabel(main) : "Assistant not connected", <Sparkles />, () => { bridge.call("clip_share", { id }).then(() => notify("Sent")).catch(() => notify("Assistant not connected")); }, "ask", undefined, !main)}

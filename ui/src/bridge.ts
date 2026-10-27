@@ -300,6 +300,8 @@ export interface Commands {
   clip_copy: { args: { id: string }; ret: void };
   /** Local calculator and conversion result: plain text through Peeka's Windows clipboard path. */
   clipboard_write: { args: { text: string }; ret: void };
+  /** Pastes a text clip without its rich clipboard formats, then restores the clipboard. Passwords are refused. */
+  clip_paste_plain: { args: { id: string }; ret: void };
   clip_pin: { args: { id: string; on: boolean }; ret: void };
   clip_delete: { args: { id: string }; ret: void };
   /** `passwords: true` = passwords only (Settings › Clipboard "Delete all passwords"); missing or false = everything ("Delete all"). */

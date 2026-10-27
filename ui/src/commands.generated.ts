@@ -66,6 +66,7 @@ export const COMMAND_NAMES = [
   "clip_list",
   "clip_copy",
   "clipboard_write",
+  "clip_paste_plain",
   "clip_pin",
   "clip_delete",
   "clip_clear",
