@@ -28,7 +28,7 @@ const MAX_INSTANCES: usize = 16;
 const QUEUE: usize = 256;
 const CONSENT_LABEL: &str = "consent";
 /// The consent window, CSS px: from the strip's top, wide enough for the 600 px card hanging from the strip (Consent.tsx)
-/// plus its shoulders and shadow; 460 x 640 cut the card on the left and scrolled its top away (Atlas Notch, 0.3.5).
+/// plus its shoulders and shadow; 460 x 640 cut the card on the left and scrolled its top away (0.3.5).
 const CONSENT_W: f64 = 680.0;
 const CONSENT_H: f64 = 860.0; // room for every scope group without scrolling; clamped to the monitor
 
