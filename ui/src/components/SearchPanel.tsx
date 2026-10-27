@@ -1,10 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Bell, Brain, Timer, Monitor, MonitorOff, Search, SlidersHorizontal, Volume2 } from "lucide-react";
+import { Bell, Brain, Calculator, Timer, Monitor, MonitorOff, Search, SlidersHorizontal, Volume2 } from "lucide-react";
 import { bridge, type SearchIndexState, type SearchResult } from "../bridge";
 import { askLabel, useMainAssistant, useSettings } from "../hooks";
 import { fileKind } from "../lib/clip";
 import { Mascot } from "../mascot";
-import { flatten, groupResults, parseTimer, splitMatch } from "../lib/search";
+import { flatten, groupResults, parseSearchAnswer, parseTimer, splitMatch } from "../lib/search";
 import { AppIcon, Kbd } from "./common";
 import { FileIcon } from "./Pano";
 import { ExtGroup, useExtSearch } from "./ExtSearch";
@@ -53,21 +53,27 @@ export function SearchPanel({ onClose, initialQuery = "", initialSel = 0 }: { on
   const groups = useMemo(() => groupResults(results, q, index === "off"), [results, q, index]);
   const ordered = useMemo(() => flatten(groups), [groups]);
   const timer = useMemo(() => parseTimer(q), [q]); // local action: first row, never goes to the assistant (no tokens spent)
-  const ti = timer ? 1 : 0; // the action row is first in navigation order
+  const answer = useMemo(() => parseSearchAnswer(q), [q]);
+  const ai = answer ? 1 : 0;
+  const ti = timer ? 1 : 0;
   // assistant slots (Y3): the extension's commands come after the timer, its groups after Peeka's results; empty without one
   const x = useExtSearch(query, !!main, onClose);
   const lead = x.lead.length;
-  const askIx = main ? ordered.length + ti + lead + x.tailCount : -1; // "ask the assistant" is the last navigable row
-  const total = ordered.length + ti + lead + x.tailCount + (main ? 1 : 0);
+  const askIx = main ? ordered.length + ai + ti + lead + x.tailCount : -1; // "ask the assistant" is the last navigable row
+  const total = ordered.length + ai + ti + lead + x.tailCount + (main ? 1 : 0);
 
   const open = (r?: SearchResult) => { if (!r) return; bridge.call("search_open", { id: r.id }).catch(() => undefined); onClose(); };
   const doAsk = () => { bridge.call("search_ask", { query }).catch(() => undefined); onClose(); };
   const doTimer = () => { if (!timer) return; bridge.call("timer_start", { label: timer.label, seconds: timer.seconds }).catch(() => undefined); onClose(); };
-  const cur = ordered.length === 0 && lead === 0 && !timer && !touched ? -1 : sel;
+  const [copied, setCopied] = useState(false);
+  const copy = () => { if (answer) bridge.call("clipboard_write", { text: answer.text }).then(() => setCopied(true)).catch(() => undefined); };
+  useEffect(() => { if (!copied) return; const t = setTimeout(() => setCopied(false), 1200); return () => clearTimeout(t); }, [copied]);
+  const cur = ordered.length === 0 && lead === 0 && !timer && !answer && !touched ? -1 : sel;
   const act = (i: number) => {
-    if (timer && i === 0) return doTimer();
+    if (answer && i === 0) return copy();
+    if (timer && i === ai) return doTimer();
     if (i === askIx) return doAsk();
-    const j = i - ti;
+    const j = i - ai - ti;
     if (j < lead) return x.lead[j].go();
     if (j < lead + ordered.length) return open(ordered[j - lead]);
     x.tail.flatMap((g) => g.rows)[j - lead - ordered.length]?.go();
@@ -78,8 +84,8 @@ export function SearchPanel({ onClose, initialQuery = "", initialSel = 0 }: { on
   };
   useEffect(() => { list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView?.({ block: "nearest" }); }, [sel]);
 
-  let n = ti + lead; // navigation row index
-  const noRows = ordered.length === 0 && lead === 0 && x.tailCount === 0 && !timer && !groups.some((g) => g.note);
+  let n = ai + ti + lead; // navigation row index
+  const noRows = ordered.length === 0 && lead === 0 && x.tailCount === 0 && !timer && !answer && !groups.some((g) => g.note);
   const hover = (i: number) => { setTouched(true); setSel(i); };
   return (
     <div className="body">
@@ -91,10 +97,11 @@ export function SearchPanel({ onClose, initialQuery = "", initialSel = 0 }: { on
         <Kbd keys="Esc" />
       </div>
       <div className="results plat glass" id={id} role="listbox" aria-label="Results" ref={list}>
+        {answer && <div role="group" aria-label="Answer"><div className="groupHead">Answer</div><div id={`${id}-0`} role="option" aria-selected={cur === 0} className={"result" + (cur === 0 ? " selected" : "")} onMouseMove={() => { setTouched(true); setSel(0); }} onClick={copy}><span className="tile"><Calculator /></span><span className="name"><b>{answer.text}</b></span><span className="kind">Calculator</span><span className="enter key-hint">{copied ? "Copied" : "Copy"}<kbd>â†µ</kbd></span></div></div>}
         {timer && (
           <div role="group" aria-label="Actions">
             <div className="groupHead">Actions</div>
-            <div id={`${id}-0`} role="option" aria-selected={cur === 0} className={"result" + (cur === 0 ? " selected" : "")} onMouseMove={() => { setTouched(true); setSel(0); }} onClick={doTimer}>
+            <div id={`${id}-${ai}`} role="option" aria-selected={cur === ai} className={"result" + (cur === ai ? " selected" : "")} onMouseMove={() => { setTouched(true); setSel(ai); }} onClick={doTimer}>
               <span className="tile"><Timer /></span>
               <span className="name">Start timer: <b>{timer.text}</b></span>
               <span className="kind">Action</span>
@@ -102,7 +109,7 @@ export function SearchPanel({ onClose, initialQuery = "", initialSel = 0 }: { on
             </div>
           </div>
         )}
-        {lead > 0 && <ExtGroup title={ext()!.label} rows={x.lead} start={ti} cur={cur} idp={id} onHover={hover} />}
+        {lead > 0 && <ExtGroup title={ext()!.label} rows={x.lead} start={ai + ti} cur={cur} idp={id} onHover={hover} />}
         {groups.map((g) => (
           <div key={g.key} role="group" aria-label={g.title}>
             <div className="groupHead">{g.title}</div>

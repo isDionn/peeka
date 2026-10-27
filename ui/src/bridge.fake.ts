@@ -33,7 +33,7 @@ const TRACKS = [
   { title: "Blue Hour", artist: "June Avery", album: "Harbor", durationMs: 198_000, art: cover("#0b2a4a", "#0e7c86", "#9be3c4") },
 ];
 
-type W4Names = "search_index_state" | "search_open" | "search_ask" | "clip_list" | "clip_copy" | "clip_pin" | "clip_delete" | "clip_clear" | "clip_reveal" | "clip_share" | "clip_edit" | "clip_drag" | "clip_visible" | "lock_state" | "lock_now" | "lock_release";
+type W4Names = "search_index_state" | "search_open" | "search_ask" | "clip_list" | "clip_copy" | "clipboard_write" | "clip_pin" | "clip_delete" | "clip_clear" | "clip_reveal" | "clip_share" | "clip_edit" | "clip_drag" | "clip_visible" | "lock_state" | "lock_now" | "lock_release";
 type W5Names = "window_preview" | "share_open" | "shelf_list" | "shelf_ask" | "shelf_add" | "shelf_open" | "shelf_pin" | "shelf_remove" | "shelf_copy_files" | "shelf_share" | "shelf_show_in_folder" | "shelf_zip" | "shelf_drag" | "timer_get" | "timer_start" | "timer_control" | "privacy_get" | "tray_open" | "mirror_state" | "mirror_enable" | "mirror_disable" | "mirror_list" | "mirror_dismiss" | "mirror_open_app" | "mirror_ask";
 type W7Names = "recent_files" | "open_recent" | "set_start_items" | "app_show_in_folder" | "launch_app_admin" | "open_start_menu" | "open_calendar" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "agent_bridges" | "agent_bridge_install" | "agent_bridge_remove" | "agent_bridge_preview" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "window_pick" | "cc_focus_terminal" | "cc_diff" | "cc_diff_open" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus";
 /** Peeka Phase C: clipboard, download and copy-code commands; Settings > About demo restart. */
@@ -348,6 +348,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     search_ask: (a) => { if (!plugins.some((x) => x.main && x.connected)) throw "not_connected"; log.push({ cmd: "search_ask", args: a }); return { turn: ++turn }; },
     clip_list: () => structuredClone(unlocked()).sort((a, b) => +b.pinned - +a.pinned || b.createdAt - a.createdAt),
     clip_copy: (a) => { const c = find(a.id); if (!c || (lock.locked && c.kind === "password")) deny(); log.push({ cmd: "clip_copy", args: a }); },
+    clipboard_write: (a) => { log.push({ cmd: "clipboard_write", args: a }); },
     clip_pin: (a) => { const c = find(a.id); if (!c || c.kind === "password") deny(); clips = clips.map((x) => (x.id === a.id ? { ...x, pinned: a.on } : x)); log.push({ cmd: "clip_pin", args: a }); clipEmit({ reason: "updated", item: find(a.id) ?? null }); },
     clip_delete: (a) => { const c = find(a.id); clips = clips.filter((x) => x.id !== a.id); log.push({ cmd: "clip_delete", args: a }); clipEmit({ reason: "removed", item: c ?? null }); },
     clip_clear: (a) => { const only = !!a?.passwords; clips = only ? clips.filter((c) => c.kind !== "password") : []; log.push({ cmd: "clip_clear", args: a ?? null }); clipEmit({ reason: "cleared", item: null }); },

@@ -1389,6 +1389,12 @@ pub async fn clip_copy(app: AppHandle, id: String) -> Res<()> {
     Ok(())
 }
 
+/// Plain local values such as calculator results use the same native clipboard writer as copy-back.
+#[tauri::command]
+pub fn clipboard_write(text: String) -> Res<()> {
+    notch_win::clipboard::write(&notch_core::clip::Payload::Text(text)).then_some(()).ok_or(CmdError::Refused)
+}
+
 #[tauri::command]
 pub fn clip_pin(app: AppHandle, id: String, on: bool) -> Res<()> {
     let change = clip_history(&app)?.clip_history.lock().pin(&id, on)?;

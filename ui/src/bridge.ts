@@ -298,6 +298,8 @@ export interface Commands {
   clip_list: { args: void; ret: ClipItem[] };
   /** Copy back. Works on passwords without revealing them; Peeka puts it on the clipboard with "don't track" flags. `denied` while locked. */
   clip_copy: { args: { id: string }; ret: void };
+  /** Local calculator and conversion result: plain text through Peeka's Windows clipboard path. */
+  clipboard_write: { args: { text: string }; ret: void };
   clip_pin: { args: { id: string; on: boolean }; ret: void };
   clip_delete: { args: { id: string }; ret: void };
   /** `passwords: true` = passwords only (Settings › Clipboard "Delete all passwords"); missing or false = everything ("Delete all"). */

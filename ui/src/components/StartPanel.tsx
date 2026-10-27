@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowUpRight, Brain, ChevronLeft, ChevronRight, FolderOpen, Lock, Moon, PanelBottom, Pencil, Pin, PinOff, Power, RotateCcw, Search, Settings, ShieldCheck, SlidersHorizontal, Trash2, Ungroup } from "lucide-react";
+import { ArrowUpRight, Brain, Calculator, ChevronLeft, ChevronRight, FolderOpen, Lock, Moon, PanelBottom, Pencil, Pin, PinOff, Power, RotateCcw, Search, Settings, ShieldCheck, SlidersHorizontal, Trash2, Ungroup } from "lucide-react";
 import { bridge, type AppRef, type MonitorInfo, type PinnedApp, type RecentItem, type SearchResult, type StartItem } from "../bridge";
 import { derive, hasApp, keyOf, pinApp, ungroup, withoutApp } from "../lib/startItems";
 import { StartGrid } from "./StartGrid";
@@ -11,6 +11,7 @@ import { initial } from "../lib/plugin";
 import { AppIcon, HoldButton, Kbd } from "./common";
 import { FileIcon } from "./Pano";
 import { useSettings } from "../hooks";
+import { parseSearchAnswer } from "../lib/search";
 import "../fidelity-settings.css";
 
 const PIN_COUNT = 12;
@@ -54,11 +55,13 @@ export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: Mo
   const [all, setAll] = useState(false); // "All apps": full list instead of the pinned grid
   const [found, setFound] = useState<SearchResult[]>([]);
   const [sel, setSel] = useState(0); // selected search row: show which row Enter will open (O7)
+  const [copied, setCopied] = useState(false);
   useEffect(() => {
     bridge.call("list_apps").then((a) => { lastApps = a; setApps(a); });
     bridge.call("recent_files").then((r) => { lastRecent = r.slice(0, 12); setRecent(lastRecent); }).catch(() => undefined);
   }, []);
   const t = q.trim();
+  const answer = useMemo(() => parseSearchAnswer(q), [q]);
   // search covers apps, windows, files and settings (same command as Ctrl+K); the grid shows when empty
   useEffect(() => {
     if (!t) { setFound([]); return; }
@@ -70,6 +73,8 @@ export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: Mo
   const launch = (appId: string) => { bridge.call("launch_app", { appId }); onClose(); };
   const openFound = (r: SearchResult) => { bridge.call("search_open", { id: r.id }).catch(() => undefined); onClose(); };
   const openRecent = (r: RecentItem) => { bridge.call("open_recent", { id: r.id }).catch(() => undefined); onClose(); };
+  const copy = () => { if (answer) bridge.call("clipboard_write", { text: answer.text }).then(() => setCopied(true)).catch(() => undefined); };
+  useEffect(() => { if (!copied) return; const timer = setTimeout(() => setCopied(false), 1200); return () => clearTimeout(timer); }, [copied]);
 
   // Right-click / Shift+F10 / Menu key on an app or folder (Windows 11 Start's menu, minus "Move to front" and app jump lists)
   const windows = useWindows(monitor.id);
@@ -130,16 +135,17 @@ export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: Mo
         <Search className="l3" />
         <input data-autofocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search apps, windows, files and settings" aria-label="Search in Start"
           onKeyDown={(e) => {
-            if (e.key === "Enter" && found[sel]) openFound(found[sel]);
-            else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); setSel((i) => Math.max(0, Math.min(found.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))); }
+            if (e.key === "Enter") { if (answer && sel === 0) copy(); else if (found[sel - (answer ? 1 : 0)]) openFound(found[sel - (answer ? 1 : 0)]); }
+            else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); setSel((i) => Math.max(0, Math.min(found.length + (answer ? 1 : 0) - 1, i + (e.key === "ArrowDown" ? 1 : -1)))); }
           }} />
         <span style={{ margin: "0 6px 0 4px" }}><Kbd keys="Ctrl+K" /></span>
       </div>
       <div className="startCenter">
       {t ? (
         <div className="list glass startResult" role="group" aria-label="Search results" style={{ "--indent": "36px" } as React.CSSProperties}>
+          {answer && <button className={"row" + (sel === 0 ? " selected" : "")} onMouseMove={() => setSel(0)} onClick={copy}><Calculator /><span className="text" style={{ textAlign: "left" }}><b>{answer.text}</b></span><span className="t12 l3">{copied ? "Copied" : "Copy"}</span></button>}
           {found.map((r, i) => (
-            <button key={r.id} className={"row" + (i === sel ? " selected" : "")} onMouseMove={() => setSel(i)} onClick={() => openFound(r)} {...(r.kind === "app" ? appMenu(r.appId, r.title, <AppIcon src={r.icon} />) : null)}>
+            <button key={r.id} className={"row" + (i + (answer ? 1 : 0) === sel ? " selected" : "")} onMouseMove={() => setSel(i + (answer ? 1 : 0))} onClick={() => openFound(r)} {...(r.kind === "app" ? appMenu(r.appId, r.title, <AppIcon src={r.icon} />) : null)}>
               <ResultIcon r={r} /><span className="text" style={{ textAlign: "left" }}>{r.title}</span>{r.subtitle && r.kind !== "app" && <span className="t12 l3">{r.subtitle}</span>}
             </button>
           ))}
