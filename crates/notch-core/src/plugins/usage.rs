@@ -57,6 +57,18 @@ pub fn claude_statusline(bytes: &[u8]) -> Option<Value> {
     Some(Value::Object(kept))
 }
 
+/// Decode the collector's deliberately small on-disk snapshot into the common
+/// usage shape. A malformed or partial local file is simply not shown.
+pub fn claude_windows(bytes: &[u8]) -> Vec<Window> {
+    let Ok(limits) = serde_json::from_slice::<Value>(bytes) else { return vec![] };
+    [("five_hour", 300), ("seven_day", 10_080)].into_iter().filter_map(|(key, minutes)| {
+        let meter = limits.get(key)?;
+        let used = meter.get("used_percentage")?.as_f64()?.round().clamp(0.0, 100.0) as u8;
+        let reset = meter.get("resets_at")?.as_i64()?;
+        Some(Window { used_percent: used, window_minutes: minutes, resets_at: Some(reset), resets_in_seconds: None })
+    }).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -82,5 +94,12 @@ mod tests {
             got,
             serde_json::json!({"five_hour":{"used_percentage":84.0,"resets_at":1770000000},"seven_day":{"used_percentage":2.0,"resets_at":"soon"}})
         );
+    }
+    #[test]
+    fn reads_the_collectors_claude_snapshot() {
+        assert_eq!(claude_windows(br#"{"five_hour":{"used_percentage":84.2,"resets_at":1770000000},"seven_day":{"used_percentage":2,"resets_at":1770003600}}"#), vec![
+            Window { used_percent: 84, window_minutes: 300, resets_at: Some(1770000000), resets_in_seconds: None },
+            Window { used_percent: 2, window_minutes: 10_080, resets_at: Some(1770003600), resets_in_seconds: None },
+        ]);
     }
 }

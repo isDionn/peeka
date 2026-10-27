@@ -2062,7 +2062,12 @@ pub struct AgentBridge {
 /// Local-only usage snapshots.  We intentionally inspect neither auth files nor
 /// provider APIs; Codex writes these public meter values into its rollout log.
 #[tauri::command]
-pub fn agent_usage() -> Res<Vec<notch_core::plugins::usage::AgentUsage>> {
+pub fn agent_usage(app: AppHandle, refresh: Option<bool>) -> Res<Vec<notch_core::plugins::usage::AgentUsage>> {
+    static CACHE: parking_lot::Mutex<Option<(std::time::Instant, Vec<notch_core::plugins::usage::AgentUsage>)>> = parking_lot::Mutex::new(None);
+    let mut cache = CACHE.lock();
+    if !refresh.unwrap_or(false) && cache.as_ref().is_some_and(|(at, _)| at.elapsed() < std::time::Duration::from_secs(30)) {
+        return Ok(cache.as_ref().unwrap().1.clone());
+    }
     let root = home()?.join(".codex").join("sessions");
     let mut newest: Option<(std::time::SystemTime, PathBuf)> = None;
     fn visit(dir: &Path, newest: &mut Option<(std::time::SystemTime, PathBuf)>) {
@@ -2075,10 +2080,20 @@ pub fn agent_usage() -> Res<Vec<notch_core::plugins::usage::AgentUsage>> {
         }
     }
     visit(&root, &mut newest);
-    let Some((_, path)) = newest else { return Ok(vec![]) };
-    let Ok(text) = std::fs::read_to_string(path) else { return Ok(vec![]) };
-    let windows = text.lines().rev().find_map(|line| { let w = notch_core::plugins::usage::codex_line(line); (!w.is_empty()).then_some(w) });
-    Ok(windows.map(|windows| vec![notch_core::plugins::usage::AgentUsage { agent: "codex", windows }]).unwrap_or_default())
+    let mut usage = Vec::new();
+    if let Some((_, path)) = newest {
+        if let Ok(text) = std::fs::read_to_string(path) {
+            if let Some(windows) = text.lines().rev().find_map(|line| { let w = notch_core::plugins::usage::codex_line(line); (!w.is_empty()).then_some(w) }) {
+                usage.push(notch_core::plugins::usage::AgentUsage { agent: "codex", windows });
+            }
+        }
+    }
+    if let Ok(bytes) = std::fs::read(app.state::<Notch>().data_dir.join("claude-usage.json")) {
+        let windows = notch_core::plugins::usage::claude_windows(&bytes);
+        if !windows.is_empty() { usage.push(notch_core::plugins::usage::AgentUsage { agent: "claude", windows }); }
+    }
+    *cache = Some((std::time::Instant::now(), usage.clone()));
+    Ok(usage)
 }
 
 fn home() -> Res<PathBuf> {
