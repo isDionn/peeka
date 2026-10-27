@@ -116,7 +116,8 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
     document.addEventListener("focusout", fout);
     return () => { document.removeEventListener("focusin", fin); document.removeEventListener("focusout", fout); };
   }, []);
-  const searching = panel === "search" || (inText && panel !== null); // a hidden field that kept focus in a closed panel doesn't count
+  // Start too: its box is focused on open, but an unfocused window fires no focusin, so Win + typing would go nowhere
+  const searching = panel === "search" || panel === "start" || (inText && panel !== null); // a hidden field that kept focus in a closed panel doesn't count
   useEffect(() => {
     if (!searching) return;
     const arg = { label: `strip-${monitorId}` };

@@ -1,8 +1,8 @@
 //! The Start panel's app list: every `.lnk` under the two Start Menu "Programs" folders (all users, this user),
 //! junk names dropped (`notch_core::apps::keep_start_name`), one per name.
 //! The shortcut's target exe is read (`IShellLinkW`) only for the
-//! shortcut-exception list. shortcut: Store apps without a Start Menu `.lnk` are missing; Wave 2 can enumerate
-//! `shell:AppsFolder` instead.
+//! shortcut-exception list. Apps with no `.lnk` (Store apps: WhatsApp, Spotify from the Store) come from
+//! `shell:AppsFolder`, as `aumid:` ids.
 
 use std::path::{Path, PathBuf};
 
@@ -49,6 +49,18 @@ pub fn to_list(lnks: Vec<PathBuf>, target: impl Fn(&Path) -> Option<String>) -> 
     list
 }
 
+/// Adds the Apps-folder entries (AUMID, name) whose name the shortcuts don't already have; sorted again by name.
+pub fn with_folder(mut list: Vec<ListedApp>, folder: Vec<(String, String)>) -> Vec<ListedApp> {
+    for (aumid, name) in folder {
+        if !keep_start_name(&name) || list.iter().any(|a| a.name.to_lowercase() == name.to_lowercase()) {
+            continue;
+        }
+        list.push(ListedApp { app_id: format!("aumid:{aumid}"), name, exe: None });
+    }
+    list.sort_by_key(|a| notch_core::apps::fold(&a.name));
+    list
+}
+
 /// The whole list. Needs COM on the calling thread.
 #[cfg(windows)]
 pub fn scan() -> Vec<ListedApp> {
@@ -56,7 +68,40 @@ pub fn scan() -> Vec<ListedApp> {
     for root in roots() {
         walk(&root, 0, &mut lnks);
     }
-    to_list(lnks, target)
+    with_folder(to_list(lnks, target), apps_folder())
+}
+
+/// `shell:AppsFolder`'s items as (AUMID, display name): what Windows's own "All apps" lists. Empty if the shell says no.
+#[cfg(windows)]
+fn apps_folder() -> Vec<(String, String)> {
+    use windows::Win32::System::Com::CoTaskMemFree;
+    use windows::Win32::UI::Shell::{
+        BHID_EnumItems, FOLDERID_AppsFolder, IEnumShellItems, IShellItem, SHGetKnownFolderItem, KF_FLAG_DEFAULT,
+        SIGDN, SIGDN_NORMALDISPLAY, SIGDN_PARENTRELATIVEPARSING,
+    };
+    let name = |item: &IShellItem, how: SIGDN| -> Option<String> {
+        // SAFETY: the returned CoTaskMem string is read once and freed.
+        unsafe {
+            let s = item.GetDisplayName(how).ok()?;
+            let out = s.to_string().ok();
+            CoTaskMemFree(Some(s.0 as *const _));
+            out.filter(|t| !t.trim().is_empty())
+        }
+    };
+    let mut out = Vec::new();
+    // SAFETY: plain COM calls on objects released on drop; `one` is a one-slot out buffer we own.
+    unsafe {
+        let Ok(folder) = SHGetKnownFolderItem::<IShellItem>(&FOLDERID_AppsFolder, KF_FLAG_DEFAULT, None) else { return out };
+        let Ok(items) = folder.BindToHandler::<_, IEnumShellItems>(None, &BHID_EnumItems) else { return out };
+        let mut one = [None];
+        while items.Next(&mut one, None).is_ok() {
+            let Some(item) = one[0].take() else { break };
+            if let (Some(aumid), Some(display)) = (name(&item, SIGDN_PARENTRELATIVEPARSING), name(&item, SIGDN_NORMALDISPLAY)) {
+                out.push((aumid, display));
+            }
+        }
+    }
+    out
 }
 
 /// A shortcut's target path (`IShellLinkW::GetPath`, `%vars%` expanded so it matches a window's exe path); None for a
@@ -217,5 +262,14 @@ mod tests {
         let shape: Vec<_> = list.iter().map(|a| (a.name.as_str(), a.exe.as_deref())).collect();
         assert_eq!(shape, [("Site", None), ("Visual Studio Code", Some("code.exe")), ("Zoom", None)]);
         assert!(list[1].app_id.starts_with("lnk:C:\\SM\\code\\") && list[1].app_id.ends_with(".lnk"));
+    }
+
+    #[test]
+    fn apps_folder_adds_only_names_the_shortcuts_lack() {
+        let lnk = ListedApp { app_id: "lnk:C:\\SM\\Zoom.lnk".into(), name: "Zoom".into(), exe: None };
+        let folder = [("5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App", "WhatsApp"), ("zoom.aumid", "zoom"), ("x!y", "Uninstall Foo")];
+        let list = with_folder(vec![lnk], folder.iter().map(|(a, n)| (a.to_string(), n.to_string())).collect());
+        let shape: Vec<_> = list.iter().map(|a| (a.app_id.as_str(), a.name.as_str())).collect();
+        assert_eq!(shape, [("aumid:5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App", "WhatsApp"), ("lnk:C:\\SM\\Zoom.lnk", "Zoom")]);
     }
 }
