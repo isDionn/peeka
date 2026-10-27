@@ -136,7 +136,8 @@ mod pdh {
         PdhGetFormattedCounterValue, PdhOpenQueryW, PDH_CSTATUS_NEW_DATA, PDH_CSTATUS_VALID_DATA, PDH_FMT,
         PDH_FMT_COUNTERVALUE, PDH_FMT_COUNTERVALUE_ITEM_W, PDH_FMT_DOUBLE, PDH_HCOUNTER, PDH_HQUERY, PDH_MORE_DATA,
     };
-    use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+    use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+    use windows::Win32::System::SystemInformation::{GetTickCount64, GlobalMemoryStatusEx, MEMORYSTATUSEX};
 
     /// pdh.h's PDH_FMT_NOCAP100 (not in the windows crate): percentages may pass 100 (CPU utility under turbo).
     const NOCAP100: u32 = 0x0000_8000;
@@ -182,6 +183,7 @@ mod pdh {
             // SAFETY: our open query. A failed collect leaves every read below failing, i.e. None fields.
             unsafe { PdhCollectQueryData(self.query) };
             let memory = memory();
+            let disk = disk();
             SysmonTick {
                 cpu: self.cpu.and_then(value).filter(|v| !v.is_nan()).map(|v| round1(v.clamp(0.0, 100.0))),
                 gpu: self.gpu.and_then(array).and_then(|items| gpu_usage(&items)).map(round1),
@@ -189,6 +191,10 @@ mod pdh {
                 mem_total: memory.map(|(_, total)| total),
                 down: self.down.and_then(array).map(|items| network_total(&items)),
                 up: self.up.and_then(array).map(|items| network_total(&items)),
+                disk_used: disk.map(|(used, _)| used),
+                disk_total: disk.map(|(_, total)| total),
+                // SAFETY: reads the system's monotonic boot timer and has no inputs or ownership.
+                uptime_s: Some(unsafe { GetTickCount64() / 1000 }),
                 top_cpu: None, // the sampler's `TopTracker` fills it
             }
         }
@@ -252,6 +258,14 @@ mod pdh {
         // SAFETY: a sized struct of ours.
         unsafe { GlobalMemoryStatusEx(&mut m) }.ok()?;
         Some((super::used_memory(m.ullTotalPhys, m.ullAvailPhys), m.ullTotalPhys))
+    }
+
+    /// (used, total) bytes on the system drive. The shell itself is Windows-only, so C: is the system drive.
+    fn disk() -> Option<(u64, u64)> {
+        let (mut free, mut total) = (0u64, 0u64);
+        // SAFETY: static NUL-terminated path and valid out-pointers to our locals.
+        unsafe { GetDiskFreeSpaceExW(w!("C:\\"), None, Some(&mut total), Some(&mut free)).ok()? };
+        Some((total.saturating_sub(free), total))
     }
 
     #[cfg(test)]
