@@ -99,6 +99,7 @@ export const COMMAND_NAMES = [
   "timer_control",
   "privacy_get",
   "tray_open",
+  "tray_menu",
   "mirror_state",
   "mirror_enable",
   "mirror_disable",

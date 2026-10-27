@@ -45,6 +45,7 @@ pub mod sysmon;
 pub mod taskbar;
 pub mod tint;
 pub mod tray;
+pub mod tray_host;
 pub mod volume;
 pub mod wifi;
 pub mod winkey;

@@ -45,6 +45,7 @@ export function TrayList({ monitor, onClose }: { monitor: string; onClose: () =>
   const refs = useMemo(() => new Map<string, AppRef>((list ?? []).map((t) => [t.id, { appId: t.id, name: t.name, icon: t.icon, colorIcon: t.colorIcon }])), [list]);
   const items = useMemo(() => withNew(mine ?? saved ?? [], (list ?? []).map((t) => t.id)), [mine, saved, list]);
   const save = (next: StartItem[]) => { setMine(next); bridge.call("set_settings", { patch: { trayItems: next } }).catch(() => undefined); };
+  const menu = (id: string, at: { x: number; y: number }) => bridge.call("tray_menu", { id, ...at }).catch(() => open(byId.get(id)!));
   const compact = useMemo(() => ({
     tile: (a: AppRef, mini: boolean) => { const t = byId.get(a.appId)!; return mini ? <TrayIconView t={{ ...t, badge: undefined }} size={14} color={t.colorIcon} /> : <TrayIconView t={t} size={18} color={t.colorIcon} />; },
     label: (a: AppRef) => label(byId.get(a.appId)!),
@@ -58,7 +59,7 @@ export function TrayList({ monitor, onClose }: { monitor: string; onClose: () =>
       {list && list.length === 0 && <div className="noResults">No icons</div>}
       {list && list.length > 0 && (
         <div className="trayIconGrid" role="group" aria-label="Hidden icons" ref={grid}>
-          <StartGrid items={items} apps={refs} onChange={save} onLaunch={(id) => open(byId.get(id)!, onClose)} compact={compact} />
+          <StartGrid items={items} apps={refs} onChange={save} onLaunch={(id) => open(byId.get(id)!, onClose)} onMenu={(it, at) => { if (it.kind === "app") menu(it.appId, at); }} compact={compact} />
         </div>
       )}
     </div>
@@ -78,7 +79,7 @@ export function PromotedTray({ monitor }: { monitor: string }) {
   if (!list.length) return null;
   return (
     <span className="favTray" role="group" aria-label="Pinned tray icons">
-      {list.map((t) => <button key={t.id} className="key" title={t.name} aria-label={label(t)} onClick={() => open(t)}><TrayIconView t={t} size={17} color={t.colorIcon} /></button>)}
+      {list.map((t) => <button key={t.id} className="key" title={t.name} aria-label={label(t)} onClick={() => open(t)} onContextMenu={(e) => { e.preventDefault(); bridge.call("tray_menu", { id: t.id, x: e.screenX, y: e.screenY }).catch(() => open(t)); }}><TrayIconView t={t} size={17} color={t.colorIcon} /></button>)}
     </span>
   );
 }

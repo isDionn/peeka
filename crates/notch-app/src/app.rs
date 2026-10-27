@@ -231,6 +231,7 @@ pub fn run() {
             crate::commands::open_windows_settings,
             crate::commands::open_tray,
             crate::commands::tray_open,
+            crate::commands::tray_menu,
             crate::commands::mirror_state,
             crate::commands::mirror_enable,
             crate::commands::mirror_disable,
@@ -387,6 +388,7 @@ fn setup(app: &AppHandle) -> Result<(), String> {
     DEMO.store(is_demo, Ordering::SeqCst);
     if !is_demo {
         notch_win::taskbar::restore_left_behind();
+        notch_win::tray_host::start();
     }
     let _ = APP.set(app.clone());
     let data_dir = notch_core::data_dir().ok_or("No data folder (LOCALAPPDATA)")?;
@@ -548,6 +550,7 @@ fn shutdown(app: &AppHandle) {
     }
     // The Windows bar first, then the strips' AppBars go.
     crate::taskbar::restore_now();
+    notch_win::tray_host::stop();
     crate::live::keys_stop();
     notch_win::winkey::unhook();
     crate::live::http_stop(app);

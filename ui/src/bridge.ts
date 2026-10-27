@@ -361,6 +361,8 @@ export interface Commands {
   timer_start: { args: { label: string; seconds: number }; ret: TimerState };
   /** Tray list (fallback until Wave 0 test 4 lands). */
   tray_open: { args: { id: string }; ret: void };
+  /** The app-owned tray context menu at this screen point. */
+  tray_menu: { args: { id: string; x: number; y: number }; ret: void };
   mirror_state: { args: void; ret: MirrorState };
   mirror_enable: { args: void; ret: MirrorState };
   mirror_disable: { args: void; ret: MirrorState };
