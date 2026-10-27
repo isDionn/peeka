@@ -33,6 +33,8 @@ struct Message {
 static ICONS: Mutex<Vec<Icon>> = Mutex::new(Vec::new());
 #[cfg(windows)]
 static HOST: OnceLock<isize> = OnceLock::new();
+#[cfg(windows)]
+static TASKBAR_CREATED: OnceLock<u32> = OnceLock::new();
 
 /// Start the listener on its own message-loop thread. It is intentionally independent of Tauri's event loop.
 #[cfg(windows)]
@@ -162,7 +164,7 @@ fn run() {
     use windows::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows::Win32::UI::WindowsAndMessaging::{
         CreateWindowExW, DispatchMessageW, GetMessageW, RegisterClassW, TranslateMessage, WNDCLASSW, WS_EX_TOOLWINDOW,
-        WS_POPUP,
+        WS_EX_TOPMOST, WS_POPUP,
     };
     // SAFETY: class and window are owned by this dedicated thread; no Tauri state is touched here.
     unsafe {
@@ -174,7 +176,9 @@ fn run() {
             ..Default::default()
         });
         let host = CreateWindowExW(
-            WS_EX_TOOLWINDOW,
+            // Explorer's real tray is topmost too.  This must be topmost before its first Shell_NotifyIcon send so
+            // this listener is the first Shell_TrayWnd in Z-order.
+            WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
             w!("Shell_TrayWnd"),
             w!(""),
             WS_POPUP,
@@ -192,11 +196,17 @@ fn run() {
             return;
         }
         let _ = HOST.set(host.0 as isize);
+        reassert_topmost(host);
+        let reorder_hook = watch_explorer_reorder();
         broadcast_created();
         let mut message = Default::default();
         while GetMessageW(&mut message, None, 0, 0).into() {
             let _ = TranslateMessage(&message);
             DispatchMessageW(&message);
+        }
+        if let Some(hook) = reorder_hook {
+            // SAFETY: the hook was installed on this message-loop thread.
+            let _ = windows::Win32::UI::Accessibility::UnhookWinEvent(hook);
         }
         broadcast_created();
         let _ = (LPARAM::default(), WPARAM::default(), LRESULT::default());
@@ -227,12 +237,17 @@ unsafe extern "system" fn proc(
         }
         let mut result = 0usize;
         if let Some(real) = explorer_tray() {
-            // SAFETY: Windows remarshal the same synchronous COPYDATA to Explorer; the timeout keeps senders moving.
-            unsafe {
-                SendMessageTimeoutW(real, WM_COPYDATA, wparam, lparam, SMTO_ABORTIFHUNG, 250, Some(&mut result));
-            }
+            // SAFETY: Windows remarshal the original synchronous COPYDATA to Explorer.  In particular this handles
+            // Peeka's SHAppBarMessage packets now that our topmost Shell_TrayWnd is found first; the timeout means a
+            // stuck Explorer cannot deadlock the app that synchronously sent us the packet.
+            unsafe { SendMessageTimeoutW(real, WM_COPYDATA, wparam, lparam, SMTO_ABORTIFHUNG, 250, Some(&mut result)) };
         }
         return LRESULT(result as isize);
+    }
+    if msg == taskbar_created_message() {
+        // Explorer recreated its topmost taskbar. Put the listener back in front before the next notification send.
+        reassert_topmost(hwnd);
+        return LRESULT(0);
     }
     if msg == WM_CLOSE {
         unsafe {
@@ -248,12 +263,14 @@ unsafe extern "system" fn proc(
 }
 
 #[cfg(windows)]
-fn explorer_tray() -> Option<windows::Win32::Foundation::HWND> {
+pub(crate) fn explorer_tray() -> Option<windows::Win32::Foundation::HWND> {
     use windows::core::{w, PCWSTR};
     use windows::Win32::Foundation::HWND;
     use windows::Win32::UI::WindowsAndMessaging::{FindWindowExW, GetWindowThreadProcessId};
     let me = std::process::id();
     let mut after = HWND::default();
+    let mut candidates = Vec::with_capacity(8);
+    let mut pids = Vec::with_capacity(8);
     for _ in 0..8 {
         // SAFETY: top-level enumeration after the prior match; result and process id are checked.
         let next = unsafe { FindWindowExW(None, Some(after), w!("Shell_TrayWnd"), PCWSTR::null()) }.ok()?;
@@ -264,23 +281,84 @@ fn explorer_tray() -> Option<windows::Win32::Foundation::HWND> {
         unsafe {
             GetWindowThreadProcessId(next, Some(&mut pid));
         }
-        if pid != me {
-            return Some(next);
-        }
+        candidates.push((next, pid));
+        pids.push(pid);
         after = next;
     }
-    None
+    first_foreign_index(&pids, me).map(|index| candidates[index].0)
+}
+
+/// Finds the first tray candidate not owned by Peeka.  Kept pure so the own-tray exclusion stays tested even on
+/// non-Windows CI.
+fn first_foreign_index(pids: &[u32], ours: u32) -> Option<usize> {
+    pids.iter().position(|&pid| pid != ours)
+}
+
+#[cfg(windows)]
+fn taskbar_created_message() -> u32 {
+    use windows::core::w;
+    use windows::Win32::UI::WindowsAndMessaging::RegisterWindowMessageW;
+    *TASKBAR_CREATED.get_or_init(|| unsafe { RegisterWindowMessageW(w!("TaskbarCreated")) })
+}
+
+#[cfg(windows)]
+fn reassert_topmost(host: windows::Win32::Foundation::HWND) {
+    use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE};
+    // SAFETY: this is our hidden tool window; this only adjusts Z-order and never activates or moves it.
+    unsafe {
+        let _ = SetWindowPos(host, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+}
+
+#[cfg(windows)]
+fn watch_explorer_reorder() -> Option<windows::Win32::UI::Accessibility::HWINEVENTHOOK> {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::Accessibility::{SetWinEventHook, HWINEVENTHOOK};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        EVENT_OBJECT_REORDER, OBJID_WINDOW, WINEVENT_OUTOFCONTEXT, WINEVENT_SKIPOWNPROCESS,
+    };
+
+    unsafe extern "system" fn on_reorder(
+        _hook: HWINEVENTHOOK,
+        _event: u32,
+        hwnd: HWND,
+        object: i32,
+        child: i32,
+        _thread: u32,
+        _time: u32,
+    ) {
+        if object != OBJID_WINDOW.0 || child != 0 || hwnd.is_invalid() {
+            return;
+        }
+        if explorer_tray() == Some(hwnd) {
+            if let Some(&host) = HOST.get() {
+                reassert_topmost(HWND(host as *mut _));
+            }
+        }
+    }
+
+    // SAFETY: out-of-context events are delivered to this thread's message loop; the hook is released before it exits.
+    let hook = unsafe {
+        SetWinEventHook(
+            EVENT_OBJECT_REORDER,
+            EVENT_OBJECT_REORDER,
+            None,
+            Some(on_reorder),
+            0,
+            0,
+            WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
+        )
+    };
+    (!hook.is_invalid()).then_some(hook)
 }
 
 #[cfg(windows)]
 fn broadcast_created() {
-    use windows::core::w;
     use windows::Win32::Foundation::{LPARAM, WPARAM};
-    use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, RegisterWindowMessageW, HWND_BROADCAST};
+    use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, HWND_BROADCAST};
     // SAFETY: TaskbarCreated has no pointer payload and a posted broadcast cannot stall the host.
     unsafe {
-        let id = RegisterWindowMessageW(w!("TaskbarCreated"));
-        let _ = PostMessageW(Some(HWND_BROADCAST), id, WPARAM(0), LPARAM(0));
+        let _ = PostMessageW(Some(HWND_BROADCAST), taskbar_created_message(), WPARAM(0), LPARAM(0));
     }
 }
 
@@ -337,5 +415,12 @@ mod tests {
         assert!(same_path(r"C:\Apps\Tool.exe", r"c:\apps\tool.EXE"));
         assert!(!same_path(r"C:\Apps\Tool.exe", r"C:\Apps\Other.exe"));
         assert!(parse(&bytes[..100]).is_none());
+    }
+
+    #[test]
+    fn own_tray_is_skipped_when_selecting_explorer() {
+        assert_eq!(first_foreign_index(&[44, 44, 77], 44), Some(2));
+        assert_eq!(first_foreign_index(&[44, 44], 44), None);
+        assert_eq!(first_foreign_index(&[], 44), None);
     }
 }
