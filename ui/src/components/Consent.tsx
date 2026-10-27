@@ -24,6 +24,8 @@ function Check({ on, label, onChange }: { on: boolean; label: string; onChange: 
 
 export function ConsentBody({ req, onClose }: { req: ConsentRequest; onClose: () => void }) {
   const known = req.scopes.map(scopeInfo);
+  // "Make it the main assistant?" once, under the first of composer.handler / voice.line in the order the groups draw
+  const mainAt = GROUPS.flatMap(([level]) => known.filter((k) => k.level === level)).find((k) => k.scope === "composer.handler" || k.scope === "voice.line")?.scope;
   // low and medium start checked, high starts unchecked
   const [on, setOn] = useState<Record<string, boolean>>(() => Object.fromEntries(known.map((k) => [k.scope, k.level !== "high"])));
   const [main, setMain] = useState(false);
@@ -64,7 +66,7 @@ export function ConsentBody({ req, onClose }: { req: ConsentRequest; onClose: ()
                     <Check on={!!on[k.scope]} label={k.text} onChange={(v) => setOn({ ...on, [k.scope]: v })} />
                     <span className="text" style={{ whiteSpace: "normal" }}>{k.text}{req.why[k.scope] && <> <span className="l3">“{plain(req.why[k.scope], 140)}”</span></>}{k.scope === "approvals.prompt" && <div className="t12 l3 b4">{RISK_NOTE}</div>}</span>
                   </div>
-                  {(k.scope === "composer.handler" || k.scope === "voice.line") && (
+                  {k.scope === mainAt && (
                     <div className="row" style={{ "--indent": "58px" } as React.CSSProperties}>
                       <span style={{ width: 20 }} /><Check on={main} label="Make it the main assistant?" onChange={setMain} />
                       <span className="text" style={{ whiteSpace: "normal" }}>Make it the main assistant? <span className="l3">(gets the mascot and Ctrl+Space)</span></span>

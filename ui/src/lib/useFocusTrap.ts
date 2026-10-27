@@ -14,7 +14,7 @@ export function useFocusTrap(ref: React.RefObject<HTMLElement | null>, onClose: 
     if (!root || !active) return;
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const first = root.querySelector<HTMLElement>("[data-autofocus]") ?? focusables(root)[0];
-    first?.focus();
+    first?.focus({ preventScroll: true }); // a panel opens at its top even when the default button sits below the fold (consent: Deny)
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close.current(); return; }
       if (e.key !== "Tab") return;

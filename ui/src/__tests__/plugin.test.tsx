@@ -265,6 +265,10 @@ describe("plugin consent window", () => {
     const boxes = screen.getAllByRole("checkbox").map((b) => b.getAttribute("aria-checked"));
     expect(boxes).toEqual(["true", "true", "true", "false", "false"]); // low, medium, medium, main assistant, high
   });
+  it("asking for both composer.handler and voice.line shows 'Make it the main assistant?' once", () => {
+    render(<ConsentBody req={{ ...req(), scopes: [...CONSENT.scopes, "voice.line"] }} onClose={() => undefined} />);
+    expect(screen.getAllByRole("checkbox", { name: "Make it the main assistant?" })).toHaveLength(1);
+  });
   it("default focus is on 'Deny'; Esc denies", async () => {
     render(<ConsentWindow req={req()} />);
     await act(async () => { await new Promise((r) => setTimeout(r, 30)); });

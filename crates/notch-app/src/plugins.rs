@@ -27,9 +27,10 @@ const MAX_INSTANCES: usize = 16;
 /// Lines waiting for a slow plugin; a plugin that stops reading is cut off past this.
 const QUEUE: usize = 256;
 const CONSENT_LABEL: &str = "consent";
-/// The consent window, CSS px (the page centres its card inside).
-const CONSENT_W: f64 = 460.0;
-const CONSENT_H: f64 = 640.0;
+/// The consent window, CSS px: from the strip's top, wide enough for the 600 px card hanging from the strip (Consent.tsx)
+/// plus its shoulders and shadow; 460 x 640 cut the card on the left and scrolled its top away (Atlas Notch, 0.3.5).
+const CONSENT_W: f64 = 680.0;
+const CONSENT_H: f64 = 860.0; // room for every scope group without scrolling; clamped to the monitor
 
 enum Msg {
     Line(String),
@@ -499,9 +500,9 @@ fn open_consent(app: &AppHandle) {
         }
         let monitors = notch_win::monitors::list();
         let Some(m) = notch_core::model::primary(&monitors) else { return };
-        let (w, h) = ((CONSENT_W * m.scale) as i32, (CONSENT_H * m.scale) as i32);
+        let (w, h) = ((CONSENT_W * m.scale) as i32, ((CONSENT_H * m.scale) as i32).min(m.rect.height()));
         let x = m.rect.left + (m.rect.width() - w) / 2;
-        let y = notch_core::model::strip_rect(m).bottom + (8.0 * m.scale) as i32;
+        let y = notch_core::model::strip_rect(m).top; // the card hangs from the strip at --BAR, like every strip panel
         let built = WebviewWindowBuilder::new(&handle, CONSENT_LABEL, WebviewUrl::App("consent.html".into()))
             .title(notch_core::PRODUCT_NAME)
             .decorations(false)

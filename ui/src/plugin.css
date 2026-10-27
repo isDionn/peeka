@@ -24,7 +24,7 @@
 .seg .segb.on { background: rgba(255,255,255,.13); border-radius: 12px; box-shadow: inset 0 .5px 0 rgba(255,255,255,.16); }
 .seg { flex-wrap: nowrap; }
 /* consent window */
-.consentBody { max-height: 80vh; overflow: auto; }
+.consentBody { max-height: calc(100vh - var(--BAR) - 16px); overflow: auto; }   /* the window starts at the strip top (plugins.rs open_consent) */
 .consentRow { cursor: pointer; text-align: left; width: 100%; }
 .consentRow .checkbox { cursor: pointer; }
 .consentCountdown { font-variant-numeric: tabular-nums; }
