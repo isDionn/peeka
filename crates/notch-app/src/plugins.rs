@@ -220,7 +220,8 @@ async fn cc_connection(app: AppHandle, pipe: NamedPipeServer) {
     let Some(p) = app.try_state::<Plugins>() else { return };
     let Some(outs) = p.host.lock().cc_hook(line, now_ms()) else { return };
     // valid, so `agent` is absent (= claude) or a known id
-    let agent = serde_json::from_slice::<serde_json::Value>(line).ok().and_then(|v| v["agent"].as_str().map(str::to_owned));
+    let agent =
+        serde_json::from_slice::<serde_json::Value>(line).ok().and_then(|v| v["agent"].as_str().map(str::to_owned));
     p.cc_seen.lock().insert(agent.unwrap_or_else(|| "claude".into()), now_ms());
     run(&app, outs);
 }
@@ -271,6 +272,44 @@ pub fn cc_hook_main() -> ! {
         Some(())
     };
     let _ = send();
+    std::process::exit(0)
+}
+
+/// Claude Code's statusline mode: save only its two public usage meters, then
+/// faithfully pass the same JSON to the owner's former command and relay its
+/// stdout. This runs before Tauri and has no network or credential access.
+pub fn cc_statusline_main() -> ! {
+    use std::io::{Read, Write};
+    let mut raw = Vec::new();
+    let _ = std::io::stdin().lock().take(4 * 1024 * 1024).read_to_end(&mut raw);
+    if let Some(limits) = notch_core::plugins::usage::claude_statusline(&raw) {
+        if let Some(dir) = notch_core::data_dir() {
+            let _ = std::fs::create_dir_all(&dir);
+            if let Ok(bytes) = serde_json::to_vec(&limits) {
+                let tmp = dir.join("claude-usage.tmp");
+                if std::fs::write(&tmp, bytes).is_ok() {
+                    let _ = std::fs::rename(tmp, dir.join("claude-usage.json"));
+                }
+            }
+        }
+    }
+    let previous = std::env::args().nth(2).and_then(|encoded| {
+        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+        URL_SAFE_NO_PAD.decode(encoded).ok().and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+    });
+    if let Some(command) = previous.and_then(|line| line.get("command").and_then(|v| v.as_str()).map(str::to_owned)) {
+        use std::process::{Command, Stdio};
+        if let Ok(mut child) =
+            Command::new("cmd").args(["/C", &command]).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
+        {
+            if let Some(mut stdin) = child.stdin.take() {
+                let _ = stdin.write_all(&raw);
+            }
+            if let Ok(output) = child.wait_with_output() {
+                let _ = std::io::stdout().write_all(&output.stdout);
+            }
+        }
+    }
     std::process::exit(0)
 }
 
@@ -438,7 +477,11 @@ pub fn run(app: &AppHandle, outs: Vec<Out>) {
             Out::Ui(UiEvent::AssistantEvent(v)) => crate::privacy::event(app, v),
             Out::Ui(UiEvent::AssistantReply(v)) => {
                 // the gate closed while it was on the way: the page gets the code, never the data
-                let v = if crate::privacy::closed(app) { serde_json::json!({"id": v.get("id"), "error": {"code": -32020}}) } else { v };
+                let v = if crate::privacy::closed(app) {
+                    serde_json::json!({"id": v.get("id"), "error": {"code": -32020}})
+                } else {
+                    v
+                };
                 let _ = app.emit("assistant_reply", v);
             }
             Out::Ui(UiEvent::FirstConnect) => {

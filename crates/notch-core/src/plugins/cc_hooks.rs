@@ -7,6 +7,7 @@
 
 use std::path::Path;
 
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde_json::{json, Map, Value};
 
 /// The `cc.event` kinds, `permission` = PermissionRequest.
@@ -116,6 +117,10 @@ pub fn agent(id: &str) -> Option<&'static Agent> {
 
 /// The argument that marks an entry as Peeka's.
 pub const HOOK_ARG: &str = crate::brand::HOOK_ARG;
+/// Claude Code's statusline invokes this small pre-Tauri mode.  Its optional
+/// argument is the owner's previous `statusLine`, encoded as JSON so it can be
+/// restored byte-for-byte at the JSON-value level on Remove.
+pub const STATUSLINE_ARG: &str = "--cc-statusline";
 /// Claude Code kills a hook after this; ours exits on its own after 2 s anyway.
 const TIMEOUT_S: u64 = 5;
 
@@ -258,7 +263,8 @@ pub fn line_diff(old: &str, new: &str) -> (Vec<String>, usize, usize) {
         let mut t = vec![0u32; (x.len() + 1) * w];
         for i in (0..x.len()).rev() {
             for j in (0..y.len()).rev() {
-                t[i * w + j] = if x[i] == y[j] { t[(i + 1) * w + j + 1] + 1 } else { t[(i + 1) * w + j].max(t[i * w + j + 1]) };
+                t[i * w + j] =
+                    if x[i] == y[j] { t[(i + 1) * w + j + 1] + 1 } else { t[(i + 1) * w + j].max(t[i * w + j + 1]) };
             }
         }
         let (mut i, mut j) = (0, 0);
@@ -301,7 +307,13 @@ pub fn edit_of(raw: &Value) -> Option<Edit> {
     if !file.is_absolute() || !cwd.is_absolute() || file.components().any(|c| c == Component::ParentDir) {
         return None;
     }
-    let rel = file.strip_prefix(cwd).ok()?.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/");
+    let rel = file
+        .strip_prefix(cwd)
+        .ok()?
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/");
     if !is_rel(&rel) {
         return None;
     }
@@ -322,7 +334,8 @@ pub fn write_diff(dir: &Path, sid: &str, e: &Edit) -> Option<()> {
     std::fs::create_dir_all(dir).ok()?;
     // sessions that never sent SessionEnd: their cached text goes after the TTL, not only when read
     for old in std::fs::read_dir(dir).ok()?.flatten() {
-        let age = old.metadata().ok().and_then(|m| m.modified().ok()).and_then(|t| t.elapsed().ok()).unwrap_or_default();
+        let age =
+            old.metadata().ok().and_then(|m| m.modified().ok()).and_then(|t| t.elapsed().ok()).unwrap_or_default();
         if age.as_millis() as u64 > DIFF_TTL_MS {
             let _ = std::fs::remove_file(old.path());
         }
@@ -375,16 +388,80 @@ fn command_line(exe: &str, agent: &str) -> String {
     format!("{exe} {HOOK_ARG} {agent}")
 }
 
+fn statusline_command(exe: &str, previous: Option<&Value>) -> String {
+    let exe = if exe.contains(' ') { format!("\"{exe}\"") } else { exe.to_string() };
+    let old = previous.map(|v| URL_SAFE_NO_PAD.encode(serde_json::to_vec(v).expect("JSON value")));
+    format!("{exe} {STATUSLINE_ARG}{}", old.map(|v| format!(" {v}")).unwrap_or_default())
+}
+
+fn statusline_previous(line: &Value) -> Result<Option<Value>, String> {
+    let Some(command) = line.get("command").and_then(Value::as_str) else { return Ok(None) };
+    let Some(encoded) = command.split_whitespace().skip_while(|word| *word != STATUSLINE_ARG).nth(1) else {
+        return Ok(None);
+    };
+    URL_SAFE_NO_PAD
+        .decode(encoded)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .map(Some)
+        .ok_or_else(|| "The Claude Code statusLine installed by Peeka could not be restored; leaving it alone.".into())
+}
+
+fn statusline_is_ours(line: &Value) -> bool {
+    line.get("command").and_then(Value::as_str).is_some_and(|c| c.split_whitespace().any(|word| word == STATUSLINE_ARG))
+}
+
+/// Adds Peeka's collector around Claude Code's statusline. Existing output is
+/// chained by the executable and the original value is carried in the command
+/// so Remove can put it back exactly. A non-command statusline is left alone.
+fn merge_statusline(doc: &mut Value, exe: &str) -> Result<(), String> {
+    let obj = doc.as_object_mut().expect("checked by hooks_of");
+    let previous = match obj.get("statusLine") {
+        None => None,
+        Some(line) if statusline_is_ours(line) => statusline_previous(line)?,
+        Some(line) if line.get("command").and_then(Value::as_str).is_some() => Some(line.clone()),
+        Some(_) => {
+            return Err("The Claude Code settings file has a statusLine Peeka cannot chain; leaving it alone.".into())
+        }
+    };
+    obj.insert(
+        "statusLine".into(),
+        json!({ "type": "command", "command": statusline_command(exe, previous.as_ref()) }),
+    );
+    Ok(())
+}
+
+fn remove_statusline(doc: &mut Value) -> Result<(), String> {
+    let obj = doc.as_object_mut().expect("checked by hooks_of");
+    let Some(line) = obj.get("statusLine") else { return Ok(()) };
+    if !statusline_is_ours(line) {
+        return Ok(());
+    }
+    match statusline_previous(line)? {
+        Some(old) => {
+            obj.insert("statusLine".into(), old);
+        }
+        None => {
+            obj.remove("statusLine");
+        }
+    }
+    Ok(())
+}
+
 /// Peeka's handler for event `ev` in `a`'s format. Every one is status only: no stdout, exit 0. Claude Code and Codex
 /// run it `async`; Copilot's docs say empty output = default behaviour; Cursor's count no output as a failed hook,
 /// fail-open (so only its non-blocking events are used); Gemini's docs do not say (an owner check on a real PC).
 fn handler(a: &Agent, exe: &str, ev: &str) -> Value {
     match a.id {
-        "claude" => json!({ "type": "command", "command": exe, "args": [HOOK_ARG], "async": true, "timeout": TIMEOUT_S }),
+        "claude" => {
+            json!({ "type": "command", "command": exe, "args": [HOOK_ARG], "async": true, "timeout": TIMEOUT_S })
+        }
         // Codex caps SessionEnd's timeout at 3 s; the hook is done in 2 s anyway
         "codex" => json!({ "type": "command", "command": command_line(exe, "codex"), "async": true, "timeout": 3 }),
         // Gemini's timeout is in ms; `name` lets the owner `/hooks disable peeka`
-        "gemini" => json!({ "name": crate::brand::EXE_NAME, "type": "command", "command": command_line(exe, "gemini"), "timeout": 5000 }),
+        "gemini" => {
+            json!({ "name": crate::brand::EXE_NAME, "type": "command", "command": command_line(exe, "gemini"), "timeout": 5000 })
+        }
         "cursor" => json!({ "command": command_line(exe, "cursor") }),
         // Copilot CLI's `exec` + `args`: no shell at all
         _ => json!({ "type": "command", "exec": exe, "args": [HOOK_ARG, a.id, ev], "timeoutSec": TIMEOUT_S }),
@@ -424,7 +501,9 @@ fn strip(list: &mut Vec<Value>, flat: bool) -> bool {
 /// replaced.
 fn hooks_of<'d>(a: &Agent, doc: &'d mut Value) -> Result<&'d mut Map<String, Value>, String> {
     let name = a.name;
-    let obj = doc.as_object_mut().ok_or(format!("The {name} settings file is not in the expected format; leaving it alone."))?;
+    let obj = doc
+        .as_object_mut()
+        .ok_or(format!("The {name} settings file is not in the expected format; leaving it alone."))?;
     let hooks = obj
         .entry("hooks")
         .or_insert_with(|| json!({}))
@@ -450,6 +529,9 @@ pub fn merge(a: &Agent, doc: &mut Value, exe: &str) -> Result<(), String> {
         strip(list, a.flat);
         list.push(entry(a, exe, ev));
     }
+    if a.id == "claude" {
+        merge_statusline(doc, exe)?;
+    }
     Ok(())
 }
 
@@ -465,6 +547,9 @@ pub fn remove(a: &Agent, doc: &mut Value) -> Result<(), String> {
                 hooks.remove(*ev);
             }
         }
+    }
+    if a.id == "claude" {
+        remove_statusline(doc)?;
     }
     Ok(())
 }
@@ -527,7 +612,10 @@ fn plan(a: &Agent, path: &Path, f: impl FnOnce(&mut Value) -> Result<(), String>
     let same = Some(&doc) == before.as_ref() || (before.is_none() && doc == json!({}));
     let new = match same {
         true => None,
-        false => Some(serde_json::to_vec_pretty(&doc).map_err(|_| format!("The {} settings file could not be written.", a.name))?),
+        false => Some(
+            serde_json::to_vec_pretty(&doc)
+                .map_err(|_| format!("The {} settings file could not be written.", a.name))?,
+        ),
     };
     Ok(Plan { fingerprint, old, new })
 }
@@ -572,7 +660,12 @@ pub fn preview(a: &Agent, path: &Path, exe: Option<&str>) -> Result<Preview, Str
 /// one-time backup `<file>.json.bak-peeka` (the file as it was before Peeka first changed it, never overwritten),
 /// then tmp + rename. shortcut: a write landing between the check and the rename (milliseconds) is still lost; a
 /// lock would need every writer of the file to take it.
-fn edit(a: &Agent, path: &Path, expect: Option<&str>, f: impl FnOnce(&mut Value) -> Result<(), String>) -> Result<(), String> {
+fn edit(
+    a: &Agent,
+    path: &Path,
+    expect: Option<&str>,
+    f: impl FnOnce(&mut Value) -> Result<(), String>,
+) -> Result<(), String> {
     let p = plan(a, path, f)?;
     if expect.is_some_and(|e| e != p.fingerprint) {
         return Err(format!(
@@ -630,12 +723,17 @@ mod tests {
             "prompt": "my password hunter22", "tool_response": "output", "transcript_path": "C:\\t.jsonl",
         });
         let p = hook_params(&CLAUDE, &raw, None).unwrap();
-        assert_eq!(p, json!({"agent": "claude", "kind": "pre_tool", "tool": "Bash", "reason": null, "sid": null}), "no salt, no sid");
+        assert_eq!(
+            p,
+            json!({"agent": "claude", "kind": "pre_tool", "tool": "Bash", "reason": null, "sid": null}),
+            "no salt, no sid"
+        );
         let s = p.to_string();
         for leak in ["rm -rf", "secret", "b.txt", "hunter22", "output", "hidden", "jsonl", "raw-session"] {
             assert!(!s.contains(leak), "{leak}");
         }
-        for bad in [r"C:\Windows\cmd.exe", "/usr/bin/bash", "rm -rf /", "Bash; echo x", &"a".repeat(65), "", "sécret"] {
+        for bad in [r"C:\Windows\cmd.exe", "/usr/bin/bash", "rm -rf /", "Bash; echo x", &"a".repeat(65), "", "sécret"]
+        {
             let p = hook_params(&CLAUDE, &json!({"hook_event_name": "PreToolUse", "tool_name": bad}), None).unwrap();
             assert_eq!(p["tool"], Value::Null, "{bad}");
         }
@@ -647,8 +745,15 @@ mod tests {
         let n = json!({"hook_event_name": "Notification", "notification_type": "permission_prompt", "message": "x y"});
         assert_eq!(hook_params(&CLAUDE, &n, None).unwrap()["reason"], "permission_prompt");
         let q = json!({"hook_event_name": "Notification", "notification_type": "quota_auto_resume_fired"});
-        assert_eq!(hook_params(&CLAUDE, &q, None).unwrap()["reason"], "quota_auto_resume_fired", "the UI clears the plan limit on it");
-        assert_eq!(hook_params(&CLAUDE, &json!({"hook_event_name": "PermissionRequest"}), None).unwrap()["kind"], "permission");
+        assert_eq!(
+            hook_params(&CLAUDE, &q, None).unwrap()["reason"],
+            "quota_auto_resume_fired",
+            "the UI clears the plan limit on it"
+        );
+        assert_eq!(
+            hook_params(&CLAUDE, &json!({"hook_event_name": "PermissionRequest"}), None).unwrap()["kind"],
+            "permission"
+        );
         assert_eq!(
             hook_params(&CLAUDE, &json!({"hook_event_name": "Stop", "error": "rate_limit"}), None).unwrap()["reason"],
             Value::Null
@@ -691,7 +796,8 @@ mod tests {
         let s = p.to_string();
         assert!(!s.contains("9c1d2e3f") && !s.contains("raw-id") && !s.contains("hidden"), "{s}");
         for bad in [json!(5), json!(""), json!("x".repeat(300))] {
-            let q = hook_params(&CLAUDE, &json!({"hook_event_name": "Stop", "session_id": bad}), Some(&[7; 32])).unwrap();
+            let q =
+                hook_params(&CLAUDE, &json!({"hook_event_name": "Stop", "session_id": bad}), Some(&[7; 32])).unwrap();
             assert_eq!(q["sid"], Value::Null);
         }
     }
@@ -724,12 +830,18 @@ mod tests {
 
     #[test]
     fn an_edit_inside_cwd_becomes_a_relative_path_and_counts() {
-        let e = edit_of(&post("Edit", json!({"file_path": r"C:\work\proj\src\a.rs", "old_string": "x\ny", "new_string": "x\nz\nw"}))).unwrap();
+        let e = edit_of(&post(
+            "Edit",
+            json!({"file_path": r"C:\work\proj\src\a.rs", "old_string": "x\ny", "new_string": "x\nz\nw"}),
+        ))
+        .unwrap();
         assert_eq!((e.rel.as_str(), e.add, e.del, e.more), ("src/a.rs", 2, 1, 0));
         assert_eq!(e.abs, r"C:\work\proj\src\a.rs");
         let w = edit_of(&post("Write", json!({"file_path": "C:/work/proj/n.txt", "content": "1\n2"}))).unwrap();
         assert_eq!((w.rel.as_str(), w.add, w.del), ("n.txt", 2, 0));
-        for outside in [r"C:\work\other\a.rs", r"C:\work\proj\..\secret.txt", r"D:\work\proj\a.rs", "src/a.rs", r"C:\work\proj"] {
+        for outside in
+            [r"C:\work\other\a.rs", r"C:\work\proj\..\secret.txt", r"D:\work\proj\a.rs", "src/a.rs", r"C:\work\proj"]
+        {
             let raw = post("Edit", json!({"file_path": outside, "old_string": "a", "new_string": "b"}));
             assert!(edit_of(&raw).is_none(), "{outside}");
         }
@@ -760,7 +872,10 @@ mod tests {
     fn the_hook_line_carries_counts_and_the_cache_holds_the_diff() {
         let tmp = Tmp::new();
         let dir = tmp.path().join("cc-diff");
-        let raw = post("Edit", json!({"file_path": r"C:\work\proj\src\a.rs", "old_string": "secret1", "new_string": "secret2"}));
+        let raw = post(
+            "Edit",
+            json!({"file_path": r"C:\work\proj\src\a.rs", "old_string": "secret1", "new_string": "secret2"}),
+        );
         let line = hook_line(&CLAUDE, &raw, Some(&[3; 32]), Some(&dir)).unwrap();
         assert_eq!(line["edit"], json!({"file": "src/a.rs", "add": 1, "del": 1}));
         let s = line.to_string();
@@ -768,11 +883,17 @@ mod tests {
         let sid = line["sid"].as_str().unwrap();
         let cached = read_diff(&dir, sid).unwrap();
         assert_eq!(cached.lines, ["-secret1", "+secret2"]);
-        assert!(read_diff(&dir, "../x").is_none() && diff_file(&dir, "..\\..\\x").is_none(), "a page argument cannot escape");
+        assert!(
+            read_diff(&dir, "../x").is_none() && diff_file(&dir, "..\\..\\x").is_none(),
+            "a page argument cannot escape"
+        );
         let end = json!({"hook_event_name": "SessionEnd", "session_id": "s1"});
         assert!(hook_line(&CLAUDE, &end, Some(&[3; 32]), Some(&dir)).unwrap().get("edit").is_none());
         assert!(read_diff(&dir, sid).is_none(), "SessionEnd removes the cache");
-        assert!(hook_line(&CLAUDE, &raw, None, Some(&dir)).unwrap()["edit"].is_object(), "no salt: counts still go, nothing cached");
+        assert!(
+            hook_line(&CLAUDE, &raw, None, Some(&dir)).unwrap()["edit"].is_object(),
+            "no salt: counts still go, nothing cached"
+        );
     }
 
     fn owner_doc() -> Value {
@@ -818,10 +939,9 @@ mod tests {
             json!({"type": "command", "command": EXE, "args": ["--cc-hook"], "async": true, "timeout": 5})
         );
         assert_eq!(d["hooks"]["Stop"][0], json!({"hooks": []}), "an empty group of the owner's stays");
-        assert_eq!(
-            (d["env"].clone(), d["statusLine"].clone()),
-            (json!({"X": "1"}), json!({"type": "command", "command": "mine"}))
-        );
+        assert_eq!(d["env"], json!({"X": "1"}));
+        assert_eq!(statusline_previous(&d["statusLine"]).unwrap(), Some(owner_doc()["statusLine"].clone()));
+        assert!(d["statusLine"]["command"].as_str().unwrap().contains(STATUSLINE_ARG));
         assert_eq!(d["hooks"]["PreCompact"], owner_doc()["hooks"]["PreCompact"]);
         assert_eq!(d["hooks"].as_object().unwrap().len(), 13, "twelve events plus the owner's PreCompact");
 
@@ -833,6 +953,16 @@ mod tests {
         assert_eq!(status(&CLAUDE, &d, EXE), (false, false));
         remove(&CLAUDE, &mut d).unwrap();
         assert_eq!(d, owner_doc());
+    }
+
+    #[test]
+    fn statusline_merge_and_restore_are_pure_and_exact() {
+        let original = json!({"type": "command", "command": "prompt.exe --quiet", "padding": 3});
+        let mut doc = json!({"statusLine": original.clone(), "hooks": {}});
+        merge(&CLAUDE, &mut doc, EXE).unwrap();
+        assert_eq!(statusline_previous(&doc["statusLine"]).unwrap(), Some(original.clone()));
+        remove(&CLAUDE, &mut doc).unwrap();
+        assert_eq!(doc["statusLine"], original);
     }
 
     #[test]
@@ -877,8 +1007,9 @@ mod tests {
         let owner = serde_json::to_vec_pretty(&owner_doc()).unwrap();
         let path = tmp.write(".claude/settings.json", &owner);
         let p = preview(&CLAUDE, &path, Some(EXE)).unwrap();
-        assert!(p.add > 0 && p.del == 0, "{p:?}");
+        assert!(p.add > 0 && p.del > 0, "{p:?}");
         assert!(p.lines.iter().any(|l| l.starts_with('+') && l.contains(HOOK_ARG)));
+        assert!(p.lines.iter().any(|l| l.starts_with('+') && l.contains(STATUSLINE_ARG)));
         assert!(p.lines.iter().any(|l| l.starts_with(' ')), "context around the change");
         assert_eq!(std::fs::read(&path).unwrap(), owner, "a preview writes nothing");
 
@@ -900,7 +1031,7 @@ mod tests {
 
         // Remove previews only Peeka's lines going; the backup is one-time, never overwritten
         let r = preview(&CLAUDE, &path, None).unwrap();
-        assert!(r.add == 0 && r.del > 0 && r.lines.iter().filter(|l| l.starts_with('-')).all(|l| !l.contains("opus")));
+        assert!(r.add > 0 && r.del > 0 && r.lines.iter().filter(|l| l.starts_with('-')).all(|l| !l.contains("opus")));
         uninstall(&CLAUDE, &path, Some(&r.fingerprint)).unwrap();
         assert_eq!(serde_json::from_slice::<Value>(&std::fs::read(&path).unwrap()).unwrap()["model"], "opus");
         assert_eq!(std::fs::read(path.with_extension("json.bak-peeka")).unwrap(), edited);
@@ -930,15 +1061,28 @@ mod tests {
 
     #[test]
     fn the_origin_is_one_word_from_the_environment() {
-        let env = |pairs: &'static [(&'static str, &'static str)]| move |k: &str| pairs.iter().find(|(n, _)| *n == k).map(|(_, v)| v.to_string());
+        let env = |pairs: &'static [(&'static str, &'static str)]| {
+            move |k: &str| pairs.iter().find(|(n, _)| *n == k).map(|(_, v)| v.to_string())
+        };
         assert_eq!(origin(env(&[])), "terminal");
         assert_eq!(origin(env(&[("CLAUDE_CODE_ENTRYPOINT", "cli")])), "terminal");
         assert_eq!(origin(env(&[("CLAUDE_CODE_ENTRYPOINT", "claude-desktop")])), "desktop");
         assert_eq!(origin(env(&[("CURSOR_TRACE_ID", "abc")])), "cursor");
-        assert_eq!(origin(env(&[("VSCODE_GIT_ASKPASS_NODE", r"C:\Users\me\AppData\Local\Programs\cursor\Cursor.exe")])), "cursor");
-        assert_eq!(origin(env(&[("VSCODE_GIT_ASKPASS_NODE", r"C:\Program Files\Microsoft VS Code\Code.exe")])), "vscode", "VS Code is not Cursor");
+        assert_eq!(
+            origin(env(&[("VSCODE_GIT_ASKPASS_NODE", r"C:\Users\me\AppData\Local\Programs\cursor\Cursor.exe")])),
+            "cursor"
+        );
+        assert_eq!(
+            origin(env(&[("VSCODE_GIT_ASKPASS_NODE", r"C:\Program Files\Microsoft VS Code\Code.exe")])),
+            "vscode",
+            "VS Code is not Cursor"
+        );
         assert_eq!(origin(env(&[("CLAUDE_CODE_ENTRYPOINT", "claude-vscode")])), "vscode");
-        assert_eq!(origin(env(&[("CLAUDE_CODE_ENTRYPOINT", "claude-vscode"), ("CURSOR_TRACE_ID", "x")])), "cursor", "the extension inside Cursor");
+        assert_eq!(
+            origin(env(&[("CLAUDE_CODE_ENTRYPOINT", "claude-vscode"), ("CURSOR_TRACE_ID", "x")])),
+            "cursor",
+            "the extension inside Cursor"
+        );
         assert_eq!(origin(env(&[("CURSOR_TRACE_ID", "")])), "terminal");
         assert!(ORIGINS.iter().all(|o| word(o)));
     }
@@ -963,7 +1107,10 @@ mod tests {
             "hook_event_name": "PreToolUse", "model": "gpt-5-codex", "turn_id": "turn-9", "tool_name": "Bash", "tool_use_id": "call_1",
             "tool_input": {"command": "cat .env"}});
         let p = hook_params(by("codex"), &codex, salt).unwrap();
-        assert_eq!(p, json!({"agent": "codex", "kind": "pre_tool", "tool": "Bash", "reason": null, "sid": session_tag(&[5; 32], "019a-codex-thread")}));
+        assert_eq!(
+            p,
+            json!({"agent": "codex", "kind": "pre_tool", "tool": "Bash", "reason": null, "sid": session_tag(&[5; 32], "019a-codex-thread")})
+        );
         no_leak(&p, &["019a", "secret", ".env", "gpt-5", "turn-9", "jsonl"]);
         // Cursor postToolUse (cursor.com/docs/agent/hooks): the session is `conversation_id`
         let cursor = json!({"conversation_id": "conv-42", "generation_id": "gen-1", "model": "claude-x", "hook_event_name": "postToolUse",
@@ -971,21 +1118,34 @@ mod tests {
             "transcript_path": "C:\\t.txt", "tool_name": "Shell", "tool_input": {"command": "ls"}, "tool_output": "passwords.txt",
             "tool_use_id": "t1", "cwd": "C:\\work\\secret-proj", "duration": 12});
         let p = hook_params(by("cursor"), &cursor, salt).unwrap();
-        assert_eq!(p, json!({"agent": "cursor", "kind": "post_tool", "tool": "Shell", "reason": null, "sid": session_tag(&[5; 32], "conv-42")}));
+        assert_eq!(
+            p,
+            json!({"agent": "cursor", "kind": "post_tool", "tool": "Shell", "reason": null, "sid": session_tag(&[5; 32], "conv-42")})
+        );
         no_leak(&p, &["conv-42", "example.com", "secret", "passwords", "claude-x"]);
-        assert!(hook_params(by("cursor"), &json!({"hook_event_name": "preToolUse", "tool_name": "Shell"}), None).is_none(), "blocking events are not ours");
+        assert!(
+            hook_params(by("cursor"), &json!({"hook_event_name": "preToolUse", "tool_name": "Shell"}), None).is_none(),
+            "blocking events are not ours"
+        );
         // Gemini CLI AfterTool and Notification (geminicli.com/docs/hooks/reference)
         let gemini = json!({"session_id": "g-1", "transcript_path": "/t", "cwd": "C:\\work\\secret-proj", "hook_event_name": "AfterTool",
             "timestamp": "2026-10-19T10:00:00Z", "tool_name": "write_file", "tool_input": {"file_path": "a.txt", "content": "hunter2"},
             "tool_response": {"llmContent": "ok"}});
         let p = hook_params(by("gemini"), &gemini, None).unwrap();
-        assert_eq!(p, json!({"agent": "gemini", "kind": "post_tool", "tool": "write_file", "reason": null, "sid": null}));
+        assert_eq!(
+            p,
+            json!({"agent": "gemini", "kind": "post_tool", "tool": "write_file", "reason": null, "sid": null})
+        );
         no_leak(&p, &["hunter2", "a.txt", "secret"]);
         let n = json!({"session_id": "g-1", "hook_event_name": "Notification", "notification_type": "ToolPermission", "message": "Allow rm -rf?", "details": {}});
         let p = hook_params(by("gemini"), &n, None).unwrap();
         assert_eq!((p["kind"].as_str(), p["reason"].as_str()), (Some("notification"), Some("ToolPermission")));
         no_leak(&p, &["rm -rf"]);
-        assert_eq!(hook_params(by("gemini"), &json!({"hook_event_name": "AfterAgent", "prompt_response": "x"}), None).unwrap()["kind"], "stop");
+        assert_eq!(
+            hook_params(by("gemini"), &json!({"hook_event_name": "AfterAgent", "prompt_response": "x"}), None).unwrap()
+                ["kind"],
+            "stop"
+        );
         // Copilot CLI, PascalCase event (snake_case payload) and the camelCase one with the event from the argument
         let pascal = json!({"hook_event_name": "PreToolUse", "session_id": "cp-1", "cwd": "C:\\work\\secret-proj", "tool_name": "bash", "tool_input": {"command": "ls"}});
         assert_eq!(hook_params(by("copilot"), &pascal, None).unwrap()["tool"], "bash");
@@ -993,7 +1153,10 @@ mod tests {
         assert!(hook_params(by("copilot"), &camel, None).is_none(), "no event name, no line");
         camel["hook_event_name"] = json!("PreToolUse"); // what the hook does with its third argument
         let p = hook_params(by("copilot"), &camel, salt).unwrap();
-        assert_eq!(p, json!({"agent": "copilot", "kind": "pre_tool", "tool": "bash", "reason": null, "sid": session_tag(&[5; 32], "cp-1")}));
+        assert_eq!(
+            p,
+            json!({"agent": "copilot", "kind": "pre_tool", "tool": "bash", "reason": null, "sid": session_tag(&[5; 32], "cp-1")})
+        );
         no_leak(&p, &["command", "/tmp"]);
         let err = json!({"hook_event_name": "ErrorOccurred", "error": {"message": "C:\\secret", "name": "Error"}});
         assert_eq!(hook_params(by("copilot"), &err, None).unwrap()["reason"], Value::Null, "an object is never a word");
@@ -1032,20 +1195,33 @@ mod tests {
         // Codex and Gemini: groups like Claude Code's, Gemini with a "*" matcher and a ms timeout
         let mut c = json!({"description": "mine", "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "notify.py"}]}]}});
         merge(by("codex"), &mut c, exe).unwrap();
-        assert_eq!(c["hooks"]["Stop"][1]["hooks"][0], json!({"type": "command", "command": format!("{exe} --cc-hook codex"), "async": true, "timeout": 3}));
+        assert_eq!(
+            c["hooks"]["Stop"][1]["hooks"][0],
+            json!({"type": "command", "command": format!("{exe} --cc-hook codex"), "async": true, "timeout": 3})
+        );
         assert!(c["hooks"].get("Notification").is_none(), "only the agent's own events");
         remove(by("codex"), &mut c).unwrap();
-        assert_eq!(c, json!({"description": "mine", "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "notify.py"}]}]}}));
+        assert_eq!(
+            c,
+            json!({"description": "mine", "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "notify.py"}]}]}})
+        );
         let mut g = json!({"theme": "x"});
         merge(by("gemini"), &mut g, r"C:\Program Files\Peeka\peeka.exe").unwrap();
         assert_eq!(g["hooks"]["BeforeTool"][0]["matcher"], "*");
-        assert_eq!(g["hooks"]["BeforeTool"][0]["hooks"][0]["command"], r#""C:\Program Files\Peeka\peeka.exe" --cc-hook gemini"#, "a path with a space is quoted");
+        assert_eq!(
+            g["hooks"]["BeforeTool"][0]["hooks"][0]["command"],
+            r#""C:\Program Files\Peeka\peeka.exe" --cc-hook gemini"#,
+            "a path with a space is quoted"
+        );
         assert_eq!(g["hooks"]["BeforeTool"][0]["hooks"][0]["timeout"], 5000);
         assert_eq!(status(by("gemini"), &g, exe), (true, false), "another exe: Reinstall");
         // Copilot: exec + args, the event as the third argument
         let mut cp = json!({});
         merge(by("copilot"), &mut cp, exe).unwrap();
-        assert_eq!(cp["hooks"]["PreToolUse"][0], json!({"type": "command", "exec": exe, "args": ["--cc-hook", "copilot", "PreToolUse"], "timeoutSec": 5}));
+        assert_eq!(
+            cp["hooks"]["PreToolUse"][0],
+            json!({"type": "command", "exec": exe, "args": ["--cc-hook", "copilot", "PreToolUse"], "timeoutSec": 5})
+        );
         // a Claude Code entry is not mistaken for another agent's and vice versa only by file: is_ours sees both forms
         assert!(is_ours(&json!({"command": "x --cc-hook gemini"})) && !is_ours(&json!({"command": "x --cc-hooks"})));
     }

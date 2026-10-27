@@ -127,6 +127,7 @@ export const COMMAND_NAMES = [
   "claude_bridge_install",
   "claude_bridge_remove",
   "agent_bridges",
+  "agent_usage",
   "agent_bridge_install",
   "agent_bridge_remove",
   "agent_bridge_preview",

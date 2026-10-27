@@ -19,8 +19,9 @@ import { ExtStripKey } from "./ExtStripKey";
 import { IslandHiddenGlyph } from "./IslandHidden";
 import { useIslandHidden } from "../hooks.fidelity";
 import { cap99 } from "../lib/plugin";
+import { UsageStrip } from "./UsagePanel";
 
-export type PanelKind = "setup" | "calendar" | "start" | "status" | "search" | "appearance" | "shortcuts" | "plugins" | "modules" | "clipboard" | "mascot" | "quit" | "notif" | "cleanup" | "tray" | "more";
+export type PanelKind = "setup" | "calendar" | "start" | "status" | "usage" | "search" | "appearance" | "shortcuts" | "plugins" | "modules" | "clipboard" | "mascot" | "quit" | "notif" | "cleanup" | "tray" | "more";
 export type MenuState = { kind: "app"; appId: string; x: number } | { kind: "strip"; x: number };
 
 const GAP = 2;
@@ -331,6 +332,7 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
       <div className="side">
         {monitor.primary && (
           <>
+            <UsageStrip onOpen={() => onPanel("usage")} />
             <ExtStripKey surfaces={surf} />
             <PromotedTray monitor={monitor.id} />
             <button className={"key keyIcon" + (openPanel === "tray" ? " shown" : "")} title="Hidden icons" aria-label="Hidden icons" aria-haspopup="dialog" {...trigger("tray")}><ChevronDown /></button>

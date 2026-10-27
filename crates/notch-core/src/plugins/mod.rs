@@ -6,6 +6,7 @@
 //! approved, nothing else. The exe path and its signature are shown in the consent window as information only.
 
 pub mod cc_hooks;
+pub mod usage;
 pub mod consent;
 pub mod host;
 pub mod items;
