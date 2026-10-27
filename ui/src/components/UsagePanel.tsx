@@ -36,8 +36,10 @@ export function UsageStrip({ onOpen }: { onOpen: () => void }) {
   const hidden = generic(lock.locked, input.presentation, privacy.screen);
   const shown = useMemo(() => rows?.map((row) => ({ row, window: fiveHour(row) })).filter((item): item is { row: Usage; window: NonNullable<ReturnType<typeof fiveHour>> } => !!item.window) ?? [], [rows]);
   if (!shown.length) return null;
-  return <button className="usageStrip" aria-label="Usage" title="Usage" onClick={onOpen}>
-    {hidden ? <span>Usage</span> : shown.map(({ row, window }) => <span className="usageSummary" key={row.agent}><b className="usageTile">{nameOf(row.agent)[0]}</b><strong className={window.usedPercent >= 80 ? "usageHot" : ""}>{window.usedPercent}%</strong><em>{remaining(window)}</em></span>)}
+  // percent only: with reset times the group grew ~200 px and met the island's widest state; times live in the title and panel
+  const title = hidden ? "Usage" : shown.map(({ row, window }) => `${nameOf(row.agent)} ${window.usedPercent}%, resets in ${remaining(window)}`).join(" · ");
+  return <button className="usageStrip" aria-label="Usage" title={title} onClick={onOpen}>
+    {hidden ? <span>Usage</span> : shown.map(({ row, window }) => <span className="usageSummary" key={row.agent}><b className="usageTile">{nameOf(row.agent)[0]}</b><strong className={window.usedPercent >= 80 ? "usageHot" : ""}>{window.usedPercent}%</strong></span>)}
   </button>;
 }
 

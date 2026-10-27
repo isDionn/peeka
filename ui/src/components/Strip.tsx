@@ -288,6 +288,7 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
+    if (left.current) ro.observe(left.current); // the usage chip arrives late and pushes Search right
     return () => ro.disconnect();
   }, []);
   const [hold, setHold] = useState<number | null>(null); // the slot width while the pointer is on the list (nothing resizes under it)
@@ -312,6 +313,7 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
       <div className="side" ref={left} onPointerEnter={() => setHold(fit.slot)} onPointerLeave={() => setHold(null)}>
         <SelectionPill host={left} watch={activeKey} />
         {monitor.primary && priv && <span className="privacyDot" role="img" aria-label={priv} title={priv} data-only={privacy.screen ? undefined : "camera"} />}
+        {monitor.primary && <UsageStrip onOpen={() => onPanel("usage")} />}{/* left, before Start: the right group has no room left beside the island's widest state */}
         <button className={"key keyIcon" + (openPanel === "start" ? " shown" : "")} title="Start" aria-label="Start" aria-haspopup="dialog" {...trigger("start")}><WinLogo /></button>
         <button ref={searchKey} className={"key keyIcon" + (openPanel === "search" ? " shown" : "")} title="Search (Ctrl+K)" aria-label="Search" aria-haspopup="dialog" {...trigger("search")}><Search /></button>
         {monitor.primary && <Pins items={fit.pinned} pins={pins} onReorder={onReorder} onHover={hover} onPick={pickByKey} onMenu={(appId, x) => onMenu({ kind: "app", appId, x })} />}
@@ -332,7 +334,6 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
       <div className="side">
         {monitor.primary && (
           <>
-            <UsageStrip onOpen={() => onPanel("usage")} />
             <ExtStripKey surfaces={surf} />
             <PromotedTray monitor={monitor.id} />
             <button className={"key keyIcon" + (openPanel === "tray" ? " shown" : "")} title="Hidden icons" aria-label="Hidden icons" aria-haspopup="dialog" {...trigger("tray")}><ChevronDown /></button>
