@@ -133,11 +133,11 @@ export function StartGrid({ items, apps, onChange, onLaunch, onMenu, compact }: 
     onMenu(it, at, () => { setNaming(true); setOpen(key!); });
     return true;
   };
-  const onContextMenu = (e: React.MouseEvent) => { if (menuAt(e.target as HTMLElement, { x: e.clientX, y: e.clientY })) e.preventDefault(); };
+  const onContextMenu = (e: React.MouseEvent) => { if (menuAt(e.target as HTMLElement, { x: e.screenX, y: e.screenY })) e.preventDefault(); };
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (!(e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))) return;
     const r = (e.target as HTMLElement).getBoundingClientRect();
-    if (menuAt(e.target as HTMLElement, { x: r.left, y: r.bottom })) e.preventDefault();
+    if (menuAt(e.target as HTMLElement, { x: window.screenX + r.left, y: window.screenY + r.bottom })) e.preventDefault();
   };
 
   return (

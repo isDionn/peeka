@@ -34,7 +34,7 @@ const TRACKS = [
 ];
 
 type W4Names = "search_index_state" | "search_open" | "search_ask" | "clip_list" | "clip_copy" | "clip_pin" | "clip_delete" | "clip_clear" | "clip_reveal" | "clip_share" | "clip_edit" | "clip_drag" | "clip_visible" | "lock_state" | "lock_now" | "lock_release";
-type W5Names = "window_preview" | "share_open" | "shelf_list" | "shelf_ask" | "shelf_add" | "shelf_open" | "shelf_pin" | "shelf_remove" | "shelf_copy_files" | "shelf_share" | "shelf_show_in_folder" | "shelf_zip" | "shelf_drag" | "timer_get" | "timer_start" | "timer_control" | "privacy_get" | "tray_open" | "mirror_state" | "mirror_enable" | "mirror_disable" | "mirror_list" | "mirror_dismiss" | "mirror_open_app" | "mirror_ask";
+type W5Names = "window_preview" | "share_open" | "shelf_list" | "shelf_ask" | "shelf_add" | "shelf_open" | "shelf_pin" | "shelf_remove" | "shelf_copy_files" | "shelf_share" | "shelf_show_in_folder" | "shelf_zip" | "shelf_drag" | "timer_get" | "timer_start" | "timer_control" | "privacy_get" | "tray_open" | "tray_menu" | "mirror_state" | "mirror_enable" | "mirror_disable" | "mirror_list" | "mirror_dismiss" | "mirror_open_app" | "mirror_ask";
 type W7Names = "recent_files" | "open_recent" | "set_start_items" | "app_show_in_folder" | "launch_app_admin" | "open_start_menu" | "open_calendar" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "agent_bridges" | "agent_bridge_install" | "agent_bridge_remove" | "agent_bridge_preview" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "window_pick" | "cc_focus_terminal" | "cc_diff" | "cc_diff_open" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus";
 /** Peeka Phase C: clipboard, download and copy-code commands; Settings > About demo restart. */
 /** The Modules card's Claude chat. */
@@ -417,6 +417,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       return { ...timer };
     },
     tray_open: (a) => { if (!TRAY.some((t) => t.id === a.id)) throw "unknown"; log.push({ cmd: "tray_open", args: a }); },
+    tray_menu: (a) => { if (!TRAY.some((t) => t.id === a.id)) throw "unknown"; log.push({ cmd: "tray_menu", args: a }); },
     mirror_state: () => ({ ...mirror }),
     mirror_enable: () => { const s = mirrorSet({ enabled: true }); log.push({ cmd: "mirror_enable", args: null }); return s; },
     mirror_disable: () => { const s = mirrorSet({ enabled: false }); log.push({ cmd: "mirror_disable", args: null }); return s; },

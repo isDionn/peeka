@@ -791,10 +791,33 @@ pub async fn open_tray(n: State<'_, Notch>, monitor: String) -> Res<Vec<notch_co
     Ok(list)
 }
 
-/// A click in the tray list: the app's open window forward, else its exe started. Only ids `open_tray` sent.
+/// A click in the tray list goes to the app's live icon when the tray host heard it; elevated and older icons keep the
+/// old focus/launch fallback. Only ids `open_tray` sent.
 #[tauri::command]
 pub fn tray_open(n: State<'_, Notch>, id: String) -> Res<()> {
-    let target = notch_core::tray::open(&n.tray.lock(), &n.items.lock(), &id).ok_or(CmdError::Unknown)?;
+    let listed = n.tray.lock();
+    let icon = listed.iter().find(|t| t.id == id).ok_or(CmdError::Unknown)?;
+    if notch_win::tray_host::click(&icon.exe, None, notch_win::tray_host::Click::Left) {
+        return Ok(());
+    }
+    let target = notch_core::tray::open(&listed, &n.items.lock(), &id).ok_or(CmdError::Unknown)?;
+    let ok = match target {
+        notch_core::tray::Open::Focus(hwnd) => Win32Control.focus(hwnd),
+        notch_core::tray::Open::Launch(exe) => Win32Control.launch(&exe),
+    };
+    ok.then_some(()).ok_or(CmdError::Refused)
+}
+
+/// The icon's own context menu. The page supplies a screen point only; this command still accepts only an id from the
+/// last `open_tray` list, then falls back to the old focus/launch behaviour when the host never heard the icon.
+#[tauri::command]
+pub fn tray_menu(n: State<'_, Notch>, id: String, x: i32, y: i32) -> Res<()> {
+    let listed = n.tray.lock();
+    let icon = listed.iter().find(|t| t.id == id).ok_or(CmdError::Unknown)?;
+    if notch_win::tray_host::click(&icon.exe, Some((x, y)), notch_win::tray_host::Click::Right) {
+        return Ok(());
+    }
+    let target = notch_core::tray::open(&listed, &n.items.lock(), &id).ok_or(CmdError::Unknown)?;
     let ok = match target {
         notch_core::tray::Open::Focus(hwnd) => Win32Control.focus(hwnd),
         notch_core::tray::Open::Launch(exe) => Win32Control.launch(&exe),

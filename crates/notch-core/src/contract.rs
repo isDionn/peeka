@@ -111,6 +111,7 @@ pub const COMMANDS: &[&str] = &[
     "privacy_get",
     // Wave 6: the read-only tray list behind `open_tray` (PENDING Wave 0 test 4), the Windows notification mirror
     "tray_open",
+    "tray_menu",
     "mirror_state",
     "mirror_enable",
     "mirror_disable",

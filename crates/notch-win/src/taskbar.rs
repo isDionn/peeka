@@ -38,11 +38,11 @@ mod sys {
     use windows::core::{w, PCWSTR};
     use windows::Win32::Foundation::HWND;
     use windows::Win32::UI::Shell::APPBARDATA;
-    use windows::Win32::UI::WindowsAndMessaging::{FindWindowExW, FindWindowW};
+    use windows::Win32::UI::WindowsAndMessaging::FindWindowExW;
 
     pub fn tray() -> Option<HWND> {
-        // SAFETY: two valid wide-string pointers (a literal and null); the result is checked.
-        unsafe { FindWindowW(w!("Shell_TrayWnd"), PCWSTR::null()) }.ok()
+        // The topmost private tray host uses the same class name, so FindWindowW would return Peeka itself.
+        crate::tray_host::explorer_tray()
     }
 
     /// Every taskbar window, found fresh each time (an Explorer restart makes new ones; handles are never cached).
