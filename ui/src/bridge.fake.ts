@@ -35,7 +35,7 @@ const TRACKS = [
 
 type W4Names = "search_index_state" | "search_open" | "search_ask" | "clip_list" | "clip_copy" | "clip_pin" | "clip_delete" | "clip_clear" | "clip_reveal" | "clip_share" | "clip_edit" | "clip_drag" | "clip_visible" | "lock_state" | "lock_now" | "lock_release";
 type W5Names = "window_preview" | "share_open" | "shelf_list" | "shelf_ask" | "shelf_add" | "shelf_open" | "shelf_pin" | "shelf_remove" | "shelf_copy_files" | "shelf_share" | "shelf_show_in_folder" | "shelf_zip" | "shelf_drag" | "timer_get" | "timer_start" | "timer_control" | "privacy_get" | "tray_open" | "mirror_state" | "mirror_enable" | "mirror_disable" | "mirror_list" | "mirror_dismiss" | "mirror_open_app" | "mirror_ask";
-type W7Names = "recent_files" | "open_recent" | "set_start_items" | "app_show_in_folder" | "launch_app_admin" | "open_start_menu" | "open_calendar" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "agent_bridges" | "agent_bridge_install" | "agent_bridge_remove" | "agent_bridge_preview" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "window_pick" | "cc_focus_terminal" | "cc_diff" | "cc_diff_open" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus";
+type W7Names = "recent_files" | "open_recent" | "set_start_items" | "app_show_in_folder" | "launch_app_admin" | "open_start_menu" | "open_calendar" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "agent_bridges" | "agent_usage" | "agent_bridge_install" | "agent_bridge_remove" | "agent_bridge_preview" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "window_pick" | "cc_focus_terminal" | "cc_diff" | "cc_diff_open" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus";
 /** Peeka Phase C: clipboard, download and copy-code commands; Settings > About demo restart. */
 /** The Modules card's Claude chat. */
 type W9Names = "claude_chat_state" | "claude_chat_send" | "claude_chat_stop" | "claude_chat_new";
@@ -103,6 +103,10 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   let recap: RecapWeek | null = null;
   let calendar: CalendarNext = structuredClone(DEFAULT_CALENDAR);
   let bridgeState: BridgeState = { installed: true, healthy: true, lastEventAgoS: 120 };
+  let agentUsage = [
+    { agent: "codex", windows: [{ usedPercent: 84, windowMinutes: 300, resetsInSeconds: 39_000 }, { usedPercent: 32, windowMinutes: 10_080, resetsInSeconds: 259_200 }] },
+    { agent: "claude", windows: [{ usedPercent: 42, windowMinutes: 300, resetsInSeconds: 7_200 }, { usedPercent: 18, windowMinutes: 10_080, resetsInSeconds: 345_600 }] },
+  ];
   const AGENTS0: AgentBridge[] = [
     { id: "codex", name: "Codex CLI", file: "~\\.codex\\hooks.json", present: true, installed: false, healthy: false, lastEventAgoS: null },
     { id: "cursor", name: "Cursor", file: "~\\.cursor\\hooks.json", present: false, installed: false, healthy: false, lastEventAgoS: null },
@@ -530,6 +534,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       return { fingerprint: "fp", add: remove ? 0 : hook.length, del: remove ? hook.length : 0, lines, more: 0 };
     },
     agent_bridges: () => structuredClone(agents),
+    agent_usage: () => structuredClone(agentUsage),
     agent_bridge_install: ({ agent, fingerprint }) => { if (settings.demo || fingerprint !== "fp") throw "refused"; log.push({ cmd: "agent_bridge_install", args: { agent } }); return setAgent(agent, true); },
     agent_bridge_remove: ({ agent, fingerprint }) => { if (settings.demo || fingerprint !== "fp") throw "refused"; log.push({ cmd: "agent_bridge_remove", args: { agent } }); return setAgent(agent, false); },
     permission_history: (): PermissionEvent[] => {
@@ -608,6 +613,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     /** The next mascot press is a drag that ends on a window (`window_pick` result once; default null = a plain click). */
     setWindowPick: (r: Attached[] | null) => { picked = r; },
     setPlugins: (list: PluginInfo[]) => { plugins = structuredClone(list); emit("plugins_changed", null); },
+    setAgentUsage: (list: typeof agentUsage) => { agentUsage = structuredClone(list); },
     /** Wave 5 hooks: trigger Rust's timer, shelf and privacy events by hand; `previewDelay` mimics preview load time. */
     /** Fidelity hook: change status fields (quiet, end time) by hand. */
     setStatus: (p: Partial<Status>) => { status = { ...status, ...p }; emit("status_changed", { ...status }); },
