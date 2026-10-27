@@ -17,6 +17,7 @@ import "../panel-surface.css";
 import { onX, sendX } from "../lib/xwin";
 import { Strip, type MenuState, type PanelKind } from "./Strip";
 import { STRIP_IDLE_HEIGHT, useWindowTall } from "../lib/windowTall";
+import { UsagePanel } from "./UsagePanel";
 
 export interface ShellInit { panel?: PanelKind | null; menu?: MenuState | null; review?: Alert | null; /** Preview: Ctrl+K opens with this text and this selected row (mockup ara1, ara2). */ query?: string; sel?: number; /** Preview: setup wizard at this step (0-based). */ setupStep?: number; /** Preview: the setup wizard opens by itself on first run (in the product, only in Tauri). */ setup?: boolean }
 const SETTINGS_PAGES: (PanelKind | null)[] = ["appearance", "shortcuts", "plugins", "modules", "clipboard", "mascot"];
@@ -170,6 +171,11 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
       {monitor.primary && (
         <Panel glow={glow} side="right" width={360} label="Status" dataKind="status" open={shown === "status"} onClose={close}>
           {status && <StatusCard monitor={monitor} status={status} setStatus={setStatus} />}
+        </Panel>
+      )}
+      {monitor.primary && (
+        <Panel glow={glow} side="right" width={400} label="Usage" dataKind="usage" open={shown === "usage"} onClose={close}>
+          <UsagePanel onSettings={() => setPanel("plugins")} />
         </Panel>
       )}
       {monitor.primary && (

@@ -71,6 +71,10 @@ const BT0: BtDevice[] = [
   { id: "demo-bt-keys", name: "MX Keys", kind: "input", battery: 45, connected: true },
   { id: "demo-bt-phone", name: "Pixel 8", kind: "phone", battery: 62, connected: false },
 ];
+const AGENT_USAGE = [
+  { agent: "codex", windows: [{ usedPercent: 84, windowMinutes: 300, resetsInSeconds: 39_000 }, { usedPercent: 32, windowMinutes: 10_080, resetsInSeconds: 259_200 }] },
+  { agent: "claude", windows: [{ usedPercent: 42, windowMinutes: 300, resetsInSeconds: 7_200 }, { usedPercent: 18, windowMinutes: 10_080, resetsInSeconds: 345_600 }] },
+];
 const TRAY: TrayIcon[] = [
   { id: "exe:c:/apps/discord.exe", name: "Discord", exe: "C:/apps/Discord.exe", promoted: true, icon: "" },
   { id: "exe:c:/apps/steam.exe", name: "Steam", exe: "C:/apps/Steam.exe", promoted: false, icon: "" },
@@ -103,10 +107,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   let recap: RecapWeek | null = null;
   let calendar: CalendarNext = structuredClone(DEFAULT_CALENDAR);
   let bridgeState: BridgeState = { installed: true, healthy: true, lastEventAgoS: 120 };
-  let agentUsage = [
-    { agent: "codex", windows: [{ usedPercent: 84, windowMinutes: 300, resetsInSeconds: 39_000 }, { usedPercent: 32, windowMinutes: 10_080, resetsInSeconds: 259_200 }] },
-    { agent: "claude", windows: [{ usedPercent: 42, windowMinutes: 300, resetsInSeconds: 7_200 }, { usedPercent: 18, windowMinutes: 10_080, resetsInSeconds: 345_600 }] },
-  ];
+  let agentUsage = structuredClone(AGENT_USAGE);
   const AGENTS0: AgentBridge[] = [
     { id: "codex", name: "Codex CLI", file: "~\\.codex\\hooks.json", present: true, installed: false, healthy: false, lastEventAgoS: null },
     { id: "cursor", name: "Cursor", file: "~\\.cursor\\hooks.json", present: false, installed: false, healthy: false, lastEventAgoS: null },
@@ -168,7 +169,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       plain("c10", "text", 60, { text: "#3A7BFF", hint: "color" }),
       plain("c11", "text", 180, { text: "git switch -c feature/notch", hint: "command" }),
     ];
-    lock = { locked: false, reason: null };
+    lock = { locked: false, reason: null }; agentUsage = structuredClone(AGENT_USAGE);
     hidden = false; firstConnect = false; recap = null; calendar = structuredClone(DEFAULT_CALENDAR); bridgeState = { installed: true, healthy: true, lastEventAgoS: 120 };
     settings = {
       autostart: true, taskbarHide: "full", clipHistory: true, clipMedia: true, clipPasswordMin: 60,
