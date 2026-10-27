@@ -77,6 +77,16 @@ describe("clipboard: row actions only on hover or while selected (decision 15)",
     expect(logged("clip_delete")[0].args).toEqual({ id: "c7" });
     expect(screen.queryByText("example.com/reports/q3-summary")).toBeNull();
   });
+  it("offers plain-text paste only for text rows, never a password", async () => {
+    render(<ClipboardView />);
+    await screen.findByText("screen-recording.mp4");
+    fireEvent.pointerEnter(row("c7"));
+    fireEvent.click(within(row("c7")).getByRole("button", { name: "Paste as plain text" }));
+    await settle();
+    expect(logged("clip_paste_plain")[0].args).toEqual({ id: "c7" });
+    fireEvent.pointerEnter(row("c6"));
+    expect(within(row("c6")).queryByRole("button", { name: "Paste as plain text" })).toBeNull();
+  });
   it("'Ask Compass' is on a text row when there is a main assistant, never on a password row, and goes away without an assistant", async () => {
     render(<ClipboardView />);
     await screen.findByText("screen-recording.mp4");

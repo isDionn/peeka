@@ -1389,6 +1389,18 @@ pub async fn clip_copy(app: AppHandle, id: String) -> Res<()> {
     Ok(())
 }
 
+/// Paste a text history item as `CF_UNICODETEXT` only. Passwords, files and images never take this path.
+/// The Windows helper snapshots and restores the user's clipboard around the target app's Ctrl+V.
+#[tauri::command]
+pub async fn clip_paste_plain(app: AppHandle, id: String) -> Res<()> {
+    let locked = crate::plugins::locked(&app);
+    let payload = clip_history(&app)?.clip_history.lock().payload(&id, locked, &notch_win::dpapi::Dpapi)?;
+    let notch_core::clip::Payload::Text(text) = payload else { return Err(CmdError::Invalid) };
+    let ok = notch_win::clipboard::paste_plain(text.bytes());
+    drop(text);
+    ok.then_some(()).ok_or(CmdError::Refused)
+}
+
 #[tauri::command]
 pub fn clip_pin(app: AppHandle, id: String, on: bool) -> Res<()> {
     let change = clip_history(&app)?.clip_history.lock().pin(&id, on)?;

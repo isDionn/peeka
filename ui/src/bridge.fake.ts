@@ -41,7 +41,7 @@ type W7Names = "recent_files" | "open_recent" | "set_start_items" | "app_show_in
 type W9Names = "claude_chat_state" | "claude_chat_send" | "claude_chat_stop" | "claude_chat_new";
 /** Wi-Fi / Bluetooth long-press pickers (same sample data as Rust demo mode). */
 type W10Names = "wifi_networks" | "wifi_connect" | "bt_devices" | "bt_set";
-type W8Names = "save_diagnostics" | "diagnostics_open_folder" | "demo_restart" | "notif_copy_code" | "clip_open" | "clip_to_shelf" | "clip_preview" | "clip_ocr" | "download_open" | "download_show_in_folder";
+type W8Names = "save_diagnostics" | "diagnostics_open_folder" | "demo_restart" | "notif_copy_code" | "clip_open" | "clip_to_shelf" | "clip_preview" | "clip_ocr" | "clip_paste_plain" | "download_open" | "download_show_in_folder";
 const svg = (inner: string) => "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${inner}</g></svg>`);
 const GLYPH = {
   bluetooth: svg('<path d="m7 7 10 10-5 5V2l5 5L7 17"/>'),
@@ -497,6 +497,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     notif_copy_code: (a) => { if (lock.locked) throw "denied"; if (!notices.some((n) => n.id === a.id && n.hasCode)) throw "missing"; log.push({ cmd: "notif_copy_code", args: a }); },
     clip_open: (a) => { const c = find(a.id); if (!c || lock.locked || c.kind === "password") throw "denied"; if (c.kind === "text") throw "invalid"; log.push({ cmd: "clip_open", args: a }); },
     clip_to_shelf: (a) => { const c = find(a.id); if (!c || lock.locked || c.kind === "password") throw "denied"; if (c.kind === "text") throw "invalid"; log.push({ cmd: "clip_to_shelf", args: a }); emit("shelf_changed", null); },
+    clip_paste_plain: (a) => { const c = find(a.id); if (!c || c.kind !== "text" || lock.locked) deny(); log.push({ cmd: "clip_paste_plain", args: a }); },
     clip_preview: (a) => { const c = find(a.id); if (!c || lock.locked || c.kind === "password") throw "denied"; if (c.kind !== "image") throw "invalid"; log.push({ cmd: "clip_preview", args: a }); return c.thumb ?? ""; },
     // Fake OCR: an image whose source name contains "blank" has no text; the rest copies a sample line.
     clip_ocr: (a) => { const c = find(a.id); if (!c || lock.locked || c.kind === "password") throw "denied"; if (c.kind !== "image") throw "invalid"; log.push({ cmd: "clip_ocr", args: a }); return !/blank/i.test(c.source ?? ""); },

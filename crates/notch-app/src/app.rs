@@ -284,6 +284,7 @@ pub fn run() {
             crate::commands::clip_visible,
             crate::commands::clip_list,
             crate::commands::clip_copy,
+            crate::commands::clip_paste_plain,
             crate::commands::clip_pin,
             crate::commands::clip_delete,
             crate::commands::clip_clear,
