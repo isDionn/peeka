@@ -10,7 +10,7 @@
 .pg .sub span:last-child{color:var(--l3);white-space:nowrap}
 .pg .action{position:absolute;left:8px;right:8px;top:8px;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;animation:actionIn .16s ease both}
 .pg .action button{width:28px;height:28px;border-radius:14px;display:grid;place-items:center;color:#fff;background:rgba(20,20,22,.55);-webkit-backdrop-filter:blur(12px) saturate(180%);backdrop-filter:blur(12px) saturate(180%);box-shadow:inset 0 .5px 0 rgba(255,255,255,.2)}
-.pg .action button svg.lucide{width:12px;height:12px}
+.pg .action button svg.lucide{width:var(--iXs);height:var(--iXs)}
 .pg .action .ask,.mini.ask{color:var(--mint)}
 .pg .action .shown,.mini.shown{color:var(--yellow)}
 .pg.selected{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.5)}
@@ -33,7 +33,7 @@
 .row .tip2 svg.lucide{width:14px;height:14px}
 .row .swatch{width:26px;height:26px;border-radius:var(--rInner);corner-shape:squircle;flex:none}
 .row .thumb{object-fit:cover;box-shadow:0 0 0 .5px rgba(255,255,255,.2)}
-.row .pinIcon{width:12px;height:12px;color:var(--l3);flex:none}
+.row .pinIcon{width:var(--iXs);height:var(--iXs);color:var(--l3);flex:none}
 .row .command,.command{font-family:var(--mono);font-size:12px;letter-spacing:.06em;font-variant-ligatures:none}
 .k-pdf{background:color-mix(in srgb,var(--red) 18%,transparent)!important;color:var(--redText)!important}
 .k-video{background:color-mix(in srgb,var(--cyan) 18%,transparent)!important;color:var(--cyan)!important}
@@ -52,7 +52,7 @@
 @keyframes eyeRing{to{--g:0}}
 
 /* screen snip peek (h1) */
-.snipSmall{width:64px;height:40px;border-radius:8px;corner-shape:squircle;object-fit:cover;box-shadow:0 0 0 .5px rgba(255,255,255,.2)}
+.snipSmall{width:64px;height:40px;border-radius:var(--rSmall);corner-shape:squircle;object-fit:cover;box-shadow:0 0 0 .5px rgba(255,255,255,.2)}
 .peekBar.shotOut{padding-bottom:10px;flex-direction:column;align-items:stretch;gap:8px;width:360px;box-sizing:border-box}
 .shotTop{display:flex;align-items:center;justify-content:center;gap:10px;min-width:0}
 .shotTop .t12{min-width:0;overflow:hidden;text-overflow:ellipsis}
@@ -60,7 +60,7 @@
 .shotIcon svg.lucide{width:14px;height:14px}
 /* added below on hover; the top row stays put (nothing shifts under the cursor) */
 .shotLarge{display:flex;flex-direction:column;align-items:center;gap:8px;animation:shotIn .2s cubic-bezier(.23,1,.32,1)}
-.shotLargeImage{width:100%;height:190px;object-fit:contain;border-radius:12px;corner-shape:squircle;background:rgba(255,255,255,.05);box-shadow:0 0 0 .5px rgba(255,255,255,.16)}
+.shotLargeImage{width:100%;height:190px;object-fit:contain;border-radius:var(--rInner);corner-shape:squircle;background:rgba(255,255,255,.05);box-shadow:0 0 0 .5px rgba(255,255,255,.16)}
 .shotAction{display:flex;gap:8px}
 @keyframes shotIn{from{opacity:0}to{opacity:1}}
 
