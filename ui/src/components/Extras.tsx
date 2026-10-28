@@ -193,8 +193,8 @@ export function ShelfCard({ items, main, generic = false }: { items: ShelfItem[]
           {items.map((f) => {
             const I = FILE_ICON[f.kind], name = generic ? KIND_LABEL[f.kind] : flat(f.name, 80), on = sel.includes(f.id);
             return (
-              <div className={"shTile" + (on ? " sel" : "") + (f.missing ? " missing" : "") + (fresh.has(f.id) ? " new" : "") + (lifted.includes(f.id) ? " lifted" : "")} key={f.id} data-shelf={f.id} {...(generic ? {} : drag(f.id))}>
-                <button className="shPick" aria-pressed={on} aria-label={`${name}, ${f.sub}${f.pinned ? ", pinned" : ""}`} disabled={generic} onClick={(e) => pick(f.id, e)}>
+              <div className={"shTile" + (on ? " sel" : "") + (f.missing ? " missing" : "") + (fresh.has(f.id) ? " new" : "") + (lifted.includes(f.id) ? " lifted" : "")} key={f.id} data-shelf={f.id} {...(generic || f.missing ? {} : drag(f.id))}>
+                <button className="shPick" aria-pressed={on} aria-label={`${name}, ${f.sub}${f.pinned ? ", pinned" : ""}${f.missing ? ", missing" : ""}`} disabled={generic} onClick={(e) => pick(f.id, e)}>
                   <span className="shThumb" style={{ color: FILE_TONE[f.kind] }}><I aria-hidden="true" /></span>
                   <span className="shName">{name}</span>
                   <span className="shMeta">{f.pinned && <Pin aria-hidden="true" />}{f.sub}</span>
@@ -202,7 +202,7 @@ export function ShelfCard({ items, main, generic = false }: { items: ShelfItem[]
                 {!generic && <>
                   <span className="shCheck" aria-hidden="true"><Check /></span>
                   <span className="shMinis">
-                    {f.missing ? <button className="mini" title="Locate" aria-label={`Locate ${name}`} onClick={() => bridge.call("shelf_locate", { id: f.id }).catch(noop)}>Locate</button> : <button className="mini" title="Open" aria-label={`Open ${name}`} onClick={() => bridge.call("shelf_open", { id: f.id }).catch(noop)}><ExternalLink /></button>}
+                    {f.missing ? <button className="mini text" title="Locate" aria-label={`Locate ${name}`} onClick={() => bridge.call("shelf_locate", { id: f.id }).catch(noop)}>Locate</button> : <button className="mini" title="Open" aria-label={`Open ${name}`} onClick={() => bridge.call("shelf_open", { id: f.id }).catch(noop)}><ExternalLink /></button>}
                     {!f.missing && <button className="mini" title={f.pinned ? "Unpin" : "Pin to the top"} aria-label={`${f.pinned ? "Unpin" : "Pin"} ${name}`} onClick={() => bridge.call("shelf_pin", { id: f.id, on: !f.pinned }).catch(noop)}>{f.pinned ? <PinOff /> : <Pin />}</button>}
                     <button className="mini" title="Remove from Shelf" aria-label={`Remove ${name} from Shelf`} onClick={() => remove([f.id])}><X /></button>
                   </span>

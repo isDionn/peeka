@@ -1630,7 +1630,10 @@ pub fn share_open(app: AppHandle, id: String) -> Res<()> {
 
 #[tauri::command]
 pub fn shelf_list(app: AppHandle) -> Res<Vec<ShelfItem>> {
-    Ok(extras(&app)?.shelf.lock().list())
+    let extras = extras(&app)?;
+    let mut shelf = extras.shelf.lock();
+    shelf.refresh();
+    Ok(shelf.list())
 }
 
 /// The shelf files to the main assistant only (one-shot share) as copies (`shelf_copy`);

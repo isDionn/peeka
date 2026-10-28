@@ -268,6 +268,8 @@
 .shMinis { position: absolute; right: 10px; top: 10px; display: flex; gap: 2px; padding: 2px; border-radius: 14px; background: rgba(20,20,22,.78); opacity: 0; transition: opacity var(--d-fast) var(--ease-move); }
 .shTile:hover .shMinis, .shTile:focus-within .shMinis { opacity: 1; }
 .shMinis .mini { width: 24px; height: 24px; }
+.shMinis .mini.text { width: auto; padding: 0 9px; font: 600 11.5px/24px var(--font); }
+.shTile.missing .shMinis { opacity: 1; }
 .shMinis .mini svg.lucide { width: 13px; height: 13px; }
 .shBar { height: 40px; display: flex; align-items: center; gap: 6px; }
 .shBar > * { animation: shFade var(--d-fast) var(--ease-move) both; }

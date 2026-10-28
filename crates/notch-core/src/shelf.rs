@@ -1,5 +1,5 @@
 //! The shelf (`shelf`, Wave 5): files dropped on the island, kept until the owner removes them (`shelf.json` in the data
-//! folder; a file that is gone is dropped on the next start). Peeka's own copies (clipboard images, zips) live in
+//! folder; a file that is gone stays as "Missing" until the owner locates or removes it). Peeka's own copies (clipboard images, zips) live in
 //! `copies_dir`. The page gets names only; paths stay here and leave only through the owner's clicks (open, copy, share,
 //! drag out, zip, show in folder) and `shelf_ask` (a one-shot share to the main assistant).
 
@@ -194,6 +194,19 @@ impl Shelf {
         changed
     }
 
+    /// Looks at every file again (the Shelf just opened): a moved or deleted one turns "Missing", a restored one is whole.
+    pub fn refresh(&mut self) {
+        for (item, path) in &mut self.items {
+            let size = sized(path);
+            if size.is_none() == item.missing {
+                continue;
+            }
+            item.missing = size.is_none();
+            item.sub = if item.missing { "Missing".into() } else { size_text(size.flatten()) };
+            item.kind = if size.flatten().is_some() { kind_of(path) } else { "other" };
+        }
+    }
+
     pub fn list(&self) -> Vec<ShelfItem> {
         self.items.iter().map(|(i, _)| i.clone()).collect()
     }
@@ -300,7 +313,7 @@ mod tests {
     }
 
     #[test]
-    fn the_shelf_survives_a_restart_pins_stay_on_top_and_gone_files_drop() {
+    fn the_shelf_survives_a_restart_pins_stay_on_top_and_gone_files_stay_missing_until_located() {
         let tmp = crate::test_util::Tmp::new();
         let file = |name: &str| {
             let p = tmp.path().join(name);
@@ -328,9 +341,27 @@ mod tests {
         std::fs::remove_file(&c).unwrap();
         let back = Shelf::load(tmp.path());
         let names: Vec<String> = back.list().into_iter().map(|i| i.name).collect();
-        assert_eq!(names, ["a.pdf", "image-1.png", "b.png"], "same order, gone files dropped (c.txt, new.txt)");
+        assert_eq!(names, ["a.pdf", "new.txt", "image-1.png", "c.txt", "b.png"], "same order, gone files kept");
+        let missing: Vec<bool> = back.list().iter().map(|i| i.missing).collect();
+        assert_eq!(missing, [false, true, false, true, false]);
         assert!(back.list()[0].pinned && !back.list()[1].pinned);
-        assert_eq!(back.list()[2].sub, "5 B");
+        assert_eq!(back.list()[4].sub, "5 B");
+        assert_eq!(back.list()[3].sub, "Missing");
+
+        let mut back = back;
+        let (gone, other, whole) = (id(&back, &c), file("moved.txt"), id(&back, &a));
+        assert!(!back.locate(&whole, other.clone()), "only a missing row can be re-pointed");
+        assert!(back.locate(&gone, other.clone()));
+        let row = back.list().into_iter().find(|i| i.id == gone).unwrap();
+        assert_eq!((row.name.as_str(), row.missing, row.sub.as_str()), ("moved.txt", false, "5 B"));
+        assert_eq!(back.path(&gone), Some(other.as_path()));
+        std::fs::remove_file(&other).unwrap();
+        back.refresh();
+        assert!(back.list().iter().find(|i| i.id == gone).unwrap().missing, "refresh notices a file that vanished");
+        std::fs::write(&other, b"12345").unwrap();
+        back.refresh();
+        assert!(!back.list().iter().find(|i| i.id == gone).unwrap().missing, "and one that came back");
+        assert!(back.remove(&[gone, id(&back, &tmp.path().join("new.txt"))]));
 
         let mut back = back;
         assert!(back.remove(&[id(&back, &copy), id(&back, &b)]));
