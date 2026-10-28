@@ -432,7 +432,7 @@ function ModulesCardImpl({ media, pos, sys, cpu, surf, shelf, main, meeting, onP
       : p === "claude" ? <ClaudeChatTab />
       : <GeneralTiles ids={core.map(([id]) => id)} go={(id) => { hideTip(); setTab(id); }} media={media} meeting={meeting} timer={timer} sys={sys} approvals={surf.approvals} onApproval={onApproval} generic={generic} battery={battery} cc={{ n: sessN, list: sessList, last: lastCc, limited }}
           plug={hasSummary || generalTabs.length > 0 ? <>
-            <SummaryBoxes surf={{ ...surf, approvals: rest }} onDetail={onApproval} />
+            <SummaryBoxes surf={{ ...surf, approvals: rest }} onDetail={onApproval} generic={generic} />
             {/* a plugin's General tab is a link here; its blocks live on its own tab, so any length fits the 330 px body without scrolling */}
             {generalTabs.length > 0 && <div className="genLinks">{generalTabs.map((x) => { const k = x.plugin.id + "/" + x.id; return <button key={k} type="button" className="genTile glass genHead genLink" aria-label={`${tabLabel(x)}: open tab`} onClick={() => { hideTip(); setTab(k); }}><TabGlyph name={x.icon} /><span className="genLine">{tabLabel(x)}</span><ChevronRight aria-hidden="true" /></button>; })}</div>}
           </> : null} />;
