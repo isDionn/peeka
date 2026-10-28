@@ -224,6 +224,7 @@ svg.lucide.genWarnIc { color: var(--orange); }
 .shTile:hover { background: var(--hover); }
 .shTile.sel { background: color-mix(in srgb, var(--blue) 16%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--blue) 70%, transparent); }
 .shTile.lifted { opacity: .4; }
+.shTile.missing .shName, .shTile.missing .shMeta { opacity: .48; }
 .shTile.new { animation: shIn 420ms var(--ease) both; }
 .shTile.new .shThumb { animation: shFlash 1600ms var(--ease-move) both; }
 @keyframes shIn { from { opacity: 0; transform: translateY(-10px) scale(.92); } }

@@ -146,7 +146,7 @@ export interface TimerState {
 export type TimerAction = "pause" | "resume" | "add5" | "stop";
 
 /* ---------- shelf (mockup g0, g) ---------- */
-export interface ShelfItem { id: string; name: string; sub: string; kind: "pdf" | "video" | "sheet" | "image" | "other"; /** Kept at the top. */ pinned: boolean }
+export interface ShelfItem { id: string; name: string; sub: string; kind: "pdf" | "video" | "sheet" | "image" | "other"; /** Kept at the top. */ pinned: boolean; missing?: boolean }
 
 /* ---------- Bluetooth earbuds (mockup bt): no case battery ---------- */
 export interface CcEdit { sid: string | null; file: string | null; add: number | null; del: number | null }
@@ -343,6 +343,7 @@ export interface Commands {
   shelf_add: { args: void; ret: void };
   /** Open with the default app; `denied` for a file Windows would run. */
   shelf_open: { args: { id: string }; ret: void };
+  shelf_locate: { args: { id: string }; ret: void };
   shelf_pin: { args: { id: string; on: boolean }; ret: void };
   /** Off the shelf (Peeka's own copies are deleted, the owner's files never). */
   shelf_remove: { args: { ids: string[] }; ret: void };

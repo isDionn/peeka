@@ -98,6 +98,7 @@ pub const COMMANDS: &[&str] = &[
     "shelf_ask",
     "shelf_add",
     "shelf_open",
+    "shelf_locate",
     "shelf_pin",
     "shelf_remove",
     "shelf_copy_files",

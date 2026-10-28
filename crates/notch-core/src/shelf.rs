@@ -16,6 +16,7 @@ pub struct ShelfItem {
     pub kind: &'static str,
     /// Kept at the top of the shelf.
     pub pinned: bool,
+    pub missing: bool,
 }
 
 /// One `shelf.json` row: only the path and the pin; name, size and kind are read again on load.
@@ -101,7 +102,7 @@ pub fn size_text(bytes: Option<u64>) -> String {
 }
 
 impl Shelf {
-    /// The saved shelf; entries whose file is gone are dropped, and Peeka copies nothing points to are deleted. A
+    /// The saved shelf; missing entries stay so the owner can locate a moved file, and Peeka copies nothing points to are deleted. A
     /// `shelf.json` that cannot be read is left alone with every copy (and nothing is saved over it this session).
     pub fn load(data_dir: &Path) -> Shelf {
         let saved: Option<Vec<Saved>> = match std::fs::read(data_dir.join("shelf.json")) {
@@ -115,9 +116,7 @@ impl Shelf {
         };
         let mut s = Shelf { dir: Some(data_dir.to_path_buf()), ..Default::default() };
         for e in saved.into_iter().rev() {
-            if let Some(size) = sized(&e.path) {
-                s.put(e.path, size, e.pinned);
-            }
+            s.put(e.path.clone(), sized(&e.path).unwrap_or(None), e.pinned, !e.path.exists());
         }
         for f in std::fs::read_dir(copies_dir(data_dir)).into_iter().flatten().flatten() {
             if !s.items.iter().any(|(_, p)| p == &f.path()) {
@@ -139,11 +138,11 @@ impl Shelf {
     }
 
     /// On top of its group: pinned first, then the rest, newest first in each.
-    fn put(&mut self, path: PathBuf, size: Option<u64>, pinned: bool) -> bool {
+    fn put(&mut self, path: PathBuf, size: Option<u64>, pinned: bool, missing: bool) -> bool {
         let Some(name) = path.file_name().map(|n| n.to_string_lossy().into_owned()) else { return false };
         self.next += 1;
         let kind = if size.is_some() { kind_of(&path) } else { "other" };
-        self.insert(ShelfItem { id: format!("shelf-{}", self.next), name, sub: size_text(size), kind, pinned }, path);
+        self.insert(ShelfItem { id: format!("shelf-{}", self.next), name, sub: if missing { "Missing".into() } else { size_text(size) }, kind, pinned, missing }, path);
         true
     }
 
@@ -159,7 +158,7 @@ impl Shelf {
         for (path, size) in dropped {
             let pinned = self.items.iter().any(|(i, p)| p == &path && i.pinned);
             self.items.retain(|(_, p)| p != &path);
-            changed |= self.put(path, size, pinned);
+            changed |= self.put(path, size, pinned, false);
         }
         if changed {
             self.save();
@@ -197,6 +196,21 @@ impl Shelf {
 
     pub fn list(&self) -> Vec<ShelfItem> {
         self.items.iter().map(|(i, _)| i.clone()).collect()
+    }
+
+    /// Re-point a missing row at a file the owner chose, keeping its id and pin.
+    pub fn locate(&mut self, id: &str, path: PathBuf) -> bool {
+        let Some(at) = self.items.iter().position(|(i, _)| i.id == id && i.missing) else { return false };
+        let Some(size) = sized(&path) else { return false };
+        let Some(name) = path.file_name().map(|n| n.to_string_lossy().into_owned()) else { return false };
+        let (mut item, _) = self.items.remove(at);
+        item.name = name;
+        item.sub = size_text(size);
+        item.kind = if size.is_some() { kind_of(&path) } else { "other" };
+        item.missing = false;
+        self.items.insert(at, (item, path));
+        self.save();
+        true
     }
 
     /// Only ids Notch handed out.

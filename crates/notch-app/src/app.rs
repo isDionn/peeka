@@ -307,6 +307,7 @@ pub fn run() {
             crate::commands::shelf_ask,
             crate::commands::shelf_add,
             crate::commands::shelf_open,
+            crate::commands::shelf_locate,
             crate::commands::shelf_pin,
             crate::commands::shelf_remove,
             crate::commands::shelf_copy_files,

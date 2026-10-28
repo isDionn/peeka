@@ -1654,10 +1654,23 @@ pub fn shelf_add(app: AppHandle) -> Res<()> {
 pub fn shelf_open(app: AppHandle, id: String) -> Res<()> {
     cmd::unlocked(crate::plugins::locked(&app))?;
     let path = extras(&app)?.shelf.lock().path(&id).ok_or(CmdError::Unknown)?.to_path_buf();
+    if !path.exists() {
+        return Err(CmdError::Missing);
+    }
     if notch_core::shelf::runnable(&path) {
         return Err(CmdError::Denied);
     }
     Win32Control.launch(&path.to_string_lossy()).then_some(()).ok_or(CmdError::Refused)
+}
+
+/// Reconnect a moved Shelf file. The picker path stays native and never reaches the page.
+#[tauri::command]
+pub fn shelf_locate(app: AppHandle, id: String) -> Res<()> {
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    let Some(path) = notch_win::picker::open_file(island_hwnd(&app)?) else { return Ok(()) };
+    let changed = extras(&app)?.shelf.lock().locate(&id, path);
+    shelf_changed(&app, changed);
+    changed.then_some(()).ok_or(CmdError::Unknown)
 }
 
 /// Pin keeps a file at the top of the shelf.
