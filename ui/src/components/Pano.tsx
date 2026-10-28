@@ -141,7 +141,7 @@ function Row({ item, now, selected, main, onSelect, shown, onEye, onPeek, onHide
       onFocus={() => { bind.onFocus(); onSelect(item.id); if (pw && document.documentElement.hasAttribute("data-kb")) onPeek(item.id); }} onClick={() => { onSelect(item.id); if (!pw) copyBody(item.id, notify); }}>
       <Tile item={item} />
       {body}
-      {!pw && item.pinned && <Pin className="pinIcon" aria-label="Pinned" />}
+      {!pw && item.pinned && <Pin className="pinIcon" role="img" aria-label="Pinned" />}
       <span className="t12 l3 num time">{time}</span>
       {active && <Actions item={item} main={main} variant="row" revealed={revealed} onEye={onEye} notify={notify} />}
     </div>
