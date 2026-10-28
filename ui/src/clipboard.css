@@ -25,6 +25,8 @@
 .clipList .row .rowAction{animation:actionIn .16s ease both}
 .clipList .row.current .rowAction{opacity:1}
 .clipList .row.current .time{opacity:0}
+/* a clicked row keeps focus but draws no actions (mouse focus doesn't count): keep its time instead of an empty gap */
+.clipList .row[data-clip]:not(.current) .time{opacity:1}
 .clipList .row.dim>:not(.rowAction){opacity:.45}
 .clipList .row:focus-visible{outline-offset:-2px;border-radius:var(--rInner)}
 .row .tip2{width:26px;height:26px;border-radius:var(--rInner);corner-shape:squircle;display:grid;place-items:center;flex:none;background:rgba(255,255,255,.08);color:var(--l2)}
