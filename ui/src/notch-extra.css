@@ -28,7 +28,7 @@ body { -webkit-user-select: none; user-select: none; }
 @keyframes inputIn { from { opacity: 0; transform: translateY(5px) scale(.985); } to { opacity: 1; transform: none; } }   /* no animated blur (polish audit #6) */
 .dangling { z-index: 7; }
 .dangling[aria-hidden="true"] { pointer-events: none; }
-.allApps { max-height: 184px; overflow: auto; }
+.allApps { max-height: calc(var(--startCenter, 380px) - 26px); overflow: auto; } /* fills Start's centre under its 26 px head instead of scrolling in a third of it */
 .allApps .row, .addException .row { width: 100%; text-align: left; }
 .suggestionGrid .row { cursor: pointer; }
 @media (hover: hover) and (pointer: fine) { .suggestionGrid .row:hover, .addException .row:hover { background: rgba(255,255,255,.07); } }
