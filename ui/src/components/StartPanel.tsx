@@ -35,7 +35,7 @@ function useStartItems(pins: PinnedApp[], apps: AppRef[], saved: StartItem[] | n
 
 /** Left icon of a Recommended row: a colored tile by type for files, a monochrome icon for apps. */
 function RecentTile({ r }: { r: RecentItem }) {
-  if (r.kind === "app") return r.icon ? <span className="tip"><AppIcon src={r.icon} size={18} /></span> : null;
+  if (r.kind === "app") return <span className="tip">{r.icon && <AppIcon src={r.icon} size={18} />}</span>; // empty tile keeps the name in line
   return <span className={"tip tip2 k-" + fileKind(r.name)}><FileIcon name={r.name} /></span>;
 }
 
