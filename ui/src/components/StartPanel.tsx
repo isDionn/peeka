@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowUpRight, Brain, Calculator, ChevronLeft, ChevronRight, FolderOpen, Lock, Moon, PanelBottom, Pencil, Pin, PinOff, Power, RotateCcw, Search, Settings, ShieldCheck, SlidersHorizontal, Trash2, Ungroup } from "lucide-react";
+import { ArrowUpRight, Brain, Calculator, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, FolderOpen, Lock, Moon, PanelBottom, Pencil, Pin, PinOff, Power, RotateCcw, Search, Settings, ShieldCheck, SlidersHorizontal, Trash2, Ungroup } from "lucide-react";
 import { bridge, type AppRef, type MonitorInfo, type PinnedApp, type RecentItem, type SearchResult, type StartItem } from "../bridge";
 import { derive, hasApp, keyOf, pinApp, ungroup, withoutApp } from "../lib/startItems";
 import { StartGrid } from "./StartGrid";
@@ -171,7 +171,7 @@ export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: Mo
               <StartGrid items={start.items} apps={start.refs} onChange={start.save} onLaunch={launch} onMenu={gridMenu} />
               {recent.length > 0 && (
                 <>
-                  <div className="sectionHead"><span>Recommended</span>{recent.length > 4 && <button className="btn kk glass" aria-expanded={more} onClick={() => setMore(!more)}>{more ? "Show less" : "Show more"}<ChevronRight /></button>}</div>
+                  <div className="sectionHead"><span>Recommended</span>{recent.length > 4 && <button className="btn kk glass" aria-expanded={more} onClick={() => setMore(!more)}>{more ? <>Show less<ChevronUp /></> : <>Show more<ChevronDown /></>}</button>}</div>
                   <div className="suggestionGrid">
                     {(more ? recent : recent.slice(0, 4)).map((r) => (
                       <button key={r.id} className="row" onClick={() => openRecent(r)}>
