@@ -176,12 +176,12 @@ describe("Modules (j)", () => {
     expect(screen.getByRole("region", { name: "Claude chat" })).toBeTruthy();
     expect(screen.getByRole("textbox", { name: "Message to Claude" })).toBeTruthy();
   });
-  it("12 tabs (Claude chat last of Peeka's own) and a gear; General has the Compass and Claude Code boxes, then one tile per module; quota bars, session states, Stop", async () => {
+  it("13 tabs (Claude chat last of Peeka's own) and a gear; General has the Compass and Claude Code boxes, then one tile per module; quota bars, session states, Stop", async () => {
     fakeBridge.setSurfaces(SURFACES_J);
     const { container } = render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
     const tabs = within(screen.getByRole("tablist", { name: "Modules" })).getAllByRole("tab").map((t) => t.getAttribute("aria-label") ?? t.textContent);
-    expect(tabs).toEqual(["General", "Music", "Clipboard", "Shelf", "Calendar", "Timer", "System", "Notifications", "Claude", "Compass", "Compass › Claude Code", "Compass › Team"]);
+    expect(tabs).toEqual(["General", "Music", "Clipboard", "Shelf", "Calendar", "Timer", "System", "Usage", "Notifications", "Claude", "Compass", "Compass › Claude Code", "Compass › Team"]);
     expect(screen.getByRole("button", { name: "Modules settings" })).toBeTruthy(); // owner: a gear to Settings › Modules (hide Calendar / Timer)
     expect(container.querySelectorAll(".grid.general3 > .box")).toHaveLength(2);
     // General home (Places): each place's name opens its tab, in fixed place order; Claude Code with 0 sessions is a plain label (no empty list)

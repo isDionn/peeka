@@ -1,5 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowUpRight, BatteryLow, BatteryMedium, Bell, Calendar, ChevronRight, Clipboard, Cpu, Inbox, LayoutGrid, MessageCircle, Music, PanelTop, Settings as Gear, Pause, Play, SkipBack, SkipForward, Timer, X, type LucideIcon } from "lucide-react";
+import { ArrowUpRight, BatteryLow, BatteryMedium, Bell, Calendar, ChevronRight, Clipboard, Cpu, Gauge, Inbox, LayoutGrid, MessageCircle, Music, PanelTop, RefreshCw, Settings as Gear, Pause, Play, SkipBack, SkipForward, Timer, X, type LucideIcon } from "lucide-react";
 import { bridge, type Alert, type TimerState, type Media, type TabExt, type ModuleEntry, type PluginInfo, type ProtrusionItem, type ShelfItem, type Status, type SurfacesView, type SysmonTick, type VolumeOsd } from "../bridge";
 import type { ApprovalItem } from "../plugin-api";
 import type { CcSession } from "../lib/notes";
@@ -116,11 +116,11 @@ export function MusicCard({ media, pos, calm = false }: { media: Media; pos: num
 }
 
 const dash = "—";
-function Meter({ label, text, ratio }: { label: string; text: string; ratio: number | null }) {
+function Meter({ label, text, ratio, hot = false }: { label: string; text: string; ratio: number | null; hot?: boolean }) {
   return (
     <>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}><span>{label}</span><span className="num b6">{text}</span></div>
-      <div className="meter" style={{ "--o": Math.round(Math.max(0, Math.min(1, ratio ?? 0)) * 100) + "%", "--color": "var(--cyan)" } as CSSProperties}><b /></div>
+      <div className="meter" role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={ratio === null ? undefined : Math.round(ratio * 100)} style={{ "--o": Math.round(Math.max(0, Math.min(1, ratio ?? 0)) * 100) + "%", "--color": hot ? "var(--red)" : "var(--cyan)" } as CSSProperties}><b /></div>
     </>
   );
 }
@@ -179,6 +179,47 @@ const SystemBox = ({ sys, cpu, battery }: { sys: SysmonTick | null; cpu: number[
     </div>
   );
 };
+
+type AgentUsage = { agent: string; windows: { usedPercent: number; windowMinutes: number; resetsAt?: number; resetsInSeconds?: number }[] };
+export function useAgentUsage() {
+  const [rows, setRows] = useState<AgentUsage[] | null>(null);
+  const refresh = () => bridge.call("agent_usage").then((next) => setRows(next.filter((row) => row.windows.length > 0)), () => setRows([]));
+  useEffect(() => { refresh(); }, []);
+  return { rows, refresh };
+}
+
+const resetsIn = (w: AgentUsage["windows"][number]) => {
+  const at = w.resetsAt ? new Date(w.resetsAt * 1000) : new Date(Date.now() + (w.resetsInSeconds ?? 0) * 1000);
+  if (w.windowMinutes !== 300) return `Resets ${at.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}`;
+  const s = Math.max(0, Math.round((at.getTime() - Date.now()) / 1000)), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+  return `Resets in ${h ? `${h}h ${m}m` : `${m}m`}`;
+};
+
+/** Usage tab: one box per agent with data, two meters each (5-hour, Weekly). Side by side so both fit the 330 px body without scrolling. */
+export function UsageBox({ generic, onSettings }: { generic: boolean; onSettings: () => void }) {
+  const { rows, refresh } = useAgentUsage();
+  if (!rows || !rows.length) return (
+    <div className="box glass" style={{ minHeight: 148 }}>
+      <h4><Gauge />Usage</h4>
+      {rows && <div className="t13 l2 b4" style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 12 }}>No usage data yet. Claude needs the statusline bridge.<button className="btn kk glass" onClick={onSettings}>Open Settings</button></div>}
+    </div>
+  );
+  return (
+    <div className="grid module" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
+      {rows.map((row) => (
+        <div className="box glass" key={row.agent} style={{ minHeight: 148 }}>
+          <h4><Gauge />{row.agent === "codex" ? "Codex" : row.agent === "claude" ? "Claude" : row.agent}<button className="mini" style={{ marginLeft: "auto" }} title="Refresh usage" aria-label="Refresh usage" onClick={refresh}><RefreshCw /></button></h4>
+          {row.windows.map((w) => (
+            <div key={w.windowMinutes}>
+              <Meter label={w.windowMinutes === 300 ? "5-hour" : "Weekly"} text={generic ? "Hidden" : w.usedPercent + "%"} ratio={generic ? null : w.usedPercent / 100} hot={!generic && w.usedPercent >= 80} />
+              <div className="t12 l3">{generic ? dash : resetsIn(w)}</div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /** General home "Places" (owner chose B, ui/concepts/overview.*): every module keeps a fixed spot (cards.css grid areas) so the eye learns where things are.
  *  The big Now box speaks only for what needs you (a plugin approval waiting, low battery); music, Claude Code and the clipboard show in their own spots,
@@ -320,7 +361,7 @@ function AlertsTab() {
 export const MOD_NARROW = 620;
 
 /** Core tabs (mockup j): Peeka's own; then a divider and plugin tabs. `id` matches the Settings › Modules id (wire name, stays Turkish). */
-const CORE: [string, string, LucideIcon][] = [["general", "General", LayoutGrid], ["music", "Music", Music], ["clipboard", "Clipboard", Clipboard], ["shelf", "Shelf", Inbox], ["calendar", "Calendar", Calendar], ["timer", "Timer", Timer], ["system", "System", Cpu], ["notifications", "Notifications", Bell], ["claude", "Claude", MessageCircle]];
+const CORE: [string, string, LucideIcon][] = [["general", "General", LayoutGrid], ["music", "Music", Music], ["clipboard", "Clipboard", Clipboard], ["shelf", "Shelf", Inbox], ["calendar", "Calendar", Calendar], ["timer", "Timer", Timer], ["system", "System", Cpu], ["usage", "Usage", Gauge], ["notifications", "Notifications", Bell], ["claude", "Claude", MessageCircle]];
 
 /** Modules card (mockup j): 11 tabs + gear; General = assistant | Claude Code | System. System monitoring runs while the card is open (Island starts it). */
 export const ModulesCard = memo(ModulesCardImpl); // Island re-renders every frame during the spring; the card only re-renders when its props change
@@ -379,6 +420,7 @@ function ModulesCardImpl({ media, pos, sys, cpu, surf, shelf, main, meeting, onP
       : p === "calendar" ? (meeting ? <MeetingCard item={meeting} /> : <div className="box glass"><h4><Calendar />Calendar</h4><div className="t13 l2 b4">No upcoming meetings. Meetings come from a calendar plugin.</div></div>)
       : p === "timer" ? <TimerStart timer={timer} />
       : p === "system" ? <SystemBox sys={sys} cpu={cpu} battery={battery} />
+      : p === "usage" ? <UsageBox generic={generic} onSettings={() => sendX({ t: "open-panel", panel: "plugins" })} />
       : p === "notifications" ? <AlertsTab />
       : p === "claude" ? <ClaudeChatTab />
       : <>

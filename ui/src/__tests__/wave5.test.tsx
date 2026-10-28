@@ -586,7 +586,7 @@ describe("module management and color icons", () => {
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
     const tabs = within(screen.getByRole("tablist", { name: "Modules" })).getAllByRole("tab").map((t) => t.getAttribute("aria-label") ?? t.textContent);
-    expect(tabs).toEqual(["General", "Music", "Clipboard", "Calendar", "Notifications", "Claude", "Compass › Claude Code", "Compass"]);
+    expect(tabs).toEqual(["General", "Music", "Clipboard", "Calendar", "Usage", "Notifications", "Claude", "Compass › Claude Code", "Compass"]);
     expect(screen.queryByRole("heading", { name: "System" })).toBeNull();
     expect(screen.queryByText("CPU")).toBeNull();
   });
