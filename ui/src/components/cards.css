@@ -173,7 +173,11 @@
 button.genBar { border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: transform var(--d-press) var(--ease), background-color var(--d-fast) var(--ease-move); }
 button.genBar:active { transform: scale(.98); }
 @media (hover: hover) and (pointer: fine) { button.genBar:hover { background: rgba(255,255,255,.08); } }
-.genChips { display: flex; gap: 6px; margin-left: auto; }
+.genChips { display: flex; align-items: center; gap: 6px; margin-left: auto; white-space: nowrap; }
+.sysCols { display: grid; grid-template-columns: 1fr 1fr; column-gap: 28px; }
+.sysCols span { white-space: nowrap; }
+.sysTop > :first-child { display: flex; flex-direction: column; }
+.sysCols .spark { flex: 1; height: auto; min-height: 34px; margin-top: 10px; }
 .genChips .btn { height: 28px; padding: 0 12px; }
 svg.lucide.genWarnIc { color: var(--orange); }
 

@@ -157,7 +157,7 @@ export function TimerStart({ timer = null }: { timer?: TimerState | null }) {
 
 const SystemBox = ({ sys, cpu, battery }: { sys: SysmonTick | null; cpu: number[]; battery: Status["battery"] }) => {
   const gb = (n: number | null) => (n === null ? dash : (n / 1024 ** 3).toLocaleString("en-US", { maximumFractionDigits: 1 }));
-  const speed = (n: number | null) => n === null ? dash : `${(n / 1024 ** 2).toLocaleString("en-US", { maximumFractionDigits: 1 })} MB/s`;
+  const speed = (n: number | null) => n === null ? dash : (n / 1024 ** 2).toLocaleString("en-US", { maximumFractionDigits: 1 });
   const uptime = (n: number | null) => {
     if (n === null) return dash;
     const d = Math.floor(n / 86_400), h = Math.floor(n % 86_400 / 3_600), m = Math.floor(n % 3_600 / 60);
@@ -167,15 +167,23 @@ const SystemBox = ({ sys, cpu, battery }: { sys: SysmonTick | null; cpu: number[
   return (
     <div className="box glass">
       <h4><Cpu />System</h4>
-      <div style={{ display: "flex", justifyContent: "space-between" }}><span>CPU</span><span className="num b6">{sys?.cpu == null ? dash : Math.round(sys.cpu) + "%"}</span></div>
-      <div className="t12 l3" style={{ display: "flex", justifyContent: "space-between" }}><span>Top app</span><span className="num">{sys?.topCpu ? flat(sys.topCpu, 24) : dash}</span></div>{/* the row is always there: the card doesn't shift when a reading arrives */}
-      <div className="spark" aria-hidden="true">{Array.from({ length: 16 }, (_, i) => cpu[cpu.length - 16 + i]).map((v, i) => <i key={i} className={v === undefined ? "empty" : undefined} style={{ height: v === undefined ? "4%" : Math.max(4, v * 2) + "%" }} />)}</div>
-      <Meter label="Memory" text={sys?.memUsed == null || sys.memTotal == null ? dash : `${gb(sys.memUsed)} / ${gb(sys.memTotal)} GB`} ratio={sys?.memUsed == null || !sys.memTotal ? null : sys.memUsed / sys.memTotal} />
-      <Meter label="GPU" text={sys?.gpu == null ? dash : Math.round(sys.gpu) + "%"} ratio={sys?.gpu == null ? null : sys.gpu / 100} />
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}><span>Network</span><span className="num b6">{`↓ ${speed(sys?.down ?? null)} · ↑ ${speed(sys?.up ?? null)}`}</span></div>
-      <Meter label="C: drive" text={sys?.diskUsed == null || sys.diskTotal == null ? dash : `${gb(sys.diskUsed)} / ${gb(sys.diskTotal)} GB`} ratio={sys?.diskUsed == null || !sys.diskTotal ? null : sys.diskUsed / sys.diskTotal} />
-      {battery?.percent != null && <Meter label="Battery" text={charge} ratio={battery.percent / 100} />}{/* owner: no battery, no row */}
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}><span>Uptime</span><span className="num b6">{uptime(sys?.uptimeS ?? null)}</span></div>
+      <div className="sysCols sysTop">
+        <div>
+          <Meter label="CPU" text={sys?.cpu == null ? dash : Math.round(sys.cpu) + "%"} ratio={sys?.cpu == null ? null : sys.cpu / 100} hot={(sys?.cpu ?? 0) >= 80} />
+          <div className="t12 l3" style={{ display: "flex", justifyContent: "space-between" }}><span>Top app</span><span className="num">{sys?.topCpu ? flat(sys.topCpu, 24) : dash}</span></div>{/* the row is always there: the card doesn't shift when a reading arrives */}
+          <div className="spark" aria-hidden="true">{Array.from({ length: 16 }, (_, i) => cpu[cpu.length - 16 + i]).map((v, i) => <i key={i} className={v === undefined ? "empty" : undefined} style={{ height: v === undefined ? "4%" : Math.max(4, v * 2) + "%" }} />)}</div>
+        </div>
+        <div>
+          <Meter label="Memory" text={sys?.memUsed == null || sys.memTotal == null ? dash : `${gb(sys.memUsed)} / ${gb(sys.memTotal)} GB`} ratio={sys?.memUsed == null || !sys.memTotal ? null : sys.memUsed / sys.memTotal} />
+          <Meter label="GPU" text={sys?.gpu == null ? dash : Math.round(sys.gpu) + "%"} ratio={sys?.gpu == null ? null : sys.gpu / 100} hot={(sys?.gpu ?? 0) >= 80} />
+          <Meter label="C: drive" text={sys?.diskUsed == null || sys.diskTotal == null ? dash : `${gb(sys.diskUsed)} / ${gb(sys.diskTotal)} GB`} ratio={sys?.diskUsed == null || !sys.diskTotal ? null : sys.diskUsed / sys.diskTotal} />
+          {battery?.percent != null && <Meter label="Battery" text={charge} ratio={battery.percent / 100} />}{/* owner: no battery, no row */}
+        </div>
+      </div>
+      <div className="sysCols t12 l3" style={{ marginTop: 10 }}>
+        <div style={{ display: "flex", justifyContent: "space-between" }}><span>Network</span><span className="num">{`↓ ${speed(sys?.down ?? null)} · ↑ ${speed(sys?.up ?? null)} MB/s`}</span></div>
+        <div style={{ display: "flex", justifyContent: "space-between" }}><span>Uptime</span><span className="num">{uptime(sys?.uptimeS ?? null)}</span></div>
+      </div>
     </div>
   );
 };
