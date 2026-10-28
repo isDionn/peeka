@@ -340,19 +340,19 @@ function MusicTab({ media, pos }: { media: Media | null; pos: number }) {
 /** Notifications tab (mockup m): title + "Clear all", plain alert rows below. The "Review" cleanup approval stays in the strip panel; here the age is shown. */
 function AlertsTab() {
   const { alerts } = useAlerts();
-  const main = useMainAssistant();
   const nowMs = bridge.now().getTime();
   return (
     <div className="body">
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <span className="t17 b6" style={{ flex: 1 }}>Notifications</span>
+      <div className="alertsHead">
+        <h4><Bell />Notifications</h4>
         <button className="btn kk glass" disabled={alerts.length === 0} onClick={() => bridge.call("clear_alerts").catch(() => undefined)}>Clear all</button>
       </div>
       {alerts.length === 0 ? <div className="noResults">No notifications</div> : (
         <div className="notifs" role="list">
           {alerts.map((a) => (
             <div key={a.id} role="listitem" className="notif plat glass">
-              {main && a.icon && MASCOT_STATES.has(a.icon) ? <Lead plugin={{ id: main.id, name: main.name, main: true }} mascot={a.icon} size={24} /> : <span className="app"><AlertIcon name={a.icon} /></span>}
+              {/* a 24 px row ghost always loses the one-mascot slot to the strip ghost while this card is open (it rendered as an empty 0 px slot): mascot states get the plain tile */}
+              <span className="app"><AlertIcon name={a.icon && MASCOT_STATES.has(a.icon) ? null : a.icon} /></span>
               <div style={{ flex: 1, minWidth: 0 }}><div className="b6">{a.title}</div>{a.subtitle && <div className="t12 l2 b4">{a.subtitle}</div>}</div>
               <span className="t12 l3">{ageLabel((nowMs - a.updatedAt) / 1000)}</span>
               {a.action && <button className="mini" title="Open link" aria-label={`${a.title}, open link`} onClick={() => bridge.call("open_alert", { id: a.id }).catch(() => undefined)}><ArrowUpRight /></button>}

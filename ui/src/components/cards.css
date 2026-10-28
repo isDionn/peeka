@@ -117,6 +117,10 @@
 }
 
 /* notification list: the last row isn't cut mid-way, it fades at the bottom (R2-D2) */
+/* Notifications tab header: the same 13 px label + 14 px icon as the other tabs' box headings (.box h4), lined up with the row tiles */
+.alertsHead { display: flex; align-items: center; padding-left: var(--s3); }
+.alertsHead h4 { flex: 1; font: 600 13px/18px var(--font); letter-spacing: -.08px; color: var(--l2); display: flex; align-items: center; gap: 6px; }
+.alertsHead h4 svg.lucide { width: 14px; height: 14px; }
 .notifs { -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 22px), transparent); padding-bottom: 14px; }
 
 /* while the card springs to size, expensive painting pauses: frosted glass, big shadow and halo (they return once the card settles) */
