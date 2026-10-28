@@ -80,6 +80,7 @@ export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: Mo
   const windows = useWindows(monitor.id);
   const body = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<ListMenu | null>(null);
+  useEffect(() => { body.current?.querySelector(".startResult .selected")?.scrollIntoView?.({ block: "nearest" }); }, [sel]); // arrow keys past the list's 300 px
   useEffect(() => {
     if (!menu) return;
     const down = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest(".context")) setMenu(null); };
