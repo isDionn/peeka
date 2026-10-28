@@ -198,7 +198,7 @@ export function useAgentUsage() {
 
 const resetsIn = (w: AgentUsage["windows"][number]) => {
   const at = w.resetsAt ? new Date(w.resetsAt * 1000) : new Date(Date.now() + (w.resetsInSeconds ?? 0) * 1000);
-  if (w.windowMinutes !== 300) return `Resets ${at.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}`;
+  if (w.windowMinutes !== 300) return `Resets ${at.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" })}`;
   const s = Math.max(0, Math.round((at.getTime() - Date.now()) / 1000)), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
   return `Resets in ${h ? `${h}h ${m}m` : `${m}m`}`;
 };
