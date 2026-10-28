@@ -277,7 +277,7 @@ describe("Settings › Mascot", () => {
     localStorage.setItem(FIRST_KEY, "1");
     const got: XMsg[] = [];
     const off = onX((m) => got.push(m));
-    fireEvent.click(screen.getByRole("button", { name: "Show" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show intro again" }));
     await settle(80);
     off();
     expect(localStorage.getItem(FIRST_KEY)).toBeNull();
