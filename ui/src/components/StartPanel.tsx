@@ -149,7 +149,7 @@ export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: Mo
               <ResultIcon r={r} /><span className="text" style={{ textAlign: "left" }}>{r.title}</span>{r.subtitle && r.kind !== "app" && <span className="t12 l3">{r.subtitle}</span>}
             </button>
           ))}
-          {!found.length && <div className="noResults">No results for “{t}”.</div>}
+          {!found.length && !answer && <div className="noResults">No results for “{t}”.</div>}
         </div>
       ) : (
         <>
