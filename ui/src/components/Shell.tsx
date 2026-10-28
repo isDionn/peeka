@@ -82,7 +82,7 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
     return () => document.removeEventListener("keydown", k);
   }, [toast]);
   // the gear on the island page: Settings › Modules
-  useEffect(() => onX((m) => { if (m.t === "open-panel" && m.panel === "modules" && primary) setPanel("modules"); }), [primary]);
+  useEffect(() => onX((m) => { if (m.t === "open-panel" && primary) setPanel(m.panel); }), [primary]);
   // setup wizard on first run (only in the real app or when a preview asks; once)
   // The island page's welcome card comes first; when it closes (Skip / Start / Esc) the wizard opens. If the island doesn't answer (2 s), don't wait.
   const [welcome, setWelcome] = useState<boolean | null>(null);
@@ -116,7 +116,8 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
     document.addEventListener("focusout", fout);
     return () => { document.removeEventListener("focusin", fin); document.removeEventListener("focusout", fout); };
   }, []);
-  const searching = panel === "search" || (inText && panel !== null); // a hidden field that kept focus in a closed panel doesn't count
+  // Start too: its box is focused on open, but an unfocused window fires no focusin, so Win + typing would go nowhere
+  const searching = panel === "search" || panel === "start" || (inText && panel !== null); // a hidden field that kept focus in a closed panel doesn't count
   useEffect(() => {
     if (!searching) return;
     const arg = { label: `strip-${monitorId}` };

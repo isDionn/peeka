@@ -80,9 +80,7 @@ pub fn parse(
         let by_name = (!exact).then_some(file);
         let id = format!("exe:{}", exe.to_lowercase());
         let promoted = r.promoted.is_some_and(|p| p != 0);
-        let tip = r
-            .tooltip
-            .and_then(|t| crate::alerts::text(&serde_json::Value::String(t.lines().next().unwrap_or("").into()), 64));
+        let tip = r.tooltip.as_deref().and_then(tip);
         let same = |(t, f, _): &&mut (TrayIcon, Option<String>, bool)| t.id == id || (by_name.is_some() && *f == by_name);
         if let Some((seen, _, named)) = out.iter_mut().find(same) {
             seen.promoted |= promoted;
@@ -104,6 +102,21 @@ pub fn parse(
     });
     out.sort_by(|a, b| b.promoted.cmp(&a.promoted).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
     out
+}
+
+/// A tooltip's first line, cleaned and capped, as a cell name; None = blank.
+fn tip(t: &str) -> Option<String> {
+    crate::alerts::text(&serde_json::Value::String(t.lines().next().unwrap_or("").into()), 64)
+}
+
+/// The tray host's live look over a listed entry: its current icon, and its current tooltip as the name.
+pub fn overlay(t: &mut TrayIcon, icon: Option<String>, live_tip: Option<&str>) {
+    if let Some(icon) = icon {
+        t.icon = icon;
+    }
+    if let Some(name) = live_tip.and_then(tip) {
+        t.name = name;
+    }
 }
 
 /// Is `exe` running? `procs` = every process as (exe file name, full path or "" when it cannot be opened, e.g. an
@@ -233,6 +246,21 @@ mod tests {
             [("NVIDIA Settings", true), ("chatgpt", false), ("Codex", false)],
             "two real apps of one file name stay"
         );
+    }
+
+    #[test]
+    fn a_live_icon_and_tip_cover_the_registry_entry() {
+        let mut t = TrayIcon {
+            id: r"exe:c:\d.exe".into(),
+            name: "Discord".into(),
+            exe: r"C:\d.exe".into(),
+            promoted: false,
+            icon: "reg".into(),
+        };
+        overlay(&mut t, None, Some("   "));
+        assert_eq!((t.name.as_str(), t.icon.as_str()), ("Discord", "reg"), "nothing live: the snapshot stays");
+        overlay(&mut t, Some("live".into()), Some("Discord - 3 unread\nmore"));
+        assert_eq!((t.name.as_str(), t.icon.as_str()), ("Discord - 3 unread", "live"));
     }
 
     #[test]

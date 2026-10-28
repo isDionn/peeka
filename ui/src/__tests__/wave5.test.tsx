@@ -277,7 +277,7 @@ describe("Settings › Mascot", () => {
     localStorage.setItem(FIRST_KEY, "1");
     const got: XMsg[] = [];
     const off = onX((m) => got.push(m));
-    fireEvent.click(screen.getByRole("button", { name: "Show" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show intro again" }));
     await settle(80);
     off();
     expect(localStorage.getItem(FIRST_KEY)).toBeNull();
@@ -586,7 +586,7 @@ describe("module management and color icons", () => {
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
     const tabs = within(screen.getByRole("tablist", { name: "Modules" })).getAllByRole("tab").map((t) => t.getAttribute("aria-label") ?? t.textContent);
-    expect(tabs).toEqual(["General", "Music", "Clipboard", "Calendar", "Notifications", "Claude", "Compass › Claude Code", "Compass"]);
+    expect(tabs).toEqual(["General", "Music", "Clipboard", "Calendar", "Usage", "Notifications", "Claude", "Compass › Claude Code", "Compass"]);
     expect(screen.queryByRole("heading", { name: "System" })).toBeNull();
     expect(screen.queryByText("CPU")).toBeNull();
   });

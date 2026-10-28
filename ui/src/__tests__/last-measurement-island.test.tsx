@@ -48,3 +48,13 @@ describe("R1-4: an answered approval row stays as a placeholder", () => {
     expect(screen.queryByText("Approved")).toBeNull();
   });
 });
+
+describe("generic mode: plugin summary shows no content", () => {
+  it("locked / presenting / shared: rows say 'Activity', no titles, subs, values or approval titles", () => {
+    const summary = [{ plugin: APPROVAL_LOW.plugin, rows: [{ title: "Moving invoices", sub: "step 3/5", value: "2 agents" }] }];
+    const surf = { tabs: [], summary, approvals: [APPROVAL_LOW], protrusion: null, composer: null, approvalTop: null, dropStripMs: null } as unknown as SurfacesView;
+    render(<SummaryBoxes surf={surf} onDetail={() => undefined} generic />);
+    expect(screen.getByText("Activity")).toBeTruthy();
+    for (const t of ["Moving invoices", "step 3/5", "2 agents", APPROVAL_LOW.title]) expect(screen.queryByText(t)).toBeNull();
+  });
+});

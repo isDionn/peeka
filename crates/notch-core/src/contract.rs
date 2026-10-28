@@ -73,6 +73,8 @@ pub const COMMANDS: &[&str] = &[
     "clip_visible",
     "clip_list",
     "clip_copy",
+    "clipboard_write",
+    "clip_paste_plain",
     "clip_pin",
     "clip_delete",
     "clip_clear",
@@ -112,6 +114,7 @@ pub const COMMANDS: &[&str] = &[
     "privacy_get",
     // Wave 6: the read-only tray list behind `open_tray` (PENDING Wave 0 test 4), the Windows notification mirror
     "tray_open",
+    "tray_menu",
     "mirror_state",
     "mirror_enable",
     "mirror_disable",
@@ -139,7 +142,8 @@ pub const COMMANDS: &[&str] = &[
     "claude_bridge_state",
     "claude_bridge_install",
     "claude_bridge_remove",
-    "agent_bridges",
+                "agent_bridges",
+                "agent_usage",
     "agent_bridge_install",
     "agent_bridge_remove",
     "agent_bridge_preview",
@@ -235,6 +239,7 @@ pub const EVENTS: &[&str] = &[
     "screen_tint",
     "assistant_event",
     "assistant_reply",
+    "tray_icon",
 ];
 
 fn ts_list(out: &mut String, name: &str, items: &[&str]) {

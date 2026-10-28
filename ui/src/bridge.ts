@@ -104,8 +104,8 @@ export interface Alert {
 }
 /** Payload of `list_alerts` and `alerts_changed` (Rust `AlertsView`): sorted list, the one alert that may open the island now, and how long to bring down a hidden strip. */
 export interface AlertsView { items: Alert[]; top: string | null; dropStripMs: number | null }
-/** System monitor sample (Rust `SysmonTick`); unreadable fields are null (nothing made up). Memory in bytes, network in bytes/s. */
-export interface SysmonTick { cpu: number | null; gpu: number | null; memUsed: number | null; memTotal: number | null; down: number | null; up: number | null; /** Program using the most CPU (exe name without ".exe"; all processes of a program are summed); null until the first sample or if nothing passes 1%. Refreshed every ~10 s while the card is open. */ topCpu: string | null }
+/** System monitor sample (Rust `SysmonTick`); unreadable fields are null (nothing made up). Memory and disk are bytes, network is bytes/s. */
+export interface SysmonTick { cpu: number | null; gpu: number | null; memUsed: number | null; memTotal: number | null; down: number | null; up: number | null; diskUsed: number | null; diskTotal: number | null; uptimeS: number | null; /** Program using the most CPU (exe name without ".exe"; all processes of a program are summed); null until the first sample or if nothing passes 1%. Refreshed every ~10 s while the card is open. */ topCpu: string | null }
 /** Volume key or volume change: our own volume indicator only. */
 export interface VolumeOsd { percent: number; muted: boolean; device?: string | null }
 
@@ -298,6 +298,8 @@ export interface Commands {
   clip_list: { args: void; ret: ClipItem[] };
   /** Copy back. Works on passwords without revealing them; Peeka puts it on the clipboard with "don't track" flags. `denied` while locked. */
   clip_copy: { args: { id: string }; ret: void };
+  /** Local calculator and conversion result: plain text through Peeka's Windows clipboard path. */
+  clipboard_write: { args: { text: string }; ret: void };
   /** Pastes a text clip without its rich clipboard formats, then restores the clipboard. Passwords are refused. */
   clip_paste_plain: { args: { id: string }; ret: void };
   clip_pin: { args: { id: string; on: boolean }; ret: void };
@@ -364,6 +366,8 @@ export interface Commands {
   timer_start: { args: { label: string; seconds: number }; ret: TimerState };
   /** Tray list (fallback until Wave 0 test 4 lands). */
   tray_open: { args: { id: string }; ret: void };
+  /** The app-owned tray context menu at this screen point. */
+  tray_menu: { args: { id: string; x: number; y: number }; ret: void };
   mirror_state: { args: void; ret: MirrorState };
   mirror_enable: { args: void; ret: MirrorState };
   mirror_disable: { args: void; ret: MirrorState };
@@ -404,6 +408,8 @@ export interface Commands {
   agent_bridge_preview: { args: { agent: string; remove: boolean }; ret: BridgePreview };
   /** Codex CLI, Cursor, Gemini CLI, GitHub Copilot CLI: Peeka's status-only hook per agent (Claude Code has its own row). */
   agent_bridges: { args: void; ret: AgentBridge[] };
+  /** Offline plan meters from local agent session files only. */
+  agent_usage: { args: void; ret: { agent: string; windows: { usedPercent: number; windowMinutes: number; resetsAt?: number; resetsInSeconds?: number }[] }[] };
   /** Same rules as `claude_bridge_install` (preview fingerprint, backup, merge, `refused` in demo mode), for one agent `id`. */
   agent_bridge_install: { args: { agent: string; fingerprint: string }; ret: AgentBridge };
   agent_bridge_remove: { args: { agent: string; fingerprint: string }; ret: AgentBridge };
@@ -481,6 +487,8 @@ export type CallArgs<K extends keyof AllCommands> = ArgsOf<K> extends void ? [] 
 /* ---------- events: Rust emit name = key ---------- */
 export interface Events {
   windows_changed: { monitor: string };
+  /** One listed tray entry's live icon or tooltip changed (or fell back to the registry snapshot). */
+  tray_icon: TrayIconX;
   pins_changed: null;
   status_changed: Status;
   settings_changed: Settings;

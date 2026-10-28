@@ -7,6 +7,8 @@ mod app;
 #[cfg(windows)]
 mod claude_chat;
 #[cfg(windows)]
+mod clip_history;
+#[cfg(windows)]
 mod commands;
 #[cfg(windows)]
 mod downloads;
@@ -15,8 +17,6 @@ mod extras;
 mod live;
 #[cfg(windows)]
 mod mirror;
-#[cfg(windows)]
-mod clip_history;
 #[cfg(windows)]
 mod plugins;
 #[cfg(windows)]
@@ -42,6 +42,9 @@ fn main() {
         // A coding agent's hook (`peeka.exe --cc-hook [agent [event]]`): forwards one sanitized event and exits, before Tauri starts.
         if args.get(1).map(String::as_str) == Some(notch_core::brand::HOOK_ARG) {
             plugins::cc_hook_main();
+        }
+        if args.get(1).map(String::as_str) == Some(notch_core::plugins::cc_hooks::STATUSLINE_ARG) {
+            plugins::cc_statusline_main();
         }
         // A restart from Settings > About (`demo_restart`): the old Peeka must be gone first, or single-instance
         // sends this one away. If it cannot be watched or is still there after 15 s, start anyway: at worst

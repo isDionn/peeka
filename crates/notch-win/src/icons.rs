@@ -120,10 +120,7 @@ pub fn bgra_to_png(bgra: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
 pub fn icon(parsing_name: &str) -> Option<Icon> {
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::SIZE as WSIZE;
-    use windows::Win32::Graphics::Gdi::{
-        DeleteObject, GetDC, GetDIBits, GetObjectW, ReleaseDC, BITMAP, BITMAPINFO, BITMAPINFOHEADER, BI_RGB,
-        DIB_RGB_COLORS, HGDIOBJ,
-    };
+    use windows::Win32::Graphics::Gdi::{DeleteObject, HGDIOBJ};
     use windows::Win32::UI::Shell::{
         IShellItemImageFactory, SHCreateItemFromParsingName, SIIGBF_ICONONLY, SIIGBF_SCALEUP,
     };
@@ -145,6 +142,19 @@ pub fn icon(parsing_name: &str) -> Option<Icon> {
             }
             r => break r.ok()?,
         }
+    };
+    let px = bits(hbmp);
+    // SAFETY: the bitmap GetImage handed us; never used after this.
+    let _ = unsafe { DeleteObject(HGDIOBJ(hbmp.0)) };
+    let (buf, w, h) = px?;
+    analyze(&buf, w, h)
+}
+
+/// A bitmap's pixels as top-down BGRA (a monochrome mask comes out black/white).
+#[cfg(windows)]
+fn bits(hbmp: windows::Win32::Graphics::Gdi::HBITMAP) -> Option<(Vec<u8>, u32, u32)> {
+    use windows::Win32::Graphics::Gdi::{
+        GetDC, GetDIBits, GetObjectW, ReleaseDC, BITMAP, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HGDIOBJ,
     };
     let mut bm = BITMAP::default();
     // SAFETY: `bm` is a BITMAP-sized out-param.
@@ -174,9 +184,34 @@ pub fn icon(parsing_name: &str) -> Option<Icon> {
             lines == h as i32
         }
     };
-    // SAFETY: the bitmap GetImage handed us; never used after this.
-    let _ = unsafe { DeleteObject(HGDIOBJ(hbmp.0)) };
-    ok.then(|| analyze(&buf, w, h)).flatten()
+    ok.then_some((buf, w, h))
+}
+
+/// A tray icon's HICON (our own copy; the caller destroys it) -> an `analyze`d icon. An old icon with no alpha gets it
+/// from its AND mask. shortcut: a monochrome icon (no colour bitmap) gives None; draw it if a tray app shows one.
+#[cfg(windows)]
+pub fn from_hicon(hicon: isize) -> Option<Icon> {
+    use windows::Win32::Graphics::Gdi::{DeleteObject, HGDIOBJ};
+    use windows::Win32::UI::WindowsAndMessaging::{GetIconInfo, HICON, ICONINFO};
+    let mut info = ICONINFO::default();
+    // SAFETY: a live HICON we own; the two bitmaps it returns are ours and deleted below.
+    unsafe { GetIconInfo(HICON(hicon as *mut _), &mut info) }.ok()?;
+    let out = (!info.hbmColor.is_invalid()).then(|| bits(info.hbmColor)).flatten().and_then(|(mut px, w, h)| {
+        if px.chunks_exact(4).all(|p| p[3] == 0) {
+            if let Some((mask, ..)) = bits(info.hbmMask).filter(|m| (m.1, m.2) == (w, h)) {
+                for (p, m) in px.chunks_exact_mut(4).zip(mask.chunks_exact(4)) {
+                    p[3] = if m[0] == 0 { 255 } else { 0 };
+                }
+            }
+        }
+        analyze(&px, w, h)
+    });
+    // SAFETY: GetIconInfo's bitmaps, never used after this.
+    unsafe {
+        let _ = DeleteObject(HGDIOBJ(info.hbmColor.0));
+        let _ = DeleteObject(HGDIOBJ(info.hbmMask.0));
+    }
+    out
 }
 
 /// The shell's name for an app: an exe's FileDescription ("Claude"), else the item's display name (an AUMID's

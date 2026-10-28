@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowUpRight, Bluetooth, Check, ChevronUp, Eye, EyeOff, Headphones, Keyboard, Laptop, LoaderCircle, Lock, Smartphone, Wifi, WifiHigh, WifiLow } from "lucide-react";
 import { bridge, type BtDevice, type WifiError, type WifiNetwork } from "../bridge";
 import "../radios.css";
@@ -25,7 +25,12 @@ function WifiList({ onState }: { onState: (scanning: boolean) => void }) {
   useEffect(() => {
     bridge.call("wifi_networks").then(setNets, (e) => setNote(failNote(e, "wifi"))).finally(() => onState(false));
   }, [onState]);
-  const close = () => { setAsk(null); setVal(""); setErr(""); setShow(false); };
+  const form = useRef<HTMLFormElement>(null);
+  const close = () => {
+    const f = form.current, a = document.activeElement; // focus inside the closing form (or already lost) goes back to its network row, not <body>
+    if (f && (f.contains(a) || a === document.body)) (f.previousElementSibling as HTMLElement | null)?.focus();
+    setAsk(null); setVal(""); setErr(""); setShow(false);
+  };
   const connect = async (ssid: string, password?: string) => {
     setBusy(ssid); setFailed(null);
     const r = await bridge.call("wifi_connect", password === undefined ? { ssid } : { ssid, password }).catch(() => "failed" as WifiError);
@@ -62,7 +67,7 @@ function WifiList({ onState }: { onState: (scanning: boolean) => void }) {
               {n.connected ? <Check className="netCheck" /> : busy === n.ssid ? <LoaderCircle className="spin netCheck" /> : <span className="netCheck" />}
             </button>
             {ask === n.ssid && (
-              <form className="pwForm" onSubmit={submit} onKeyDownCapture={(e) => { if (e.key === "Escape") { e.stopPropagation(); e.preventDefault(); close(); } }}>
+              <form ref={form} className="pwForm" onSubmit={submit} onKeyDownCapture={(e) => { if (e.key === "Escape") { e.stopPropagation(); e.preventDefault(); close(); } }}>
                 <label className="t12 l2" htmlFor="pkPw">Password for {n.ssid}</label>
                 <div className="pwField">
                   <input id="pkPw" type={show ? "text" : "password"} value={val} autoFocus autoComplete="off" spellCheck={false} aria-invalid={!!err} aria-describedby="pkPwHint"
@@ -132,7 +137,7 @@ export function RadioPicker({ kind, onClose }: { kind: "wifi" | "bt"; onClose: (
       }}>
       <div className="pickHead">
         <span className="t12 b6 l2">{kind === "wifi" ? "Wi-Fi networks" : "Paired devices"}</span>
-        {kind === "wifi" && <LoaderCircle className="spin pickScan" data-on={scan ? "" : undefined} aria-label={scan ? "Searching" : undefined} />}
+        {kind === "wifi" && <LoaderCircle className="spin pickScan" data-on={scan ? "" : undefined} role="img" aria-label={scan ? "Searching" : undefined} aria-hidden={!scan || undefined} />}
         <button className="pickDone" aria-label="Close list" title="Close list (Esc)" onClick={onClose}><ChevronUp /></button>
       </div>
       {kind === "wifi" ? <WifiList onState={setScan} /> : <BtList />}

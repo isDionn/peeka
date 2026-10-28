@@ -147,8 +147,11 @@ fn app_ref(n: &Notch, app_id: &str, name: &str) -> AppRef {
 /// The colour copy of an app's icon (the extracted PNG is already in colour): while the setting is on, and always
 /// for an icon whose mask would be a blank square or circle; never for a nearly black one (invisible on the strip).
 fn color(n: &Notch, app_id: &str) -> Option<String> {
-    let i = look(n, app_id);
-    (!i.url.is_empty() && !i.dark && (i.blob || n.settings.lock().color_icons)).then_some(i.url)
+    color_of(n, &look(n, app_id))
+}
+
+fn color_of(n: &Notch, i: &notch_win::icons::Icon) -> Option<String> {
+    (!i.url.is_empty() && !i.dark && (i.blob || n.settings.lock().color_icons)).then(|| i.url.clone())
 }
 
 /// The window-event generation (`flash::generation`) `n.items` was listed at.
@@ -791,10 +794,33 @@ pub async fn open_tray(n: State<'_, Notch>, monitor: String) -> Res<Vec<notch_co
     Ok(list)
 }
 
-/// A click in the tray list: the app's open window forward, else its exe started. Only ids `open_tray` sent.
+/// A click in the tray list goes to the app's live icon when the tray host heard it; elevated and older icons keep the
+/// old focus/launch fallback. Only ids `open_tray` sent.
 #[tauri::command]
 pub fn tray_open(n: State<'_, Notch>, id: String) -> Res<()> {
-    let target = notch_core::tray::open(&n.tray.lock(), &n.items.lock(), &id).ok_or(CmdError::Unknown)?;
+    let listed = n.tray.lock();
+    let icon = listed.iter().find(|t| t.id == id).ok_or(CmdError::Unknown)?;
+    if notch_win::tray_host::click(&icon.exe, None, notch_win::tray_host::Click::Left) {
+        return Ok(());
+    }
+    let target = notch_core::tray::open(&listed, &n.items.lock(), &id).ok_or(CmdError::Unknown)?;
+    let ok = match target {
+        notch_core::tray::Open::Focus(hwnd) => Win32Control.focus(hwnd),
+        notch_core::tray::Open::Launch(exe) => Win32Control.launch(&exe),
+    };
+    ok.then_some(()).ok_or(CmdError::Refused)
+}
+
+/// The icon's own context menu. The page supplies a screen point only; this command still accepts only an id from the
+/// last `open_tray` list, then falls back to the old focus/launch behaviour when the host never heard the icon.
+#[tauri::command]
+pub fn tray_menu(n: State<'_, Notch>, id: String, x: i32, y: i32) -> Res<()> {
+    let listed = n.tray.lock();
+    let icon = listed.iter().find(|t| t.id == id).ok_or(CmdError::Unknown)?;
+    if notch_win::tray_host::click(&icon.exe, Some((x, y)), notch_win::tray_host::Click::Right) {
+        return Ok(());
+    }
+    let target = notch_core::tray::open(&listed, &n.items.lock(), &id).ok_or(CmdError::Unknown)?;
     let ok = match target {
         notch_core::tray::Open::Focus(hwnd) => Win32Control.focus(hwnd),
         notch_core::tray::Open::Launch(exe) => Win32Control.launch(&exe),
@@ -1389,6 +1415,12 @@ pub async fn clip_copy(app: AppHandle, id: String) -> Res<()> {
     Ok(())
 }
 
+/// Plain local values such as calculator results use the same native clipboard writer as copy-back.
+#[tauri::command]
+pub fn clipboard_write(text: String) -> Res<()> {
+    notch_win::clipboard::write(&notch_core::clip::Payload::Text(notch_core::clip::vault::Secret::new(text.into_bytes()))).then_some(()).ok_or(CmdError::Refused)
+}
+
 /// Paste a text history item as `CF_UNICODETEXT` only. Passwords, files and images never take this path.
 /// The Windows helper snapshots and restores the user's clipboard around the target app's Ctrl+V.
 #[tauri::command]
@@ -1912,7 +1944,7 @@ pub fn island_hidden(n: State<'_, Notch>) -> bool {
 
 /// fidelity-api.ts `TrayIconX`: `open_tray`'s list plus the colour icon (`color`). No `badge`:
 /// `NotifyIconSettings` has no count, and Notch does not guess one.
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrayIconX {
     #[serde(flatten)]
@@ -1924,7 +1956,20 @@ pub struct TrayIconX {
 #[tauri::command]
 pub async fn tray_icons(n: State<'_, Notch>, monitor: String) -> Res<Vec<TrayIconX>> {
     let list = open_tray(n.clone(), monitor).await?;
-    Ok(list.into_iter().map(|t| TrayIconX { color_icon: color(&n, &t.id), icon: t }).collect())
+    Ok(list.into_iter().map(|t| tray_x(&n, t)).collect())
+}
+
+/// A listed entry with the tray host's live icon and tip over it, if the host heard one (`tray_host::live`).
+pub fn tray_x(n: &Notch, mut icon: notch_core::tray::TrayIcon) -> TrayIconX {
+    let live = notch_win::tray_host::live(&icon.exe);
+    let color_icon = match live.as_ref().and_then(|l| l.icon.as_ref()) {
+        Some(i) => color_of(n, i),
+        None => color(n, &icon.id),
+    };
+    if let Some(l) = live {
+        notch_core::tray::overlay(&mut icon, l.icon.map(|i| i.url), l.tip.as_deref());
+    }
+    TrayIconX { color_icon, icon }
 }
 
 /// Start "Recommended": the newest files in the owner's Recent folder (`shell:recent`, its `.lnk` files only;
@@ -2082,6 +2127,43 @@ pub struct AgentBridge {
     installed: bool,
     healthy: bool,
     last_event_ago_s: Option<u64>,
+}
+
+/// Local-only usage snapshots.  We intentionally inspect neither auth files nor
+/// provider APIs; Codex writes these public meter values into its rollout log.
+#[tauri::command]
+pub fn agent_usage(app: AppHandle, refresh: Option<bool>) -> Res<Vec<notch_core::plugins::usage::AgentUsage>> {
+    static CACHE: parking_lot::Mutex<Option<(std::time::Instant, Vec<notch_core::plugins::usage::AgentUsage>)>> = parking_lot::Mutex::new(None);
+    let mut cache = CACHE.lock();
+    if !refresh.unwrap_or(false) && cache.as_ref().is_some_and(|(at, _)| at.elapsed() < std::time::Duration::from_secs(30)) {
+        return Ok(cache.as_ref().unwrap().1.clone());
+    }
+    let root = home()?.join(".codex").join("sessions");
+    let mut newest: Option<(std::time::SystemTime, PathBuf)> = None;
+    fn visit(dir: &Path, newest: &mut Option<(std::time::SystemTime, PathBuf)>) {
+        for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() { visit(&path, newest); continue; }
+            if path.extension().and_then(|e| e.to_str()) != Some("jsonl") { continue; }
+            let Ok(modified) = entry.metadata().and_then(|m| m.modified()) else { continue; };
+            if newest.as_ref().is_none_or(|(time, _)| modified > *time) { *newest = Some((modified, path)); }
+        }
+    }
+    visit(&root, &mut newest);
+    let mut usage = Vec::new();
+    if let Some((_, path)) = newest {
+        if let Ok(text) = std::fs::read_to_string(path) {
+            if let Some(windows) = text.lines().rev().find_map(|line| { let w = notch_core::plugins::usage::codex_line(line); (!w.is_empty()).then_some(w) }) {
+                usage.push(notch_core::plugins::usage::AgentUsage { agent: "codex", windows });
+            }
+        }
+    }
+    if let Ok(bytes) = std::fs::read(app.state::<Notch>().data_dir.join("claude-usage.json")) {
+        let windows = notch_core::plugins::usage::claude_windows(&bytes);
+        if !windows.is_empty() { usage.push(notch_core::plugins::usage::AgentUsage { agent: "claude", windows }); }
+    }
+    *cache = Some((std::time::Instant::now(), usage.clone()));
+    Ok(usage)
 }
 
 fn home() -> Res<PathBuf> {

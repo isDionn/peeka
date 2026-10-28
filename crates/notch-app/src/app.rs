@@ -231,6 +231,7 @@ pub fn run() {
             crate::commands::open_windows_settings,
             crate::commands::open_tray,
             crate::commands::tray_open,
+            crate::commands::tray_menu,
             crate::commands::mirror_state,
             crate::commands::mirror_enable,
             crate::commands::mirror_disable,
@@ -284,6 +285,7 @@ pub fn run() {
             crate::commands::clip_visible,
             crate::commands::clip_list,
             crate::commands::clip_copy,
+            crate::commands::clipboard_write,
             crate::commands::clip_paste_plain,
             crate::commands::clip_pin,
             crate::commands::clip_delete,
@@ -337,6 +339,7 @@ pub fn run() {
             crate::commands::claude_bridge_install,
             crate::commands::claude_bridge_remove,
             crate::commands::agent_bridges,
+            crate::commands::agent_usage,
             crate::commands::agent_bridge_install,
             crate::commands::agent_bridge_remove,
             crate::commands::agent_bridge_preview,
@@ -389,8 +392,18 @@ fn setup(app: &AppHandle) -> Result<(), String> {
     DEMO.store(is_demo, Ordering::SeqCst);
     if !is_demo {
         notch_win::taskbar::restore_left_behind();
+        notch_win::tray_host::start();
     }
     let _ = APP.set(app.clone());
+    let handle = app.clone();
+    // A tray icon changed (or went): the listed entry it matches goes to the page, already overlaid (`tray_x`).
+    notch_win::tray_host::on_live(move |exe| {
+        let Some(n) = handle.try_state::<Notch>() else { return }; // not managed yet: the first list overlays it
+        let listed = n.tray.lock().iter().find(|t| t.exe.eq_ignore_ascii_case(exe)).cloned();
+        if let Some(t) = listed {
+            let _ = handle.emit("tray_icon", crate::commands::tray_x(&n, t));
+        }
+    });
     let data_dir = notch_core::data_dir().ok_or("No data folder (LOCALAPPDATA)")?;
     if !is_demo {
         notch_core::migrate_data_dir(&data_dir);
@@ -550,6 +563,7 @@ fn shutdown(app: &AppHandle) {
     }
     // The Windows bar first, then the strips' AppBars go.
     crate::taskbar::restore_now();
+    notch_win::tray_host::stop();
     crate::live::keys_stop();
     notch_win::winkey::unhook();
     crate::live::http_stop(app);

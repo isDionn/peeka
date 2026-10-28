@@ -54,3 +54,53 @@ export function parseTimer(q: string): TimerAsk | null {
   const text = seconds % 3600 === 0 ? `${seconds / 3600} h` : seconds % 60 === 0 ? `${seconds / 60} min` : `${seconds} s`;
   return { label, seconds, text: rest ? `${text} · ${label}` : text };
 }
+
+export interface SearchAnswer { text: string }
+
+const UNITS: Record<string, { kind: string; scale: number }> = {
+  b: { kind: "data", scale: 1 }, kb: { kind: "data", scale: 1e3 }, mb: { kind: "data", scale: 1e6 }, gb: { kind: "data", scale: 1e9 },
+  m: { kind: "length", scale: 1 }, km: { kind: "length", scale: 1e3 }, mi: { kind: "length", scale: 1609.344 },
+  s: { kind: "time", scale: 1 }, min: { kind: "time", scale: 60 }, h: { kind: "time", scale: 3600 },
+};
+
+const number = (n: number) => Number.isFinite(n) ? String(Number(n.toFixed(8))) : null;
+
+/** A small local expression reader: numbers, + - * / ^ and parentheses; never executes input as code. */
+function math(q: string) {
+  let at = 0;
+  const ws = () => { while (/\s/.test(q[at] ?? "")) at++; };
+  const atom = (): number | null => {
+    ws();
+    if (q[at] === "(") { at++; const n = sum(); ws(); if (q[at++] !== ")") return null; return n; }
+    const m = /^[0-9]+(?:\.[0-9]+)?/.exec(q.slice(at));
+    if (!m) return null;
+    at += m[0].length;
+    let n = Number(m[0]);
+    ws();
+    if (q[at] === "%") { at++; n /= 100; }
+    return n;
+  };
+  const power = (): number | null => { let n = atom(); ws(); if (n !== null && q[at] === "^") { at++; const r = power(); n = r === null ? null : n ** r; } return n; };
+  const product = (): number | null => { let n = power(); while (n !== null) { ws(); const op = q[at]; if (op !== "*" && op !== "/") break; at++; const r = power(); n = r === null || (op === "/" && r === 0) ? null : op === "*" ? n * r : n / r; } return n; };
+  const sum = (): number | null => { let n = product(); while (n !== null) { ws(); const op = q[at]; if (op !== "+" && op !== "-") break; at++; const r = product(); n = r === null ? null : op === "+" ? n + r : n - r; } return n; };
+  const result = sum(); ws();
+  return at === q.length ? result : null;
+}
+
+/** Calculator and offline unit conversion for search. shortcut: currency conversion needs a live exchange-rate source, so it is intentionally not offered here. */
+export function parseSearchAnswer(q: string): SearchAnswer | null {
+  const t = q.trim().toLocaleLowerCase("en-US");
+  const c = /^(\d+(?:\.\d+)?)\s*(gb|mb|kb|b|km|mi|m|h|min|s|f|c)\s+(?:in|to)\s+(gb|mb|kb|b|km|mi|m|h|min|s|f|c)$/.exec(t);
+  if (c) {
+    const value = Number(c[1]), from = c[2], to = c[3];
+    let out: number | null = null;
+    if ((from === "f" || from === "c") && (to === "f" || to === "c")) out = from === to ? value : from === "f" ? (value - 32) * 5 / 9 : value * 9 / 5 + 32;
+    else if (UNITS[from]?.kind === UNITS[to]?.kind) out = value * UNITS[from].scale / UNITS[to].scale;
+    const shown = out === null ? null : number(out);
+    return shown === null ? null : { text: `${shown} ${to}` };
+  }
+  const of = /^(\d+(?:\.\d+)?)%\s+of\s+(\d+(?:\.\d+)?)$/.exec(t);
+  const value = of ? Number(of[1]) * Number(of[2]) / 100 : math(t);
+  const shown = value === null ? null : number(value);
+  return shown === null ? null : { text: shown };
+}

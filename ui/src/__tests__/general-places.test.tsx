@@ -28,13 +28,13 @@ async function home(p: P = {}) {
   const el = r.container.querySelector(".genHome") as HTMLElement;
   const now = el.querySelector(".genNow") as HTMLElement;
   // the places in DOM order with their grid spot: the eye learns them, so they never change with the state
-  const places = [...el.children].filter((x) => x.classList.contains("genTile")).map((x) => (x as HTMLElement).style.gridArea || [...x.classList].find((k) => k !== "genTile" && k.startsWith("gen")));
+  const places = [...el.querySelectorAll(":scope > .genTile, .genGlance > .genRow")].map((x) => (x as HTMLElement).style.gridArea || [...x.classList].find((k) => k.startsWith("gen") && !["genTile", "genRow"].includes(k)));
   return { ...r, el, now, places, head: now.querySelector(".t17")?.textContent };
 }
-const PLACES = ["genNow", "genMusic", "cc", "clip", "cal", "timer", "power"];
+const PLACES = ["genNow", "genMusic", "genGlance", "cc", "clip", "cal", "timer", "power"];
 
 describe("General home: Places", () => {
-  it("idle: 'Nothing needs you', the 56 px ghost, all seven places", async () => {
+  it("idle: 'Nothing needs you', the 56 px ghost, every place", async () => {
     const h = await home();
     expect(h.head).toBe("Nothing needs you");
     expect(h.now.querySelector(".genGhost .mascot[data-size='56']")).toBeTruthy();
@@ -75,7 +75,7 @@ describe("General home: Places", () => {
   it("clipboard copied: the Clipboard place lights up with kind, age and count only, never the content", async () => {
     clip("image", 2_000);
     const h = await home();
-    const tile = h.el.querySelector('.genTile[style*="grid-area: clip"]') as HTMLElement;
+    const tile = h.el.querySelector('.genRow[style*="grid-area: clip"]') as HTMLElement;
     expect(tile.classList.contains("info")).toBe(true);
     expect(tile.textContent).toMatch(/^ClipboardImage, just now\d+ items?$/);
     expect(h.el.textContent).not.toContain("secret");
@@ -86,14 +86,14 @@ describe("General home: Places", () => {
   it("an older copy doesn't glow", async () => {
     clip("text", 5 * 60_000);
     const h = await home();
-    expect((h.el.querySelector('.genTile[style*="grid-area: clip"]') as HTMLElement).classList.contains("info")).toBe(false);
+    expect((h.el.querySelector('.genRow[style*="grid-area: clip"]') as HTMLElement).classList.contains("info")).toBe(false);
   });
 
   it("low battery: the Now box warns with Battery saver settings; the Power place turns orange; charging stays quiet", async () => {
     const h = await home({ battery: LOW });
     expect(h.head).toBe("Battery at 14%");
     expect(h.now.classList.contains("warn")).toBe(true);
-    expect(h.el.querySelector('.genTile[style*="grid-area: power"]')?.classList.contains("warn")).toBe(true);
+    expect(h.el.querySelector('.genRow[style*="grid-area: power"]')?.classList.contains("warn")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Battery saver settings" }));
     await settle();
     expect(calls().find((c) => c.m === "open_windows_settings")?.a).toEqual({ uri: "ms-settings:batterysaver" });
@@ -123,10 +123,11 @@ describe("General home: Places", () => {
     expect(document.activeElement).toBe(cc);
   });
 
-  it("0 Claude Code sessions: the name is a plain label, there is no empty list to open", async () => {
+  it("0 Claude Code sessions: one quiet line, and the name still opens the list like every other place", async () => {
     const h = await home({ sessN: 0 });
-    expect(screen.queryByRole("button", { name: "Claude Code sessions, show list" })).toBeNull();
-    expect(h.el.querySelector("span.genHead")?.textContent).toBe("Claude Code");
+    expect(h.el.querySelector('.genRow[style*="grid-area: cc"]')?.textContent).toBe("Claude CodeNo open sessions");
+    fireEvent.click(screen.getByRole("button", { name: "Claude Code sessions, show list" }));
+    expect(screen.getByRole("group", { name: "Claude Code sessions" }).textContent).toContain("0 Claude Code sessions open");
   });
 
   it("the approval in the Now box is not repeated in its plugin's box below; a second one still is", async () => {
@@ -167,11 +168,12 @@ describe("General home inside the island", () => {
 
 describe("General home: nothing shifts between states", () => {
   const css = readFileSync("src/components/cards.css", "utf8");
-  it("fixed rows and height (112 + 92 + 44 + 2 x 8 = 264), named spots, under the 330 px body", () => {
+  it("fixed rows and height (92 + 8 + 230 = 330, the body cap: nothing scrolls), named spots, five glance rows", () => {
     const rule = css.match(/\.genHome \{[^}]*\}/)![0];
-    expect(rule).toMatch(/grid-template-rows: 112px 92px 44px;/);
-    expect(rule).toMatch(/height: 264px;/);
-    expect(rule).toMatch(/grid-template-areas: "now now music" "cc clip cal" "timer timer power";/);
+    expect(rule).toMatch(/grid-template-rows: 92px minmax\(0, 1fr\);/);
+    expect(rule).toMatch(/height: 330px;/);
+    expect(rule).toMatch(/grid-template-areas: "now music" "plug glance";/);
+    expect(css).toMatch(/\.genGlance \{[^}]*grid-template-areas: "cc" "clip" "cal" "timer" "power";/);
   });
   it("a disabled module leaves its spot empty: the others keep their place", async () => {
     const order = (await bridge.call("modules_get")).map((m) => m.id);

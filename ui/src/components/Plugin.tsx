@@ -340,7 +340,7 @@ export function TabBlocks({ tab }: { tab: ModuleTab }) {
 }
 
 /** Plugin boxes on the "General" page: summary rows (up to 3), with that plugin's approvals in between (300 ms guard applies), row icons and one action (e.g. Stop). */
-export function SummaryBoxes({ surf, onDetail }: { surf: SurfacesView; onDetail: (id: string) => void }) {
+export function SummaryBoxes({ surf, onDetail, generic = false }: { surf: SurfacesView; onDetail: (id: string) => void; generic?: boolean }) {
   // An answered approval row doesn't vanish at once: ~1.5 s "Approved / Denied" placeholder, then a short height animation; the button below doesn't jump under the pointer (R1-4)
   const [ans, setAns] = useState<Record<string, { text: string; leaving: boolean }>>({});
   const seen = useRef(new Map<string, ApprovalItem>());
@@ -358,14 +358,17 @@ export function SummaryBoxes({ surf, onDetail }: { surf: SurfacesView; onDetail:
   return <>{ids.map((id) => {
     const rows = surf.summary.find((s) => s.plugin.id === id);
     const plugin = rows?.plugin ?? shown.find((a) => a.plugin.id === id)!.plugin;
-    const list = (rows?.rows ?? []).slice(0, 3);
+    // General's plugin slot holds three rows: waiting approvals take theirs first, the summary fills the rest (its plugin tab has everything).
+    // shortcut: sized for one plugin box; a second plugin with a summary overflows the slot, cap per slot if that ever ships
+    const list = (rows?.rows ?? []).slice(0, Math.max(0, 3 - shown.filter((a) => a.plugin.id === id).length));
     const row = (r: (typeof list)[number], i: number) => {
       const x = r as typeof r & SummaryRowExt, G = glyphOf(x.icon);
       return (
         <div className="row" key={"r" + i}>
           {G && <span className={x.state === "attention" ? "orangeIcon" : "dim"}><G /></span>}
-          <div style={{ flex: 1, minWidth: 0 }}><div>{plain(r.title, 100)}</div>{r.sub && <div className="t12 l3 b4">{plain(r.sub, 140)}</div>}</div>
-          {r.value && <span className="t12 l3">{plain(r.value, 60)}</span>}
+          {/* generic (locked, presenting, shared): a row says only that something is going on, never what */}
+          <div style={{ flex: 1, minWidth: 0 }}><div>{generic ? "Activity" : plain(r.title, 100)}</div>{!generic && r.sub && <div className="t12 l3 b4">{plain(r.sub, 140)}</div>}</div>
+          {!generic && r.value && <span className="t12 l3">{plain(r.value, 60)}</span>}
           {x.action && <ActionButtons plugin={plugin} actions={[x.action]} />}
           <TerminalBtn id={x.session} />
         </div>
@@ -375,7 +378,7 @@ export function SummaryBoxes({ surf, onDetail }: { surf: SurfacesView; onDetail:
       <div className="box glass" key={id}>
         <BoxHead plugin={plugin}>{pluginName(plugin)}</BoxHead>
         {list.slice(0, 1).map(row)}
-        {shown.filter((a) => a.plugin.id === id).map((a) => <ApprovalRow key={a.id} a={a} done={ans[a.id]} onDetail={() => onDetail(a.id)} onAnswered={onAnswered} />)}
+        {shown.filter((a) => a.plugin.id === id).map((a) => <ApprovalRow key={a.id} a={a} generic={generic} done={ans[a.id]} onDetail={() => onDetail(a.id)} onAnswered={onAnswered} />)}
         {list.slice(1).map((r, i) => row(r, i + 1))}
       </div>
     );
@@ -383,18 +386,18 @@ export function SummaryBoxes({ surf, onDetail }: { surf: SurfacesView; onDetail:
 }
 
 const GHOST_MS = 1500;
-function ApprovalRow({ a, onDetail, done, onAnswered }: { a: ApprovalItem; onDetail: () => void; done?: { text: string; leaving: boolean }; onAnswered: (a: ApprovalItem, text: string) => void }) {
+function ApprovalRow({ a, onDetail, done, onAnswered, generic = false }: { a: ApprovalItem; onDetail: () => void; done?: { text: string; leaving: boolean }; onAnswered: (a: ApprovalItem, text: string) => void; generic?: boolean }) {
   const direct = riskOf(a.risk) === "low" && !a.choices?.length && !a.freeText && a.options.includes("allow");
   if (done) return (
     <div className={"row rowDone" + (done.leaving ? " go" : "")} role="status">
       <span style={{ color: done.text === "Approved" ? "var(--green)" : "var(--l3)" }}><Check /></span>
-      <div style={{ flex: 1, minWidth: 0 }}><div>{done.text}</div><div className="t12 l3 b4">{flat(a.title)}</div></div>
+      <div style={{ flex: 1, minWidth: 0 }}><div>{done.text}</div>{!generic && <div className="t12 l3 b4">{flat(a.title)}</div>}</div>
     </div>
   );
   return (
     <div className="row">
       <span style={{ color: "var(--orange)" }}><ShieldAlert /></span>
-      <div style={{ flex: 1, minWidth: 0 }}><div>Awaiting approval</div><div className="t12 l3 b4">{flat(a.title)}</div></div>
+      <div style={{ flex: 1, minWidth: 0 }}><div>Awaiting approval</div>{!generic && <div className="t12 l3 b4">{flat(a.title)}</div>}</div>
       {direct && <GuardBtn className="btn kk primary" onClick={() => { answer(a, "allow", {}, "protrusion"); onAnswered(a, "Approved"); }}>Allow</GuardBtn>}
       {direct ? <GuardBtn className="btn kk glass" onClick={() => { answer(a, "deny"); onAnswered(a, "Denied"); }}>Deny</GuardBtn> : <button className="btn kk primary" onClick={onDetail}>Details</button>}
     </div>

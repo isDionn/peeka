@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use serde::Serialize;
 
 /// One reading a second. A field Windows cannot give stays `None` (never guessed).
-/// Percentages have one decimal, memory is bytes, network is bytes per second.
+/// Percentages have one decimal; memory and disk are bytes; network is bytes per second.
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SysmonTick {
@@ -17,6 +17,9 @@ pub struct SysmonTick {
     pub mem_total: Option<u64>,
     pub down: Option<f64>,
     pub up: Option<f64>,
+    pub disk_used: Option<u64>,
+    pub disk_total: Option<u64>,
+    pub uptime_s: Option<u64>,
     /// The program using the most processor now (every process of one exe added up), by exe name without `.exe`;
     /// None until the first measurement or when nothing passes `TOP_MIN_PERCENT`.
     pub top_cpu: Option<String>,
@@ -221,12 +224,13 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_tick_is_seven_camel_case_nulls() {
+    fn an_empty_tick_is_ten_camel_case_nulls() {
         let json = serde_json::to_value(SysmonTick::default()).unwrap();
         assert_eq!(
             json,
             serde_json::json!({
-                "cpu": null, "gpu": null, "memUsed": null, "memTotal": null, "down": null, "up": null, "topCpu": null
+                "cpu": null, "gpu": null, "memUsed": null, "memTotal": null, "down": null, "up": null,
+                "diskUsed": null, "diskTotal": null, "uptimeS": null, "topCpu": null
             })
         );
     }

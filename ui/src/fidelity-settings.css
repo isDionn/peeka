@@ -39,7 +39,9 @@ html .result.assistantAsk .tile { background: var(--e2); color: var(--l1); overf
 .suggestionGrid .row .tip svg.lucide, .suggestionGrid .row > svg.lucide { width: 16px; height: 16px; }
 .suggestionGrid .row .sub { flex: 1; min-width: 0; text-align: left; }
 .startResult { max-height: 300px; overflow: auto; }
-.startResult .row { width: 100%; text-align: left; cursor: pointer; }
+.startResult .row { width: calc(100% + 16px); margin-inline: -8px; padding-inline: 8px; border-radius: var(--rSmall); corner-shape: squircle; text-align: left; cursor: pointer; }
+.startResult .row + .row::before { right: 8px; }
+.startResult .row.selected::before, .startResult .row.selected + .row::before { opacity: 0; } /* no hairline cutting the rounded pill */
 
 /* W1: setup wizard */
 .setup .list .row > svg.lucide { color: var(--l3); }
@@ -56,6 +58,7 @@ html .pg .action .ask, html .mini.ask { color: #fff; }
 
 /* S5: exception list, grouped row */
 .exceptionGroup { width: 100%; text-align: left; cursor: pointer; }
+.exceptionGroup::after { content: ""; width: 28px; flex: none; } /* the .mini slot the other rows keep, so the keys column lines up */
 .exceptions .row .mini { opacity: 0; }
 .exceptions .row:hover .mini, .exceptions .row:focus-within .mini { opacity: 1; }
 

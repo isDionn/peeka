@@ -33,9 +33,9 @@ const TRACKS = [
   { title: "Blue Hour", artist: "June Avery", album: "Harbor", durationMs: 198_000, art: cover("#0b2a4a", "#0e7c86", "#9be3c4") },
 ];
 
-type W4Names = "search_index_state" | "search_open" | "search_ask" | "clip_list" | "clip_copy" | "clip_pin" | "clip_delete" | "clip_clear" | "clip_reveal" | "clip_share" | "clip_edit" | "clip_drag" | "clip_visible" | "lock_state" | "lock_now" | "lock_release";
-type W5Names = "window_preview" | "share_open" | "shelf_list" | "shelf_ask" | "shelf_add" | "shelf_open" | "shelf_locate" | "shelf_pin" | "shelf_remove" | "shelf_copy_files" | "shelf_share" | "shelf_show_in_folder" | "shelf_zip" | "shelf_drag" | "timer_get" | "timer_start" | "timer_control" | "privacy_get" | "tray_open" | "mirror_state" | "mirror_enable" | "mirror_disable" | "mirror_list" | "mirror_dismiss" | "mirror_open_app" | "mirror_ask";
-type W7Names = "recent_files" | "open_recent" | "set_start_items" | "app_show_in_folder" | "launch_app_admin" | "open_start_menu" | "open_calendar" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "agent_bridges" | "agent_bridge_install" | "agent_bridge_remove" | "agent_bridge_preview" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "window_pick" | "cc_focus_terminal" | "cc_diff" | "cc_diff_open" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus";
+type W4Names = "search_index_state" | "search_open" | "search_ask" | "clip_list" | "clip_copy" | "clipboard_write" | "clip_pin" | "clip_delete" | "clip_clear" | "clip_reveal" | "clip_share" | "clip_edit" | "clip_drag" | "clip_visible" | "lock_state" | "lock_now" | "lock_release";
+type W5Names = "window_preview" | "share_open" | "shelf_list" | "shelf_ask" | "shelf_add" | "shelf_open" | "shelf_locate" | "shelf_pin" | "shelf_remove" | "shelf_copy_files" | "shelf_share" | "shelf_show_in_folder" | "shelf_zip" | "shelf_drag" | "timer_get" | "timer_start" | "timer_control" | "privacy_get" | "tray_open" | "tray_menu" | "mirror_state" | "mirror_enable" | "mirror_disable" | "mirror_list" | "mirror_dismiss" | "mirror_open_app" | "mirror_ask";
+type W7Names = "recent_files" | "open_recent" | "set_start_items" | "app_show_in_folder" | "launch_app_admin" | "open_start_menu" | "open_calendar" | "quit_app" | "island_hide" | "island_hidden" | "tray_icons" | "assistant_counts" | "assistant_open" | "calendar_next" | "claude_bridge_state" | "claude_bridge_install" | "claude_bridge_remove" | "agent_bridges" | "agent_bridge_install" | "agent_bridge_remove" | "agent_bridge_preview" | "permission_history" | "first_connect_get" | "first_connect_ack" | "shelf_suggest" | "shelf_memory" | "assistant_start" | "composer_kinds" | "composer_scan" | "composer_attach_file" | "window_pick" | "cc_focus_terminal" | "cc_diff" | "cc_diff_open" | "open_task_manager" | "focus_strip" | "focus_island" | "typing_focus" | "agent_usage";
 /** Peeka Phase C: clipboard, download and copy-code commands; Settings > About demo restart. */
 /** The Modules card's Claude chat. */
 type W9Names = "claude_chat_state" | "claude_chat_send" | "claude_chat_stop" | "claude_chat_new";
@@ -71,6 +71,10 @@ const BT0: BtDevice[] = [
   { id: "demo-bt-keys", name: "MX Keys", kind: "input", battery: 45, connected: true },
   { id: "demo-bt-phone", name: "Pixel 8", kind: "phone", battery: 62, connected: false },
 ];
+const AGENT_USAGE = [
+  { agent: "codex", windows: [{ usedPercent: 84, windowMinutes: 300, resetsInSeconds: 39_000 }, { usedPercent: 32, windowMinutes: 10_080, resetsInSeconds: 259_200 }] },
+  { agent: "claude", windows: [{ usedPercent: 42, windowMinutes: 300, resetsInSeconds: 7_200 }, { usedPercent: 18, windowMinutes: 10_080, resetsInSeconds: 345_600 }] },
+];
 const TRAY: TrayIcon[] = [
   { id: "exe:c:/apps/discord.exe", name: "Discord", exe: "C:/apps/Discord.exe", promoted: true, icon: "" },
   { id: "exe:c:/apps/steam.exe", name: "Steam", exe: "C:/apps/Steam.exe", promoted: false, icon: "" },
@@ -103,6 +107,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
   let recap: RecapWeek | null = null;
   let calendar: CalendarNext = structuredClone(DEFAULT_CALENDAR);
   let bridgeState: BridgeState = { installed: true, healthy: true, lastEventAgoS: 120 };
+  let agentUsage = structuredClone(AGENT_USAGE);
   const AGENTS0: AgentBridge[] = [
     { id: "codex", name: "Codex CLI", file: "~\\.codex\\hooks.json", present: true, installed: false, healthy: false, lastEventAgoS: null },
     { id: "cursor", name: "Cursor", file: "~\\.cursor\\hooks.json", present: false, installed: false, healthy: false, lastEventAgoS: null },
@@ -164,7 +169,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       plain("c10", "text", 60, { text: "#3A7BFF", hint: "color" }),
       plain("c11", "text", 180, { text: "git switch -c feature/notch", hint: "command" }),
     ];
-    lock = { locked: false, reason: null };
+    lock = { locked: false, reason: null }; agentUsage = structuredClone(AGENT_USAGE);
     hidden = false; firstConnect = false; recap = null; calendar = structuredClone(DEFAULT_CALENDAR); bridgeState = { installed: true, healthy: true, lastEventAgoS: 120 };
     settings = {
       autostart: true, taskbarHide: "full", clipHistory: true, clipMedia: true, clipPasswordMin: 60,
@@ -263,7 +268,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       if (sysmonTimer) return;
       let cpu = 23;
       const GB = 1024 ** 3;
-      const tick = () => { cpu = Math.max(8, Math.min(70, cpu + (Math.random() - 0.5) * 14)); emit("sysmon_tick", { cpu: Math.round(cpu), memUsed: 18.2 * GB, memTotal: 32 * GB, gpu: 11, down: 120_000, up: 30_000, topCpu: "chrome" } satisfies SysmonTick); };
+      const tick = () => { cpu = Math.max(8, Math.min(70, cpu + (Math.random() - 0.5) * 14)); emit("sysmon_tick", { cpu: Math.round(cpu), memUsed: 18.2 * GB, memTotal: 32 * GB, gpu: 11, down: 120_000, up: 30_000, diskUsed: 245 * GB, diskTotal: 512 * GB, uptimeS: 3 * 86_400 + 4 * 3_600 + 12 * 60, topCpu: "chrome" } satisfies SysmonTick); };
       tick(); sysmonTimer = setInterval(tick, 1000);
     },
     sysmon_stop: () => { if (sysmonTimer) clearInterval(sysmonTimer); sysmonTimer = null; },
@@ -348,6 +353,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     search_ask: (a) => { if (!plugins.some((x) => x.main && x.connected)) throw "not_connected"; log.push({ cmd: "search_ask", args: a }); return { turn: ++turn }; },
     clip_list: () => structuredClone(unlocked()).sort((a, b) => +b.pinned - +a.pinned || b.createdAt - a.createdAt),
     clip_copy: (a) => { const c = find(a.id); if (!c || (lock.locked && c.kind === "password")) deny(); log.push({ cmd: "clip_copy", args: a }); },
+    clipboard_write: (a) => { log.push({ cmd: "clipboard_write", args: a }); },
     clip_pin: (a) => { const c = find(a.id); if (!c || c.kind === "password") deny(); clips = clips.map((x) => (x.id === a.id ? { ...x, pinned: a.on } : x)); log.push({ cmd: "clip_pin", args: a }); clipEmit({ reason: "updated", item: find(a.id) ?? null }); },
     clip_delete: (a) => { const c = find(a.id); clips = clips.filter((x) => x.id !== a.id); log.push({ cmd: "clip_delete", args: a }); clipEmit({ reason: "removed", item: c ?? null }); },
     clip_clear: (a) => { const only = !!a?.passwords; clips = only ? clips.filter((c) => c.kind !== "password") : []; log.push({ cmd: "clip_clear", args: a ?? null }); clipEmit({ reason: "cleared", item: null }); },
@@ -418,6 +424,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       return { ...timer };
     },
     tray_open: (a) => { if (!TRAY.some((t) => t.id === a.id)) throw "unknown"; log.push({ cmd: "tray_open", args: a }); },
+    tray_menu: (a) => { if (!TRAY.some((t) => t.id === a.id)) throw "unknown"; log.push({ cmd: "tray_menu", args: a }); },
     mirror_state: () => ({ ...mirror }),
     mirror_enable: () => { const s = mirrorSet({ enabled: true }); log.push({ cmd: "mirror_enable", args: null }); return s; },
     mirror_disable: () => { const s = mirrorSet({ enabled: false }); log.push({ cmd: "mirror_disable", args: null }); return s; },
@@ -532,6 +539,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
       return { fingerprint: "fp", add: remove ? 0 : hook.length, del: remove ? hook.length : 0, lines, more: 0 };
     },
     agent_bridges: () => structuredClone(agents),
+    agent_usage: () => structuredClone(agentUsage),
     agent_bridge_install: ({ agent, fingerprint }) => { if (settings.demo || fingerprint !== "fp") throw "refused"; log.push({ cmd: "agent_bridge_install", args: { agent } }); return setAgent(agent, true); },
     agent_bridge_remove: ({ agent, fingerprint }) => { if (settings.demo || fingerprint !== "fp") throw "refused"; log.push({ cmd: "agent_bridge_remove", args: { agent } }); return setAgent(agent, false); },
     permission_history: (): PermissionEvent[] => {
@@ -610,6 +618,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     /** The next mascot press is a drag that ends on a window (`window_pick` result once; default null = a plain click). */
     setWindowPick: (r: Attached[] | null) => { picked = r; },
     setPlugins: (list: PluginInfo[]) => { plugins = structuredClone(list); emit("plugins_changed", null); },
+    setAgentUsage: (list: typeof agentUsage) => { agentUsage = structuredClone(list); },
     /** Wave 5 hooks: trigger Rust's timer, shelf and privacy events by hand; `previewDelay` mimics preview load time. */
     /** Fidelity hook: change status fields (quiet, end time) by hand. */
     setStatus: (p: Partial<Status>) => { status = { ...status, ...p }; emit("status_changed", { ...status }); },

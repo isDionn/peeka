@@ -28,7 +28,7 @@ body { -webkit-user-select: none; user-select: none; }
 @keyframes inputIn { from { opacity: 0; transform: translateY(5px) scale(.985); } to { opacity: 1; transform: none; } }   /* no animated blur (polish audit #6) */
 .dangling { z-index: 7; }
 .dangling[aria-hidden="true"] { pointer-events: none; }
-.allApps { max-height: 184px; overflow: auto; }
+.allApps { max-height: calc(var(--startCenter, 380px) - 26px); overflow: auto; } /* fills Start's centre under its 26 px head instead of scrolling in a third of it */
 .allApps .row, .addException .row { width: 100%; text-align: left; }
 .suggestionGrid .row { cursor: pointer; }
 @media (hover: hover) and (pointer: fine) { .suggestionGrid .row:hover, .addException .row:hover { background: rgba(255,255,255,.07); } }
@@ -49,6 +49,7 @@ input[type=range].hud::-webkit-slider-runnable-track { height: 4px; border-radiu
 input[type=range].hud::-webkit-slider-thumb { -webkit-appearance: none; width: 4px; height: 4px; border-radius: 50%; background: transparent; transition: transform var(--d-press) var(--ease); }
 input[type=range].hud:active::-webkit-slider-thumb { transform: scale(3); background: #fff; }
 .dsat { gap: 10px; }
+.dsat .num { min-width: 3ch; text-align: right; }   /* fixed width: going 9 -> 10 -> 100 never shrinks the track under the thumb mid-drag */
 .controlGrid .boxBtn:focus-visible { outline-offset: 2px; }
 
 /* press-and-hold button: label + hint */
@@ -88,6 +89,13 @@ html[data-narrow] .pin.openPinned { position: relative; }
 .dim{opacity:.5}
 /* Wave 6: Windows notification card (Notifications, top right) and tray list */
 .notifM{align-items:flex-start}
+.notifGroup{display:flex;flex-direction:column;gap:6px}
+.notifGroupHead{width:100%;border:0;color:inherit;text-align:left;cursor:pointer}
+.notifGroupItems{display:flex;flex-direction:column;gap:6px}
+.notif .app{position:relative}   /* the group count badge sits on the tile's corner, not the panel's */
+.notif .app .badge{top:-5px;right:-5px}
+.notif>.leadMascot{min-width:22px;justify-content:center}   /* keeps the text column aligned when the one-mascot rule hides this ghost */
+[data-panel="notif"] .panelClose{top:15px}   /* centred on the "Clear all" row */
 .notifM .app b{font:600 12px/1 var(--font)}
 .notifM .appIcon{width:13px;height:13px}
 .mBody{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
