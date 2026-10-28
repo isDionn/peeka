@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { createPortal } from "react-dom";
 import { ArrowUpRight, Clipboard, FileText, LayoutGrid, Lock, Search, Settings as SettingsIcon, ShieldCheck, Volume2, VolumeX, X } from "lucide-react";
 import { bridge, UNSUPPORTED_EVENT, type Alert, type Attached, type ApprovalItem, type AssistantCounts, type BluetoothEvent, type CcEdit, type ClipPlain, type CpuHigh, type DownloadDone, type Media, type MusicStopped, type ProtrusionItem, type Status, type TimerState, type VolumeOsd } from "../bridge";
-import { timerLeft, useAlerts, useBluetooth, useComposer, useConsent, useHitRects, useInput, useLock, useMainAssistant, useMedia, useMirror, useNow, usePlugins, useMeetingReminder, useSecond, useSettings, useShelf, useShelfDrag, useStatus, useSurfaces, useSysmon, useTimer } from "../hooks";
+import { timerLeft, useAlerts, useBluetooth, useComposer, useConsent, useHitRects, useInput, useLock, useMainAssistant, useMedia, useMirror, useNow, usePlugins, useMeetingReminder, useSecond, useStuckApproval, useSettings, useShelf, useShelfDrag, useStatus, useSurfaces, useSysmon, useTimer } from "../hooks";
 import { pickProtrusion } from "../lib/alerts";
 import { cap99, flat, pluginName } from "../lib/plugin";
 import { Kbd } from "./common";
@@ -263,7 +263,9 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const surf0 = useSurfaces();
   // meeting reminder from the assistant's calendar (row 22): stands in when there's no plugin peek; generic text when locked or presenting
   const reminder = useMeetingReminder(lock.locked || input.presentation);
-  const surf = useMemo(() => (reminder && !surf0.protrusion ? { ...surf0, protrusion: reminder } : surf0), [surf0, reminder]);
+  const stuck = useStuckApproval(surf0.approvals, lock.locked || input.presentation);
+  const own = reminder ?? stuck; // Peeka's own peeks (meeting, stuck approval) stand in when no plugin peek is up
+  const surf = useMemo(() => (own && !surf0.protrusion ? { ...surf0, protrusion: own } : surf0), [surf0, own]);
   const [detailId, setDetailId] = useState<string | null>(null);
   const composer = useComposer();
   // while the chat is open the strip says what's really happening (Peeka's text, name from Peeka's records): "replying" while answering, else "ready"
@@ -377,7 +379,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const prot = surf.protrusion;
   const acts: { kind: ActivityKind }[] = [];
   if (approvalTop) acts.push({ kind: "approval" });
-  if (prot && (!input.presentation || prot === reminder)) acts.push({ kind: prot.icon === "calendar" ? "meeting" : prot.plugin.main ? "live" : "other" });
+  if (prot && (!input.presentation || prot === own)) acts.push({ kind: prot.icon === "calendar" ? "meeting" : prot.plugin.main ? "live" : "other" });
   if (edit && !input.presentation) acts.push({ kind: "edit" });
   if (alert) acts.push({ kind: "alert" });
   if (timerDone) acts.push({ kind: "timerEnd" });

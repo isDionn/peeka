@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { bridge, type Alert, type CalendarNext, type Media, type MonitorInfo, type PinnedApp, type Rect, type Settings, type Status, type SysmonTick, type WindowInfo } from "./bridge";
+import { bridge, type Alert, type ApprovalItem, type ProtrusionItem, type CalendarNext, type Media, type MonitorInfo, type PinnedApp, type Rect, type Settings, type Status, type SysmonTick, type WindowInfo } from "./bridge";
 import { liveAlerts, nextExpiry, sortAlerts } from "./lib/alerts";
 import { livePosition } from "./lib/media";
 import { meetingReminder, type ReminderItem } from "./lib/meetingReminder";
+import { SHOW_MS, stuckApproval, stuckPeek } from "./lib/stuckApproval";
 import { collectHitRects, sameRects } from "./lib/hitRects";
 import { ISLAND_IDLE_HEIGHT, STRIP_IDLE_HEIGHT } from "./lib/windowTall";
 
@@ -185,6 +186,21 @@ export function useMeetingReminder(generic: boolean): ReminderItem | null {
     return () => { alive = false; clearInterval(tick); clearInterval(reload); };
   }, []);
   return useMemo(() => meetingReminder(cal, now, generic), [cal, now, generic]);
+}
+
+/** One peek, once per approval, when an approval has waited 3 min (lib/stuckApproval.ts). */
+export function useStuckApproval(approvals: ApprovalItem[], generic: boolean): ProtrusionItem | null {
+  const first = useRef(new Map<string, number>()), done = useRef(new Set<string>());
+  const [now, setNow] = useState(() => Date.now());
+  const [shown, setShown] = useState<ApprovalItem | null>(null);
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 15_000); return () => clearInterval(t); }, []);
+  useEffect(() => {
+    const hit = stuckApproval(first.current, done.current, approvals, Date.now());
+    if (!hit) return;
+    setShown(hit);
+    setTimeout(() => setShown(null), SHOW_MS);
+  }, [approvals, now]);
+  return useMemo(() => shown && approvals.some((a) => a.id === shown.id) ? stuckPeek(shown, generic) : null, [shown, approvals, generic]);
 }
 
 /** Latest text of the `live_text` / `voice.transcript` stream (Rust merges every 50 ms) and the speaker label, if any. */
