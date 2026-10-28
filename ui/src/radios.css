@@ -2,7 +2,6 @@
 .controlGrid .boxBtn { position: relative; min-width: 0; transition: transform .45s var(--ease), background-color .15s ease; }
 .controlGrid .boxBtn > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }   /* a long network or device name stays on one line inside the tile */
 .controlGrid .boxBtn.holding { transform: scale(.97); }
-.controlGrid .boxBtn.held { transform: scale(1); transition: transform .3s cubic-bezier(.34,1.56,.64,1); }
 .holdRing { position: absolute; width: 32px; height: 32px; pointer-events: none; transform: rotate(-90deg); }
 .holdRing circle { fill: none; stroke-width: 2; }
 .holdRing .trk { stroke: rgba(255,255,255,.16); opacity: 0; animation: ringTrk .12s ease 120ms forwards; }
