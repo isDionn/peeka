@@ -39,7 +39,7 @@ function PluginCard({ p }: { p: PluginInfo }) {
         const info = scopeInfo(s.scope);
         return (
           <div className="row" key={s.scope}>
-            <div style={{ flex: 1 }}><div>{shortText(s.scope)}</div><div className="t12 l3 b4" id={`risk-${p.id}-${s.scope}`}>{LEVEL_NAME[info.level]}</div></div>
+            <div style={{ flex: 1 }}><div>{shortText(s.scope)}</div><div className="t12 l3 b4" id={`risk-${p.id}-${s.scope}`}>{`${LEVEL_NAME[info.level]} risk`}</div></div>
             <Switch on={s.granted} describedBy={`risk-${p.id}-${s.scope}`} label={shortText(s.scope)} onChange={(on) => bridge.call("plugin_set_scope", { id: p.id, scope: s.scope, on })} />
           </div>
         );
