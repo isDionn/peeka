@@ -100,11 +100,11 @@ export function NotificationList({ onReview, onClose, onEmpty }: { onReview: (a:
   );
 }
 
-/** A grouped app keeps its latest notification under the pointer; older notifications expand below it. */
+/** A grouped app keeps its latest notification under the pointer; expanding lists every one below it, the latest too, so each keeps its buttons and remove. */
 function NoticeGroup({ items, onClose, onHold }: { items: Notice[]; onClose?: () => void; onHold: (e: { currentTarget: HTMLElement }, id: string) => void }) {
   const [open, setOpen] = useState(false);
   const latest = items[0];
-  return <div className="notifGroup"><button type="button" className="notif notifGroupHead plat glass" aria-expanded={open} onClick={() => setOpen((v) => !v)}><span className="app"><b aria-hidden="true">{initial(latest.app)}</b><span className="badge">{items.length > 9 ? "9+" : items.length}</span></span><div className="mBody"><div className="t12 l3 b4">{latest.app}</div><div className="b6">{latest.title}</div>{latest.body && <div className="t12 l2 mText">{latest.body}</div>}</div></button>{open && <div className="notifGroupItems">{items.slice(1).map((n) => <MirrorCard key={n.id} n={n} onClose={onClose} onHold={onHold} />)}</div>}</div>;
+  return <div className="notifGroup"><button type="button" className="notif notifGroupHead plat glass" aria-expanded={open} onClick={() => setOpen((v) => !v)}><span className="app"><b aria-hidden="true">{initial(latest.app)}</b><span className="badge">{items.length > 9 ? "9+" : items.length}</span></span><div className="mBody"><div className="t12 l3 b4">{latest.app}</div><div className="b6">{latest.title}</div>{latest.body && <div className="t12 l2 mText">{latest.body}</div>}</div></button>{open && <div className="notifGroupItems">{items.map((n) => <MirrorCard key={n.id} n={n} onClose={onClose} onHold={onHold} />)}</div>}</div>;
 }
 
 /**
