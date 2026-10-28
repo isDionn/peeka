@@ -137,7 +137,7 @@ export function RadioPicker({ kind, onClose }: { kind: "wifi" | "bt"; onClose: (
       }}>
       <div className="pickHead">
         <span className="t12 b6 l2">{kind === "wifi" ? "Wi-Fi networks" : "Paired devices"}</span>
-        {kind === "wifi" && <LoaderCircle className="spin pickScan" data-on={scan ? "" : undefined} aria-label={scan ? "Searching" : undefined} />}
+        {kind === "wifi" && <LoaderCircle className="spin pickScan" data-on={scan ? "" : undefined} role="img" aria-label={scan ? "Searching" : undefined} aria-hidden={!scan || undefined} />}
         <button className="pickDone" aria-label="Close list" title="Close list (Esc)" onClick={onClose}><ChevronUp /></button>
       </div>
       {kind === "wifi" ? <WifiList onState={setScan} /> : <BtList />}
