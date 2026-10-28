@@ -1039,7 +1039,10 @@ fn ticks(app: AppHandle) {
                     let handle = app.clone();
                     let _ = app.run_on_main_thread(move || layout(&handle));
                 }
-                if notch_win::monitors::list() != *n.monitors.lock() {
+                // A strip whose ABM_NEW was lost (Explorer busy at launch, see `tray_host`) is unreserved and maximised
+                // windows go under it: try again every 3 s until each strip holds its 30 px.
+                let unreserved = notch_core::brand::RESERVE_APPBAR && n.appbar.handles().len() < n.strips.lock().len();
+                if notch_win::monitors::list() != *n.monitors.lock() || (unreserved && tick % 3 == 0) {
                     let handle = app.clone();
                     let _ = app.run_on_main_thread(move || layout(&handle));
                 }

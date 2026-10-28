@@ -1,4 +1,4 @@
-//! A small `Shell_TrayWnd` listener, modelled after the MIT-licensed new_win tray host and Peeka's Wave 0 probe.
+﻿//! A small `Shell_TrayWnd` listener, modelled after the MIT-licensed new_win tray host and Peeka's Wave 0 probe.
 //! It never replaces Explorer: every `WM_COPYDATA` is promptly forwarded to the real taskbar, while this private
 //! window remembers enough of the app's registration to replay its own left or context-menu callback.
 
@@ -321,7 +321,9 @@ unsafe extern "system" fn proc(
         if let Some(real) = explorer_tray() {
             // SAFETY: Windows remarshal the original synchronous COPYDATA to Explorer.  In particular this handles
             // Peeka's SHAppBarMessage packets now that our topmost Shell_TrayWnd is found first; the timeout means a
-            // stuck Explorer cannot deadlock the app that synchronously sent us the packet.
+            // stuck Explorer cannot deadlock the app that synchronously sent us the packet. Measured: while every app
+            // re-adds its icon, one packet can stall Explorer for seconds, so a strip's ABM_NEW queued behind it fails;
+            // a longer wait only made that worse. The app retries the reservation instead (`app::tick`).
             unsafe { SendMessageTimeoutW(real, WM_COPYDATA, wparam, lparam, SMTO_ABORTIFHUNG, 250, Some(&mut result)) };
         }
         return LRESULT(result as isize);
@@ -663,5 +665,26 @@ mod tests {
     #[ignore]
     fn explorer_tray_found_on_a_real_desktop() {
         assert!(super::explorer_tray().is_some());
+    }
+
+    /// A strip's ABM_NEW goes through the host (it is the first `Shell_TrayWnd`) and must still reach Explorer.
+    /// Registers and removes only, no ABM_SETPOS: the desktop's windows do not move.
+    /// `cargo test -p notch-win --lib -- --ignored appbar_registers_through`; never with Peeka running.
+    #[cfg(windows)]
+    #[test]
+    #[ignore]
+    fn appbar_registers_through_the_host_on_a_real_desktop() {
+        use notch_core::ports::AppBar;
+        use windows::core::w;
+        use windows::Win32::UI::WindowsAndMessaging::{CreateWindowExW, WS_EX_TOOLWINDOW, WS_POPUP};
+        super::start();
+        std::thread::sleep(std::time::Duration::from_millis(800));
+        // SAFETY: a hidden window of this test thread, only used as the AppBar handle.
+        let hwnd = unsafe { CreateWindowExW(WS_EX_TOOLWINDOW, w!("Static"), w!(""), WS_POPUP, 0, 0, 0, 0, None, None, None, None) }.unwrap();
+        let bar = crate::appbar::Win32AppBar::default();
+        // Retried like the app does: the host's TaskbarCreated makes every app re-add its icon, Explorer is busy a moment.
+        let ok = (0..8).any(|_| bar.register(hwnd.0 as isize) || { std::thread::sleep(std::time::Duration::from_secs(1)); false });
+        bar.remove(hwnd.0 as isize);
+        assert!(ok);
     }
 }
