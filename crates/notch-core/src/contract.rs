@@ -238,6 +238,7 @@ pub const EVENTS: &[&str] = &[
     "screen_tint",
     "assistant_event",
     "assistant_reply",
+    "tray_icon",
 ];
 
 fn ts_list(out: &mut String, name: &str, items: &[&str]) {

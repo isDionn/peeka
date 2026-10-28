@@ -212,4 +212,5 @@ export const EVENT_NAMES = [
   "screen_tint",
   "assistant_event",
   "assistant_reply",
+  "tray_icon",
 ] as const;

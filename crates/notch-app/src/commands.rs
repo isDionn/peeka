@@ -147,8 +147,11 @@ fn app_ref(n: &Notch, app_id: &str, name: &str) -> AppRef {
 /// The colour copy of an app's icon (the extracted PNG is already in colour): while the setting is on, and always
 /// for an icon whose mask would be a blank square or circle; never for a nearly black one (invisible on the strip).
 fn color(n: &Notch, app_id: &str) -> Option<String> {
-    let i = look(n, app_id);
-    (!i.url.is_empty() && !i.dark && (i.blob || n.settings.lock().color_icons)).then_some(i.url)
+    color_of(n, &look(n, app_id))
+}
+
+fn color_of(n: &Notch, i: &notch_win::icons::Icon) -> Option<String> {
+    (!i.url.is_empty() && !i.dark && (i.blob || n.settings.lock().color_icons)).then(|| i.url.clone())
 }
 
 /// The window-event generation (`flash::generation`) `n.items` was listed at.
@@ -1928,7 +1931,7 @@ pub fn island_hidden(n: State<'_, Notch>) -> bool {
 
 /// fidelity-api.ts `TrayIconX`: `open_tray`'s list plus the colour icon (`color`). No `badge`:
 /// `NotifyIconSettings` has no count, and Notch does not guess one.
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrayIconX {
     #[serde(flatten)]
@@ -1940,7 +1943,20 @@ pub struct TrayIconX {
 #[tauri::command]
 pub async fn tray_icons(n: State<'_, Notch>, monitor: String) -> Res<Vec<TrayIconX>> {
     let list = open_tray(n.clone(), monitor).await?;
-    Ok(list.into_iter().map(|t| TrayIconX { color_icon: color(&n, &t.id), icon: t }).collect())
+    Ok(list.into_iter().map(|t| tray_x(&n, t)).collect())
+}
+
+/// A listed entry with the tray host's live icon and tip over it, if the host heard one (`tray_host::live`).
+pub fn tray_x(n: &Notch, mut icon: notch_core::tray::TrayIcon) -> TrayIconX {
+    let live = notch_win::tray_host::live(&icon.exe);
+    let color_icon = match live.as_ref().and_then(|l| l.icon.as_ref()) {
+        Some(i) => color_of(n, i),
+        None => color(n, &icon.id),
+    };
+    if let Some(l) = live {
+        notch_core::tray::overlay(&mut icon, l.icon.map(|i| i.url), l.tip.as_deref());
+    }
+    TrayIconX { color_icon, icon }
 }
 
 /// Start "Recommended": the newest files in the owner's Recent folder (`shell:recent`, its `.lnk` files only;
