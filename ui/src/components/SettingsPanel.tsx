@@ -63,7 +63,7 @@ function ImportPins() {
   const run = () => bridge.call("import_taskbar_pins").then((p) => setRes(`Done. ${p.length} app${p.length === 1 ? "" : "s"} pinned on the strip`), () => setRes("Couldn't import right now"));
   return (
     <Row title="Windows taskbar pins" sub={res ?? "Pins the apps from your Windows taskbar here too. Nothing is removed"}>
-      <button className="btn kk glass" onClick={run}>Import</button>
+      <button className="btn kk glass" aria-label="Import Windows taskbar pins" onClick={run}>Import</button>
     </Row>
   );
 }
@@ -93,7 +93,7 @@ function Appearance({ settings }: { settings: Settings }) {
         </Row>
         <ImportPins />
         <Row title="Lock Peeka" sub="Hides Clipboard and plugin cards">
-          <button className="btn kk glass" onClick={() => bridge.call("lock_now").catch(() => undefined)}><Lock />Lock</button>
+          <button className="btn kk glass" aria-label="Lock Peeka" onClick={() => bridge.call("lock_now").catch(() => undefined)}><Lock />Lock</button>
         </Row>
       </div>
       <button className="btn kk glass otherSettings" aria-expanded={more} onClick={() => setMore(!more)}><ChevronRight />More settings</button>
@@ -135,7 +135,7 @@ function MascotSettings({ settings }: { settings: Settings }) {
           <Switch on={settings.celebrate} label="Celebrate finished tasks" onChange={(v) => bridge.call("set_settings", { patch: { celebrate: v } })} />
         </Row>
         <Row title="Show intro again" sub="Introduces Peeka and the main assistant">
-          <button className="btn kk glass" onClick={() => { resetFirstRun(); sendX({ t: "firstrun" }); }}>Show</button>
+          <button className="btn kk glass" aria-label="Show intro again" onClick={() => { resetFirstRun(); sendX({ t: "firstrun" }); }}>Show</button>
         </Row>
       </div>
       <div className="t12 l3 b4">The mascot is Peeka's own character. It sleeps while the main assistant is disconnected and hides when there isn't one.</div>
