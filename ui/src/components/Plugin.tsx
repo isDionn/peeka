@@ -358,7 +358,9 @@ export function SummaryBoxes({ surf, onDetail }: { surf: SurfacesView; onDetail:
   return <>{ids.map((id) => {
     const rows = surf.summary.find((s) => s.plugin.id === id);
     const plugin = rows?.plugin ?? shown.find((a) => a.plugin.id === id)!.plugin;
-    const list = (rows?.rows ?? []).slice(0, 3);
+    // General's plugin slot holds three rows: waiting approvals take theirs first, the summary fills the rest (its plugin tab has everything).
+    // shortcut: sized for one plugin box; a second plugin with a summary overflows the slot, cap per slot if that ever ships
+    const list = (rows?.rows ?? []).slice(0, Math.max(0, 3 - shown.filter((a) => a.plugin.id === id).length));
     const row = (r: (typeof list)[number], i: number) => {
       const x = r as typeof r & SummaryRowExt, G = glyphOf(x.icon);
       return (

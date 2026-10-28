@@ -176,28 +176,31 @@ describe("Modules (j)", () => {
     expect(screen.getByRole("region", { name: "Claude chat" })).toBeTruthy();
     expect(screen.getByRole("textbox", { name: "Message to Claude" })).toBeTruthy();
   });
-  it("13 tabs (Claude chat last of Peeka's own) and a gear; General has the Compass and Claude Code boxes, then one tile per module; quota bars, session states, Stop", async () => {
+  it("13 tabs (Claude chat last of Peeka's own) and a gear; General has the Compass box and a link to its Claude Code tab, then one place per module; quota bars, session states, Stop", async () => {
     fakeBridge.setSurfaces(SURFACES_J);
     const { container } = render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
     const tabs = within(screen.getByRole("tablist", { name: "Modules" })).getAllByRole("tab").map((t) => t.getAttribute("aria-label") ?? t.textContent);
     expect(tabs).toEqual(["General", "Music", "Clipboard", "Shelf", "Calendar", "Timer", "System", "Usage", "Notifications", "Claude", "Compass", "Compass › Claude Code", "Compass › Team"]);
     expect(screen.getByRole("button", { name: "Modules settings" })).toBeTruthy(); // owner: a gear to Settings › Modules (hide Calendar / Timer)
-    expect(container.querySelectorAll(".grid.general3 > .box")).toHaveLength(2);
-    // General home (Places): each place's name opens its tab, in fixed place order; Claude Code with 0 sessions is a plain label (no empty list)
+    expect(container.querySelectorAll(".genPlug > .box")).toHaveLength(1);
+    // General home (Places): every place's name opens its tab, in fixed place order (Claude Code: the sessions list); the plugin's General tab is a link last
     expect([...container.querySelectorAll(".genHome .genHead")].map((b) => b.getAttribute("aria-label")))
-      .toEqual(["Music: open tab", null, "Clipboard: open tab", "Calendar: open tab", "Timer: open tab"]);
+      .toEqual(["Music: open tab", "Compass › Claude Code: open tab", "Claude Code sessions, show list", "Clipboard: open tab", "Calendar: open tab", "Timer: open tab", "System: open tab"]);
+    expect(screen.getByRole("button", { name: "Stop" })).toBeTruthy();
+    expect(screen.getByText("3 note suggestions")).toBeTruthy();
+    // one mascot: General's 56 px ghost outranks the Compass box's 24 px one (single-mascot registry)
+    expect([...container.querySelectorAll(".mascot")].map((m) => m.getAttribute("data-size"))).toEqual(["56"]);
+    expect(container.querySelector(".genHome .genGhost .mascot")).toBeTruthy();
+    // the Claude Code tab's blocks live on its own tab, one click from General
+    fireEvent.click(screen.getByRole("button", { name: "Compass › Claude Code: open tab" }));
+    await settle();
     expect(container.querySelectorAll(".quota .meter")).toHaveLength(2);
     expect(container.querySelector(".quota .threshold")).toBeTruthy();
     expect(screen.getByText("Resets in 2h 14m")).toBeTruthy();
     expect(container.querySelector(".sessions .pulse")).toBeTruthy();
     expect(container.querySelector(".sessions .ring")).toBeTruthy();
     expect(container.querySelector(".sessions .tickGreen")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Stop" })).toBeTruthy();
-    expect(screen.getByText("3 note suggestions")).toBeTruthy();
-    // one mascot: General's 56 px ghost outranks the Compass box's 24 px one (single-mascot registry)
-    expect([...container.querySelectorAll(".mascot")].map((m) => m.getAttribute("data-size"))).toEqual(["56"]);
-    expect(container.querySelector(".genHome .genGhost .mascot")).toBeTruthy();
   });
   it.each([
     ["installed but not connected", () => PLUGINS.map((p) => (p.main ? { ...p, connected: false } : p))],
@@ -228,7 +231,7 @@ describe("Modules (j)", () => {
     await settle();
     const home = container.querySelector(".genHome")!;
     expect(home.querySelector(".genMusic")?.textContent).toContain("Night Train");
-    const clip = home.querySelector('.genTile[style*="grid-area: clip"]');
+    const clip = home.querySelector('.genRow[style*="grid-area: clip"]');
     expect(clip?.textContent).toMatch(/^ClipboardText, just now\d+ items?$/); // kind and age of the newest (the text item), then the count
     expect(home.textContent).not.toContain("secret");
     expect(home.textContent).not.toContain("Chrome");

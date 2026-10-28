@@ -271,8 +271,8 @@ describe("System history", () => {
 });
 
 describe("General home: the empty-state line fits", () => {
-  it("the Now box spans two of three columns, so \"Nothing needs you\" isn't cut next to the reserved ghost spot (VM v0.3.4)", () => {
-    expect(readFileSync("src/components/cards.css", "utf8")).toMatch(/\.genHome \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);[^}]*"now now music"/);
+  it("the Now box takes all but the 236 px glance column, so \"Nothing needs you\" isn't cut next to the reserved ghost spot (VM v0.3.4)", () => {
+    expect(readFileSync("src/components/cards.css", "utf8")).toMatch(/\.genHome \{[^}]*grid-template-columns: minmax\(0, 1fr\) 236px;[^}]*"now music"/);
   });
 });
 

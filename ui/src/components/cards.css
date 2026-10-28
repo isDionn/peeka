@@ -1,7 +1,5 @@
 /* Fidelity audit 2: cards. New rules only; doesn't touch notch.css, plugin.css or island.css. Motion is always on (reduced-motion is not read). */
 
-/* General: assistant | Claude Code | System (mockup j). The column count is set inline from the number of boxes. */
-.grid.module.general3 { grid-template-columns: 1.3fr 1fr .9fr; }
 .row .suggestionTag { margin-left: auto; }
 /* the tab bar is fixed-width and centered on the island's midline: its screen x stays put even when the card width changes (Y4) */
 /* right corner group: fixed width (498: 12 tabs + gear + ×), centered in the card; × sits at the same screen point on every card and Modules tab (card width ≥ 520) (R1-1) */
@@ -131,55 +129,72 @@
 .row.rowDone.go { max-height: 0; min-height: 0; padding-block: 0; opacity: 0; }
 
 /* General home "Places" (owner chose B, ui/concepts/overview.*): every module keeps a fixed spot so the eye learns where things are.
-   Row 1: the big Now box (only an approval or low battery speaks there) + Music; row 2: Claude Code, Clipboard, Calendar; row 3: Timer quick starts + Power.
-   Fixed geometry: 112 + 92 + 44 + 2 x 8 = 264 px whatever the state; a disabled module leaves its spot empty (named areas), nothing slides over.
-   A spot "lights up" with a soft wash from its left edge (::before, opacity + transform only); new text fades in (genIn). One accent: Peeka indigo. */
-.genHome { --acc: color-mix(in srgb, var(--indigo) 60%, white); position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: 112px 92px 44px;
-  grid-template-areas: "now now music" "cc clip cal" "timer timer power"; gap: 8px; height: 264px; flex: none; }
-.genHome + .general3 { margin-top: 0; }   /* .modBody's 12 px gap is the gutter */
-.genTile { position: relative; isolation: isolate; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 10px 14px 12px; border-radius: var(--rPlat); corner-shape: squircle; background: rgba(255,255,255,.045); }
+   Left is what needs you: the Now box (only an approval or low battery speaks there) over the plugins' slot. Right is the glance: Music over one list
+   (Claude Code, Clipboard, Calendar, Timer, System). Fixed geometry: 92 + 8 + 230 = 330 px, the Modules body cap, in every state: nothing scrolls.
+   Without plugins the Now box takes the whole left. A disabled module leaves its spot empty (named areas), nothing slides over.
+   Same glass boxes, radius and 13 px headers as the System and Usage tabs. A spot "lights up" with a soft wash from its left edge (::before, opacity +
+   transform only); new text fades in (genIn). One accent: Peeka indigo. */
+.genHome { --acc: color-mix(in srgb, var(--indigo) 60%, white); position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 236px; grid-template-rows: 92px minmax(0, 1fr);
+  grid-template-areas: "now music" "plug glance"; gap: 8px; height: 330px; flex: none; }
+.genHome.solo { grid-template-areas: "now music" "now glance"; }
+.solo .genNow { grid-template-columns: minmax(0, 1fr); justify-items: center; align-content: center; row-gap: 10px; text-align: center; }   /* the whole left: the ghost over its line, centred */
+.solo .genActs { justify-content: center; }
+.genTile { position: relative; isolation: isolate; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: var(--rPlat); corner-shape: squircle; }
 .genLine { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .genText { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .genLive { color: var(--acc); }
 .genWarnTx { color: var(--orange); }
 .genIn { animation: genIn 240ms var(--ease) both; }
 @keyframes genIn { from { opacity: 0; transform: translateY(4px); filter: blur(3px); } }
-.genTile::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; opacity: 0; pointer-events: none; }
-.genTile:is(.attn, .warn)::before { opacity: 1; background: radial-gradient(130% 160% at 0% 50%, color-mix(in srgb, var(--orange) 20%, transparent), transparent 62%); animation: genWash 900ms var(--ease) both; }
-.genTile.info::before { opacity: 1; background: radial-gradient(130% 160% at 0% 50%, color-mix(in srgb, var(--indigo) 26%, transparent), transparent 62%); animation: genWash 900ms var(--ease) both; }
-.genTile.info .b6 { color: color-mix(in srgb, var(--indigo) 50%, white); }
+:is(.genTile, .genRow)::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; opacity: 0; pointer-events: none; }
+:is(.genTile, .genRow):is(.attn, .warn)::before { opacity: 1; background: radial-gradient(130% 160% at 0% 50%, color-mix(in srgb, var(--orange) 20%, transparent), transparent 62%); animation: genWash 900ms var(--ease) both; }
+.genRow.info::before { opacity: 1; background: radial-gradient(130% 160% at 0% 50%, color-mix(in srgb, var(--indigo) 26%, transparent), transparent 62%); animation: genWash 900ms var(--ease) both; }
+.genRow.info .b6 { color: color-mix(in srgb, var(--indigo) 50%, white); }
 @keyframes genWash { from { opacity: 0; transform: translateX(-30px); } }
 
-/* "Music ›", "Claude Code ›"...: the tile's name opens its tab (Claude Code: the sessions list) */
-.genHead { align-self: flex-start; display: inline-flex; align-items: center; gap: 2px; margin: 0 0 6px -6px; padding: 2px 4px 2px 6px; border: 0; border-radius: 8px; background: none;
-  color: var(--l3); font: 500 12px/16px var(--font); cursor: pointer; transition: color var(--d-fast) var(--ease-move), background-color var(--d-fast) var(--ease-move), transform var(--d-press) var(--ease); }
-.genHead svg.lucide { width: 12px; height: 12px; opacity: .7; }
-.genHead:active { transform: scale(.96); }
-@media (hover: hover) and (pointer: fine) { button.genHead:hover { color: var(--l1); background: var(--hover); } }
-:is(.genHead, .genBar):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* every spot's header is the System / Usage box header (icon, 13 px semibold) plus a chevron: it opens the spot's tab (Claude Code: the sessions list) */
+.genHead { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; max-width: 100%; margin-left: -6px; padding: 2px 6px; border: 0; border-radius: 8px; background: none;
+  color: var(--l2); font: 600 13px/18px var(--font); letter-spacing: -.08px; cursor: pointer; transition: color var(--d-fast) var(--ease-move), background-color var(--d-fast) var(--ease-move), transform var(--d-press) var(--ease); }
+.genHead svg.lucide { width: 14px; height: 14px; flex: none; }
+.genHead > svg.lucide:last-child { width: 12px; height: 12px; margin-left: -3px; opacity: .6; }
+.genHead:disabled { cursor: default; }
+.genHead:not(:disabled):active { transform: scale(.96); }
+@media (hover: hover) and (pointer: fine) { .genHead:not(:disabled):hover { color: var(--l1); background: var(--hover); } }
+.genHead:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .genNow { grid-area: now; display: grid; grid-template-columns: 64px minmax(0, 1fr); column-gap: 10px; align-items: center; padding: 0 16px 0 10px; }
 .genGhost { flex: none; width: 64px; height: 64px; display: flex; align-items: flex-end; justify-content: center; }
-.genActs { display: flex; gap: 8px; margin-top: 10px; }
+.genActs { display: flex; gap: 8px; margin-top: 8px; }
 .genMusic { grid-area: music; justify-content: space-between; }
-.genMusicRow { display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 10px; align-items: center; }
+.genMusicRow { display: grid; grid-template-columns: 32px minmax(0, 1fr) repeat(3, 28px); column-gap: 2px; align-items: center; }
+.genMusicRow .genText { margin: 0 4px 0 8px; }
 .genArt { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; }
 .genArt.notchIcon { display: grid; place-items: center; background: rgba(255,255,255,.06); color: var(--l3); }
 .genArt svg.lucide { width: 16px; height: 16px; }
-.genTransport { display: flex; justify-content: space-between; margin-top: 6px; }
-.genBar { flex-direction: row; align-items: center; gap: 10px; padding: 0 8px 0 14px; }
-.genBar > svg.lucide { width: var(--iSm); height: var(--iSm); color: var(--l2); flex: none; }
-.genBar .genHead { align-self: center; margin: 0 0 0 -6px; }
-button.genBar { border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: transform var(--d-press) var(--ease), background-color var(--d-fast) var(--ease-move); }
-button.genBar:active { transform: scale(.98); }
-@media (hover: hover) and (pointer: fine) { button.genBar:hover { background: rgba(255,255,255,.08); } }
-.genChips { display: flex; align-items: center; gap: 6px; margin-left: auto; white-space: nowrap; }
+
+/* plugins: their summary box fills the slot; a plugin's General tab is a one-line link under it (its blocks live on its own tab) */
+.genPlug { grid-area: plug; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.genPlug > .box { flex: 1; }
+.genLinks { display: flex; gap: 8px; flex: none; }
+.genHead.genLink { flex: 1 1 0; align-self: auto; min-width: 0; height: 40px; margin: 0; padding: 0 14px; flex-direction: row; gap: 6px; border-radius: var(--rPlat); }
+@media (hover: hover) and (pointer: fine) { .genHead.genLink:hover { background: var(--hover); } }
+
+/* the glance: five fixed rows, header over a one-line value; a quiet value is l3, a live one semibold */
+.genGlance { grid-area: glance; display: grid; grid-template-rows: repeat(5, minmax(0, 1fr)); grid-template-areas: "cc" "clip" "cal" "timer" "power"; gap: 0; padding: 4px 14px; }
+.genRow { position: relative; isolation: isolate; min-width: 0; display: flex; flex-direction: column; justify-content: center; margin: 0 -14px; padding: 0 14px; }
+.genRow:not(:first-child)::after { content: ""; position: absolute; left: 34px; right: 14px; top: 0; height: 1px; background: var(--divider); transform: scaleY(.5); transform-origin: 0 0; }
+.genRowHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.genVal { display: flex; gap: 8px; padding-left: 20px; }
+.genVal > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.genVal > span + span { flex-shrink: 10; }   /* the detail gives way before the value */
+.genChips { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.genChips .btn.kk { height: 24px; padding: 0 8px; }
+
+/* System tab */
 .sysCols { display: grid; grid-template-columns: 1fr 1fr; column-gap: 28px; }
 .sysCols span { white-space: nowrap; }
 .sysTop > :first-child { display: flex; flex-direction: column; }
 .sysCols .spark { flex: 1; height: auto; min-height: 34px; margin-top: 10px; }
-.genChips .btn { height: 28px; padding: 0 12px; }
-svg.lucide.genWarnIc { color: var(--orange); }
 
 /* Claude Code's sessions list (the strip's "N sessions" chip list, Notes.tsx SessionList) over the whole home: nothing under it moves */
 .genSessions { position: absolute; inset: 0; z-index: 3; overflow-y: auto; border-radius: var(--rPlat); corner-shape: squircle; background: rgb(24, 24, 28); box-shadow: inset 0 .5px 0 rgba(255,255,255,.14); animation: genIn 200ms var(--ease) both; }
