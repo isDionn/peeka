@@ -241,7 +241,7 @@ function Shortcuts({ settings }: { settings: Settings }) {
         {ex.slice(0, HEAD).map((e) => <ExceptionRow key={e.appId} e={e} onRemove={() => save(ex.filter((x) => x.appId !== e.appId))} />)}
         {rest.length > 0 && !grouped && rest.map((e) => <ExceptionRow key={e.appId} e={e} onRemove={() => save(ex.filter((x) => x.appId !== e.appId))} />)}
         {rest.length > 0 && grouped && (
-          <button className="row exceptionGroup" aria-expanded={false} aria-label={`${rest.length} more apps: ${rest.map((e) => e.name).join(", ")}. Show each`} onClick={() => setGrouped(false)}>
+          <button className="row exceptionGroup" aria-label={`${rest.length} more apps: ${rest.map((e) => e.name).join(", ")}. Show each`} onClick={() => setGrouped(false)}>
             <span className="app"><FileText /></span><span className="text" title={rest.map((e) => e.name).join(", ")}>{rest.map((e) => e.name).join(", ")}</span>
             <span className="t12 l3">{rest.every((e) => e.keys === rest[0].keys) ? rest[0].keys : "various"}</span>
           </button>
