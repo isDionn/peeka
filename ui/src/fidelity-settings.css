@@ -56,6 +56,7 @@ html .pg .action .ask, html .mini.ask { color: #fff; }
 
 /* S5: exception list, grouped row */
 .exceptionGroup { width: 100%; text-align: left; cursor: pointer; }
+.exceptionGroup::after { content: ""; width: 28px; flex: none; } /* the .mini slot the other rows keep, so the keys column lines up */
 .exceptions .row .mini { opacity: 0; }
 .exceptions .row:hover .mini, .exceptions .row:focus-within .mini { opacity: 1; }
 
