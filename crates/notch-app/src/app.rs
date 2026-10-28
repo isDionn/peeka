@@ -115,6 +115,8 @@ pub struct Notch {
     pub island_hidden: Mutex<Option<u64>>,
     /// `recent_files`' last list (the `.lnk` paths, by index): `open_recent` opens only these.
     pub recent: Mutex<Vec<PathBuf>>,
+    /// `app_recent`'s last list: `app_recent_open` opens only these.
+    pub jump: Mutex<Vec<PathBuf>>,
     /// Ctrl+Space attachments made by `composer_scan` / `composer_attach_file` (share-folder copies), taken in
     /// order by `composer_submit`.
     pub composer_files: Mutex<Vec<notch_core::plugins::host::Attachment>>,
@@ -329,6 +331,8 @@ pub fn run() {
             crate::commands::tray_icons,
             crate::commands::recent_files,
             crate::commands::open_recent,
+            crate::commands::app_recent,
+            crate::commands::app_recent_open,
             crate::commands::set_start_items,
             crate::commands::app_show_in_folder,
             crate::commands::launch_app_admin,
@@ -446,6 +450,7 @@ fn setup(app: &AppHandle) -> Result<(), String> {
         capture: Mutex::new(Default::default()),
         search_last: Mutex::new(HashMap::new()),
         recents: Mutex::new(vec![]),
+        jump: Mutex::new(vec![]),
         tray: Mutex::new(vec![]),
         island_hidden: Mutex::new(None),
         recent: Mutex::new(vec![]),

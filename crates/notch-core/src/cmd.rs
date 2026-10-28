@@ -86,7 +86,7 @@ pub fn unlocked(locked: bool) -> Result<(), CmdError> {
 }
 
 /// The commands in `crates/notch-app/src/commands.rs` that must start with `cmd::unlocked`.
-pub const SENDS_OWNER_CONTENT: [&str; 27] = [
+pub const SENDS_OWNER_CONTENT: [&str; 29] = [
     "composer_scan",
     "window_pick",
     "composer_attach_file",
@@ -97,6 +97,8 @@ pub const SENDS_OWNER_CONTENT: [&str; 27] = [
     "shelf_add",
     "shelf_open",
     "shelf_locate",
+    "app_recent",
+    "app_recent_open",
     "shelf_copy_files",
     "shelf_share",
     "shelf_show_in_folder",

@@ -2000,6 +2000,34 @@ pub fn open_recent(n: State<'_, Notch>, id: String) -> Res<()> {
     Win32Control.launch(&path.to_string_lossy()).then_some(()).ok_or(CmdError::Refused)
 }
 
+/// The right-click menu's "Recent" for an AUMID app: names and an opaque id, paths stay here. `[]` for an app
+/// without an AUMID or one Notch never listed.
+#[tauri::command]
+pub async fn app_recent(app: AppHandle, n: State<'_, Notch>, app_id: String) -> Res<Vec<notch_core::fidelity::RecentItem>> {
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    let known = n.items.lock().iter().any(|i| i.app_id == app_id);
+    let Some(aumid) = app_id.strip_prefix("aumid:").filter(|_| known) else { return Ok(vec![]) };
+    let paths = notch_win::jumplist::recent(aumid, notch_core::fidelity::RECENT_MAX as u32);
+    let rows = paths
+        .iter()
+        .enumerate()
+        .filter_map(|(i, p)| {
+            let name = p.file_name()?.to_string_lossy().into_owned();
+            Some(notch_core::fidelity::RecentItem { id: format!("r{i}"), kind: notch_core::fidelity::recent_kind(&name), name, sub: String::new() })
+        })
+        .collect::<Vec<_>>();
+    *n.jump.lock() = paths;
+    Ok(rows)
+}
+
+/// Opens a row of the last `app_recent` list. `unknown` otherwise.
+#[tauri::command]
+pub fn app_recent_open(app: AppHandle, n: State<'_, Notch>, id: String) -> Res<()> {
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    let path = notch_core::fidelity::recent_target(&n.jump.lock(), &id).ok_or(CmdError::Unknown)?.to_path_buf();
+    Win32Control.launch(&path.to_string_lossy()).then_some(()).ok_or(CmdError::Refused)
+}
+
 /// Start's pinned grid with folders (`settings::StartItem`), cleaned and saved; every strip hears `settings_changed`
 /// (the grid is read from the settings). Windows's own Start pins (`start2.bin`) stay unread: undocumented.
 #[tauri::command]

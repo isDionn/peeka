@@ -21,6 +21,7 @@ pub mod flash;
 pub mod foreground;
 pub mod icons;
 pub mod input;
+pub mod jumplist;
 pub mod keyboard;
 pub mod media;
 pub mod monitors;

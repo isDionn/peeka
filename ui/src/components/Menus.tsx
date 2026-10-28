@@ -1,6 +1,6 @@
-import { useLayoutEffect, useRef, useState } from "react";
-import { Activity, AppWindow, CircleX, Eye, EyeOff, Lock, PanelBottom, Pin, PinOff, Power, X } from "lucide-react";
-import { bridge, type PinnedApp, type WindowInfo } from "../bridge";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Activity, AppWindow, CircleX, Eye, File, EyeOff, Lock, PanelBottom, Pin, PinOff, Power, X } from "lucide-react";
+import { bridge, type PinnedApp, type RecentItem, type WindowInfo } from "../bridge";
 import { pickWindow } from "./Strip";
 import { mergePins } from "../lib/mergePins";
 import { AppIcon } from "./common";
@@ -54,6 +54,15 @@ export function ContextMenu({ menu, pins, windows, locked, onClose, onPins, onQu
     setStripGap("menu", [Math.round(r.left - 8), Math.round(r.right + 8)]);
     return () => setStripGap("menu", null);
   }, [menu, hang]);
+  // the app's jump-list files go last, so a late answer pushes no other item under the cursor
+  const [recent, setRecent] = useState<RecentItem[]>([]);
+  const appId = menu.kind === "app" ? menu.appId : null;
+  useEffect(() => {
+    if (!appId || locked || !appId.startsWith("aumid:")) return;
+    let live = true;
+    bridge.call("app_recent", { appId }).then((r) => live && setRecent(r.slice(0, 8)), () => undefined);
+    return () => { live = false; };
+  }, [appId, locked]);
   const glowHost = glow ? <div className="glowHost"><GlowField monitor={glow} /></div> : null;
 
   if (menu.kind === "list") {
@@ -103,6 +112,12 @@ export function ContextMenu({ menu, pins, windows, locked, onClose, onPins, onQu
           <button role="menuitem" onClick={() => attempt(bridge.call("close_window", { hwnd: w.hwnd }))}><X />Close window</button>
           <button role="menuitem" className={armed ? "destructive" : undefined} onClick={armed ? () => attempt(bridge.call("quit_app", { appId: menu.appId })) : () => setArmed(true)}><CircleX />{armed ? "Sure? Click again" : "Quit app"}</button>
           {(denied || w.elevated) && <button role="menuitem" onClick={done(() => { bridge.call("open_task_manager").catch(() => undefined); })}><Activity />Open Task Manager</button>}
+        </>
+      )}
+      {recent.length > 0 && !locked && (
+        <>
+          <hr />
+          {recent.map((f) => <button key={f.id} role="menuitem" title={f.name} onClick={done(() => { bridge.call("app_recent_open", { id: f.id }).catch(() => undefined); })}><File /><span className="titleName">{f.name}</span></button>)}
         </>
       )}
     </div>

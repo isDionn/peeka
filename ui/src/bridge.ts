@@ -382,6 +382,9 @@ export interface Commands {
   /** Start "Recommended" (at most 8; the page shows 4). */
   recent_files: { args: void; ret: RecentItem[] };
   open_recent: { args: { id: string }; ret: void };
+  /** The app's jump-list files (names only); `[]` for an app without an AUMID. */
+  app_recent: { args: { appId: string }; ret: RecentItem[] };
+  app_recent_open: { args: { id: string }; ret: void };
   /** Save Start's pinned grid with folders (Rust cleans it: each app once, a one-app folder becomes the app); returns the settings, also sent as `settings_changed`. */
   set_start_items: { args: { items: StartItem[] }; ret: Settings };
   /** Open the Windows Start menu (Win key). */

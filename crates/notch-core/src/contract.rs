@@ -132,6 +132,8 @@ pub const COMMANDS: &[&str] = &[
     "tray_icons",
     "recent_files",
     "open_recent",
+    "app_recent",
+    "app_recent_open",
     "set_start_items",
     "app_show_in_folder",
     "launch_app_admin",
