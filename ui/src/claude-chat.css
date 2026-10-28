@@ -12,14 +12,14 @@
 .ccTop { display: flex; align-items: center; gap: var(--s2); min-height: 24px; padding-left: var(--s1); }
 .ccPill { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 10px 0 8px; border-radius: 11px;
   background: var(--hover); color: var(--l2); font-size: 12px; font-weight: 500; }
-.ccPill i { width: 6px; height: 6px; border-radius: 50%; background: var(--l3); transition: background-color .2s var(--ease); }
+.ccPill i { width: 6px; height: 6px; border-radius: 50%; background: var(--l3); transition: background-color var(--d-move) var(--ease-move); }
 .ccPill.on { color: var(--l1); }
 .ccPill.on i { background: var(--green); }
 .ccHint { min-width: 0; color: var(--l3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ccHint code { font: 12px var(--mono); color: var(--l2); }
 .ccLink, .ccNew { border: 0; background: none; color: var(--l2); font: 500 12px var(--font); cursor: pointer; border-radius: var(--rSmall); }
 .ccLink { margin-left: var(--s2); text-decoration: underline; text-underline-offset: 2px; }
-.ccNew { flex: none; white-space: nowrap; margin-left: auto; height: 24px; padding: 0 var(--s2); transition: background-color .15s var(--ease), color .15s var(--ease); }
+.ccNew { flex: none; white-space: nowrap; margin-left: auto; height: 24px; padding: 0 var(--s2); transition: background-color var(--d-fast) var(--ease-move), color var(--d-fast) var(--ease-move); }
 .ccNew:hover:not(:disabled) { background: var(--hover); color: var(--l1); }
 .ccNew:disabled { color: var(--l4); cursor: default; }
 .ccLink:focus-visible, .ccNew:focus-visible, .ccSend:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -31,7 +31,7 @@
 .ccList > :first-child { margin-top: auto; }   /* a short conversation sits at the bottom, by the input */
 .ccMe, .ccAi, .ccErr { max-width: 62ch; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ccMe { align-self: flex-end; max-width: 78%; padding: 6px 12px; border-radius: 16px; background: var(--e2); color: var(--l1);
-  animation: ccIn .18s var(--ease) both; }
+  animation: ccIn var(--d-move) var(--ease) both; }
 .ccAi { align-self: flex-start; color: var(--l1); }
 .ccErr { align-self: flex-start; color: var(--redText); font-size: 12px; }
 .ccEmpty { align-self: flex-start; color: var(--l3); font-size: 12px; }
@@ -49,13 +49,13 @@
 
 /* input row: one field and a round white button (Send, Stop while answering; same size, same place) */
 .ccRow { display: flex; align-items: center; gap: var(--s2); height: 40px; margin-left: calc(var(--ccGutter) - var(--s3));
-  padding: 0 5px 0 14px; border-radius: 20px; background: var(--e1); box-shadow: inset 0 0 0 1px var(--edge); transition: box-shadow .15s var(--ease); }
+  padding: 0 5px 0 14px; border-radius: 20px; background: var(--e1); box-shadow: inset 0 0 0 1px var(--edge); transition: box-shadow var(--d-fast) var(--ease-move); }
 .ccRow:focus-within { box-shadow: inset 0 0 0 1px var(--glassEdge); }
 html[data-kb] .ccRow:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }   /* keyboard focus: the shared ring around the field (the input itself has none) */
 .ccInput { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; color: var(--l1); font: 13px var(--font); caret-color: var(--l1); }
 .ccInput::placeholder { color: var(--l3); }
 .ccInput:disabled { cursor: not-allowed; }
 .ccSend { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer;
-  background: var(--l1); color: #0A0A0B; transition: transform .12s var(--ease), opacity .15s var(--ease); }
+  background: var(--l1); color: var(--strip); transition: transform var(--d-press) var(--ease), opacity var(--d-fast) var(--ease-move); }
 .ccSend:active:not(:disabled) { transform: scale(.92); }
 .ccSend:disabled { opacity: .28; cursor: default; }
