@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowUpRight, Brain, Calculator, ChevronLeft, ChevronRight, FolderOpen, Lock, Moon, PanelBottom, Pencil, Pin, PinOff, Power, RotateCcw, Search, Settings, ShieldCheck, SlidersHorizontal, Trash2, Ungroup } from "lucide-react";
+import { ArrowUpRight, Brain, Calculator, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, FolderOpen, Lock, Moon, PanelBottom, Pencil, Pin, PinOff, Power, RotateCcw, Search, Settings, ShieldCheck, SlidersHorizontal, Trash2, Ungroup } from "lucide-react";
 import { bridge, type AppRef, type MonitorInfo, type PinnedApp, type RecentItem, type SearchResult, type StartItem } from "../bridge";
 import { derive, hasApp, keyOf, pinApp, ungroup, withoutApp } from "../lib/startItems";
 import { StartGrid } from "./StartGrid";
@@ -35,7 +35,7 @@ function useStartItems(pins: PinnedApp[], apps: AppRef[], saved: StartItem[] | n
 
 /** Left icon of a Recommended row: a colored tile by type for files, a monochrome icon for apps. */
 function RecentTile({ r }: { r: RecentItem }) {
-  if (r.kind === "app") return r.icon ? <span className="tip"><AppIcon src={r.icon} size={18} /></span> : null;
+  if (r.kind === "app") return <span className="tip">{r.icon && <AppIcon src={r.icon} size={18} />}</span>; // empty tile keeps the name in line
   return <span className={"tip tip2 k-" + fileKind(r.name)}><FileIcon name={r.name} /></span>;
 }
 
@@ -80,6 +80,7 @@ export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: Mo
   const windows = useWindows(monitor.id);
   const body = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<ListMenu | null>(null);
+  useEffect(() => { body.current?.querySelector(".startResult .selected")?.scrollIntoView?.({ block: "nearest" }); }, [sel]); // arrow keys past the list's 300 px
   useEffect(() => {
     if (!menu) return;
     const down = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest(".context")) setMenu(null); };
@@ -142,14 +143,14 @@ export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: Mo
       </div>
       <div className="startCenter">
       {t ? (
-        <div className="list glass startResult" role="group" aria-label="Search results" style={{ "--indent": "36px" } as React.CSSProperties}>
+        <div className="list glass startResult" role="group" aria-label="Search results" style={{ "--indent": "34px" } as React.CSSProperties}>
           {answer && <button className={"row" + (sel === 0 ? " selected" : "")} onMouseMove={() => setSel(0)} onClick={copy}><Calculator /><span className="text" style={{ textAlign: "left" }}><b>{answer.text}</b></span><span className="t12 l3">{copied ? "Copied" : "Copy"}</span></button>}
           {found.map((r, i) => (
             <button key={r.id} className={"row" + (i + (answer ? 1 : 0) === sel ? " selected" : "")} onMouseMove={() => setSel(i + (answer ? 1 : 0))} onClick={() => openFound(r)} {...(r.kind === "app" ? appMenu(r.appId, r.title, <AppIcon src={r.icon} />) : null)}>
               <ResultIcon r={r} /><span className="text" style={{ textAlign: "left" }}>{r.title}</span>{r.subtitle && r.kind !== "app" && <span className="t12 l3">{r.subtitle}</span>}
             </button>
           ))}
-          {!found.length && <div className="noResults">No results for “{t}”.</div>}
+          {!found.length && !answer && <div className="noResults">No results for “{t}”.</div>}
         </div>
       ) : (
         <>
@@ -170,7 +171,7 @@ export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: Mo
               <StartGrid items={start.items} apps={start.refs} onChange={start.save} onLaunch={launch} onMenu={gridMenu} />
               {recent.length > 0 && (
                 <>
-                  <div className="sectionHead"><span>Recommended</span>{recent.length > 4 && <button className="btn kk glass" aria-expanded={more} onClick={() => setMore(!more)}>{more ? "Show less" : "Show more"}<ChevronRight /></button>}</div>
+                  <div className="sectionHead"><span>Recommended</span>{recent.length > 4 && <button className="btn kk glass" aria-expanded={more} onClick={() => setMore(!more)}>{more ? <>Show less<ChevronUp /></> : <>Show more<ChevronDown /></>}</button>}</div>
                   <div className="suggestionGrid">
                     {(more ? recent : recent.slice(0, 4)).map((r) => (
                       <button key={r.id} className="row" onClick={() => openRecent(r)}>
