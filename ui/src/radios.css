@@ -1,5 +1,6 @@
 /* Wi-Fi / Bluetooth lists under the Status tiles (StatusCard.tsx): open in place, nothing above moves. */
-.controlGrid .boxBtn { position: relative; transition: transform .45s var(--ease), background-color .15s ease; }
+.controlGrid .boxBtn { position: relative; min-width: 0; transition: transform .45s var(--ease), background-color .15s ease; }
+.controlGrid .boxBtn > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }   /* a long network or device name stays on one line inside the tile */
 .controlGrid .boxBtn.holding { transform: scale(.97); }
 .controlGrid .boxBtn.held { transform: scale(1); transition: transform .3s cubic-bezier(.34,1.56,.64,1); }
 .holdRing { position: absolute; width: 32px; height: 32px; pointer-events: none; transform: rotate(-90deg); }
@@ -28,13 +29,14 @@
 .lockI { width: 12px !important; height: 12px !important; color: var(--l3); flex: none; }
 .netState { margin-left: auto; }
 .netCheck { width: 15px; height: 15px; flex: none; color: var(--l1) !important; }
-.pwForm { display: grid; gap: 6px; padding: 2px 12px 12px 40px; animation: pickIn .2s var(--ease); }
-.pwField { display: flex; align-items: center; height: 34px; padding: 0 3px 0 10px; border-radius: 10px; background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); }
+.pwForm { display: grid; gap: 6px; padding: 2px 0 12px 26px; text-wrap: pretty; animation: pickIn .2s var(--ease); }
+.pwField { display: flex; align-items: center; height: 34px; padding: 0 3px 0 10px; border-radius: var(--rInner); background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); }
 .pwField:focus-within { box-shadow: inset 0 0 0 2px var(--l1); }
 .pwField:has([aria-invalid="true"]) { box-shadow: inset 0 0 0 2px var(--redText); }
 .pwField input { flex: 1; min-width: 0; height: 100%; background: none; border: 0; outline: none; color: var(--l1); font: 500 13px/1 var(--font); letter-spacing: .02em; }
 .pwField input[aria-invalid="true"] { color: var(--redText); }
 .pwEye { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: var(--l2); }
+.pwEye:hover { background: var(--hover); }
 .pwEye svg { width: 15px; height: 15px; }
 .pwErr { color: var(--redText); }
 .pwActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; }
