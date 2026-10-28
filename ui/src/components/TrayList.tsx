@@ -14,6 +14,13 @@ const label = (t: TrayIconX) => t.name + (t.badge ? `, ${t.badge} new` : "");
 /** The last list, so a reopened panel paints its cells at once instead of growing in after the call. */
 let last: TrayIconX[] | null = null;
 
+/** Rust `tray_icon`: one entry's live icon/tip (Discord's red dot, OneDrive's sync arrows), at most ~4 a second. */
+const patch = (l: TrayIconX[], t: TrayIconX) => l.map((o) => (o.id === t.id ? t : o));
+const onLive = (set: (t: TrayIconX) => void) => {
+  const off = bridge.on("tray_icon", (t) => { if (last) last = patch(last, t); set(t); });
+  return () => { off.then((f) => f()); };
+};
+
 /** Strip icon 17, hidden-icons grid (list role) 18: the notch.css app icon scale. No icon: the name's letter in a circle, as on the strip. */
 function TrayIconView({ t, size, color }: { t: TrayIconX; size: number; color?: string | null }) {
   return (
@@ -38,6 +45,7 @@ export function TrayList({ monitor, onClose }: { monitor: string; onClose: () =>
     loadTray(monitor).then((l) => { last = l; if (live) setList(l); }).catch(() => { if (live) setList([]); });
     return () => { live = false; };
   }, [monitor]);
+  useEffect(() => onLive((t) => setList((l) => l && patch(l, t))), []);
   const saved = useSettings()?.trayItems;
   const [mine, setMine] = useState<StartItem[] | null>(null); // shown at once while Rust saves
   useEffect(() => { setMine(null); }, [saved]); // Rust's cleaned copy (settings_changed) wins
@@ -76,6 +84,7 @@ export function PromotedTray({ monitor }: { monitor: string }) {
     window.addEventListener("focus", load); // badges get no events from Rust: refresh when the window gains focus
     return () => { live = false; window.removeEventListener("focus", load); };
   }, [monitor]);
+  useEffect(() => onLive((t) => setList((l) => patch(l, t))), []);
   if (!list.length) return null;
   return (
     <span className="favTray" role="group" aria-label="Pinned tray icons">

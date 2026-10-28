@@ -486,6 +486,8 @@ export type CallArgs<K extends keyof AllCommands> = ArgsOf<K> extends void ? [] 
 /* ---------- events: Rust emit name = key ---------- */
 export interface Events {
   windows_changed: { monitor: string };
+  /** One listed tray entry's live icon or tooltip changed (or fell back to the registry snapshot). */
+  tray_icon: TrayIconX;
   pins_changed: null;
   status_changed: Status;
   settings_changed: Settings;

@@ -394,6 +394,15 @@ fn setup(app: &AppHandle) -> Result<(), String> {
         notch_win::tray_host::start();
     }
     let _ = APP.set(app.clone());
+    let handle = app.clone();
+    // A tray icon changed (or went): the listed entry it matches goes to the page, already overlaid (`tray_x`).
+    notch_win::tray_host::on_live(move |exe| {
+        let Some(n) = handle.try_state::<Notch>() else { return }; // not managed yet: the first list overlays it
+        let listed = n.tray.lock().iter().find(|t| t.exe.eq_ignore_ascii_case(exe)).cloned();
+        if let Some(t) = listed {
+            let _ = handle.emit("tray_icon", crate::commands::tray_x(&n, t));
+        }
+    });
     let data_dir = notch_core::data_dir().ok_or("No data folder (LOCALAPPDATA)")?;
     if !is_demo {
         notch_core::migrate_data_dir(&data_dir);
