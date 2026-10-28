@@ -278,7 +278,7 @@ function GeneralTiles({ ids, go, media, meeting, timer, sys, approvals, onApprov
         <div className="genTile glass genMusic">
           <Head name="Music" icon={Music} go={() => go("music")} />
           <div className="genMusicRow">
-            {media?.art && !generic ? <img className="genArt" src={media.art} alt="" /> : <span className="genArt notchIcon"><Music aria-hidden="true" /></span>}
+            {media?.art && !generic && <img className="genArt" src={media.art} alt="" />}{/* no cover, no placeholder: its width goes to the title */}
             <div className="genText">
               <div className="t13 b6 genLine">{!media ? "Nothing playing" : generic ? (media.playing ? LOCK_MUSIC : "Music paused") : trackTitle(media)}</div>
               <div className={"t12 genLine " + (media?.playing ? "genLive" : "l3")}>{!media ? "Play in any app" : media.playing ? "Playing" : "Paused"}</div>

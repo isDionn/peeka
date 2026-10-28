@@ -166,11 +166,10 @@
 .genGhost { flex: none; width: 64px; height: 64px; display: flex; align-items: flex-end; justify-content: center; }
 .genActs { display: flex; gap: 8px; margin-top: 8px; }
 .genMusic { grid-area: music; justify-content: space-between; }
-.genMusicRow { display: grid; grid-template-columns: 32px minmax(0, 1fr) repeat(3, 28px); column-gap: 2px; align-items: center; }
-.genMusicRow .genText { margin: 0 4px 0 8px; }
+.genMusicRow { display: grid; grid-template-columns: auto minmax(0, 1fr) repeat(3, 28px); column-gap: 2px; align-items: center; }
+.genMusicRow .genText { grid-column: 2; margin-right: 4px; }
+.genArt + .genText { margin-left: 8px; }
 .genArt { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; }
-.genArt.notchIcon { display: grid; place-items: center; background: rgba(255,255,255,.06); color: var(--l3); }
-.genArt svg.lucide { width: 16px; height: 16px; }
 
 /* plugins: their summary box fills the slot; a plugin's General tab is a one-line link under it (its blocks live on its own tab) */
 .genPlug { grid-area: plug; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
