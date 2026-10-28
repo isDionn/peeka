@@ -143,7 +143,7 @@ export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: Mo
       </div>
       <div className="startCenter">
       {t ? (
-        <div className="list glass startResult" role="group" aria-label="Search results" style={{ "--indent": "36px" } as React.CSSProperties}>
+        <div className="list glass startResult" role="group" aria-label="Search results" style={{ "--indent": "34px" } as React.CSSProperties}>
           {answer && <button className={"row" + (sel === 0 ? " selected" : "")} onMouseMove={() => setSel(0)} onClick={copy}><Calculator /><span className="text" style={{ textAlign: "left" }}><b>{answer.text}</b></span><span className="t12 l3">{copied ? "Copied" : "Copy"}</span></button>}
           {found.map((r, i) => (
             <button key={r.id} className={"row" + (i + (answer ? 1 : 0) === sel ? " selected" : "")} onMouseMove={() => setSel(i + (answer ? 1 : 0))} onClick={() => openFound(r)} {...(r.kind === "app" ? appMenu(r.appId, r.title, <AppIcon src={r.icon} />) : null)}>
