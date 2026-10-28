@@ -126,7 +126,11 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
   }, [searching, monitorId]);
 
   const closeAll = useCallback(() => { setPanel(null); setMenu(null); }, []);
-  const toggle = useCallback((k: PanelKind) => { setMenu(null); setPanel((p) => (p === k ? null : k)); }, []);
+  // locked: Start and Search would show app, file and user names, so they stay shut (owner rule: lock shows no content)
+  const lockedRef = useRef(lock.locked);
+  lockedRef.current = lock.locked;
+  const toggle = useCallback((k: PanelKind) => { setMenu(null); if (lockedRef.current && (k === "start" || k === "search")) return; setPanel((p) => (p === k ? null : k)); }, []);
+  useEffect(() => { if (lock.locked) setPanel((p) => (p === "start" || p === "search" ? null : p)); }, [lock.locked]);
 
   useEffect(() => {
     const down = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest("[data-panel],.context,[data-panel-trigger]")) closeAll(); };

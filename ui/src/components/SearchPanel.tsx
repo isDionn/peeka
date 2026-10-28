@@ -97,7 +97,7 @@ export function SearchPanel({ onClose, initialQuery = "", initialSel = 0 }: { on
         <Kbd keys="Esc" />
       </div>
       <div className="results plat glass" id={id} role="listbox" aria-label="Results" ref={list}>
-        {answer && <div role="group" aria-label="Answer"><div className="groupHead">Answer</div><div id={`${id}-0`} role="option" aria-selected={cur === 0} className={"result" + (cur === 0 ? " selected" : "")} onMouseMove={() => { setTouched(true); setSel(0); }} onClick={copy}><span className="tile"><Calculator /></span><span className="name"><b>{answer.text}</b></span><span className="kind">Calculator</span><span className="enter key-hint">{copied ? "Copied" : "Copy"}<kbd>â†µ</kbd></span></div></div>}
+        {answer && <div role="group" aria-label="Answer"><div className="groupHead">Answer</div><div id={`${id}-0`} role="option" aria-selected={cur === 0} className={"result" + (cur === 0 ? " selected" : "")} onMouseMove={() => { setTouched(true); setSel(0); }} onClick={copy}><span className="tile"><Calculator /></span><span className="name"><b>{answer.text}</b></span><span className="kind">Calculator</span><span className="enter key-hint">{copied ? "Copied" : "Copy"}<kbd>↵</kbd></span></div></div>}
         {timer && (
           <div role="group" aria-label="Actions">
             <div className="groupHead">Actions</div>
