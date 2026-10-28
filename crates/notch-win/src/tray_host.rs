@@ -72,7 +72,9 @@ pub fn on_live(f: impl Fn(&str) + Send + Sync + 'static) {
 /// The live look of `exe`'s tray icon; None = never heard, deleted or hidden (the registry snapshot stands).
 /// shortcut: an app with two tray icons shows whichever changed first in the list; key by uid if that shows.
 pub fn live(exe: &str) -> Option<Live> {
-    LIVE.lock().iter().find(|(_, e, _)| same_path(e, exe)).map(|(.., l)| l.clone())
+    let live = LIVE.lock();
+    let found = live.iter().find(|(_, e, _)| same_path(e, exe)).or_else(|| live.iter().find(|(_, e, _)| same_file(e, exe)));
+    found.map(|(.., l)| l.clone())
 }
 
 /// Fewest ms between two conversions of one icon (an animating icon: ~4 a second).
@@ -133,7 +135,10 @@ pub fn click(exe: &str, point: Option<(i32, i32)>, click: Click) -> bool {
         AllowSetForegroundWindow, GetCursorPos, PostMessageW, WM_CONTEXTMENU, WM_LBUTTONDOWN, WM_LBUTTONUP,
         WM_RBUTTONDOWN, WM_RBUTTONUP,
     };
-    let Some(icon) = ICONS.lock().iter().find(|i| same_path(&exe_of_pid(i.pid), exe)).cloned() else { return false };
+    let icons = ICONS.lock();
+    let found = icons.iter().find(|i| same_path(&exe_of_pid(i.pid), exe)).or_else(|| icons.iter().find(|i| same_file(&exe_of_pid(i.pid), exe)));
+    let Some(icon) = found.cloned() else { return false };
+    drop(icons);
     let hwnd = HWND(icon.hwnd as *mut _);
     let mut cursor = POINT::default();
     // SAFETY: registered window handle and plain callback messages from the icon's owner.
@@ -167,6 +172,13 @@ pub fn click(_exe: &str, _point: Option<(i32, i32)>, _click: Click) -> bool {
 
 fn same_path(a: &str, b: &str) -> bool {
     a.eq_ignore_ascii_case(b)
+}
+
+/// Same exe file name: the registry keeps the path an app had when it first registered (Discord's `app-1.0.x`
+/// folder changes on every update), so a full-path miss falls back to the file name.
+fn same_file(a: &str, b: &str) -> bool {
+    let name = |p: &str| p.rsplit(['\\', '/']).next().unwrap_or("").to_ascii_lowercase();
+    !a.is_empty() && name(a) == name(b)
 }
 
 fn apply(message: &Message, pid: u32) {
@@ -450,9 +462,11 @@ pub(crate) fn explorer_tray() -> Option<windows::Win32::Foundation::HWND> {
     let mut pids = Vec::with_capacity(8);
     for _ in 0..8 {
         // SAFETY: top-level enumeration after the prior match; result and process id are checked.
-        let next = unsafe { FindWindowExW(None, Some(after), w!("Shell_TrayWnd"), PCWSTR::null()) }.ok()?;
+        // No more windows is an Err: stop there and pick from what was found (a `?` here returned None whenever
+        // fewer than 8 trays existed, so Peeka never found Explorer's taskbar to hide it or forward to).
+        let Ok(next) = (unsafe { FindWindowExW(None, Some(after), w!("Shell_TrayWnd"), PCWSTR::null()) }) else { break };
         if next.is_invalid() {
-            return None;
+            break;
         }
         let mut pid = 0;
         unsafe {
@@ -613,6 +627,8 @@ mod tests {
         assert_eq!(parse(&bytes).unwrap().hidden, None, "state outside the mask says nothing");
         assert!(same_path(r"C:\Apps\Tool.exe", r"c:\apps\tool.EXE"));
         assert!(!same_path(r"C:\Apps\Tool.exe", r"C:\Apps\Other.exe"));
+        assert!(same_file(r"C:\D\app-1.0.9\Discord.exe", r"c:\d\app-1.0.8\discord.EXE"));
+        assert!(!same_file("", r"C:\x\a.exe") && !same_file(r"C:\x\a.exe", r"C:\x\b.exe"));
         assert!(parse(&bytes[..100]).is_none());
     }
 
@@ -639,5 +655,13 @@ mod tests {
         assert_eq!(first_foreign_index(&[44, 44, 77], 44), Some(2));
         assert_eq!(first_foreign_index(&[44, 44], 44), None);
         assert_eq!(first_foreign_index(&[], 44), None);
+    }
+
+    /// Needs a desktop with Explorer's taskbar (not CI): `cargo test -p notch-win --lib -- --ignored explorer_tray_found`.
+    #[cfg(windows)]
+    #[test]
+    #[ignore]
+    fn explorer_tray_found_on_a_real_desktop() {
+        assert!(super::explorer_tray().is_some());
     }
 }

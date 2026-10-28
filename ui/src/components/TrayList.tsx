@@ -9,6 +9,8 @@ import "../fidelity-settings.css";
 /** Rust `tray_icons`: `open_tray` + color icon. No badge count arrives; without `badge` no badge is drawn. */
 const loadTray = (monitor: string): Promise<TrayIconX[]> => bridge.call("tray_icons", { monitor });
 const open = (t: TrayIconX, then?: () => void) => bridge.call("tray_open", { id: t.id }).then(then).catch(() => undefined);
+/** Screen CSS px -> the physical px Windows' menus are placed in. */
+const px = (at: { x: number; y: number }) => ({ x: Math.round(at.x * devicePixelRatio), y: Math.round(at.y * devicePixelRatio) });
 const label = (t: TrayIconX) => t.name + (t.badge ? `, ${t.badge} new` : "");
 
 /** The last list, so a reopened panel paints its cells at once instead of growing in after the call. */
@@ -53,7 +55,7 @@ export function TrayList({ monitor, onClose }: { monitor: string; onClose: () =>
   const refs = useMemo(() => new Map<string, AppRef>((list ?? []).map((t) => [t.id, { appId: t.id, name: t.name, icon: t.icon, colorIcon: t.colorIcon }])), [list]);
   const items = useMemo(() => withNew(mine ?? saved ?? [], (list ?? []).map((t) => t.id)), [mine, saved, list]);
   const save = (next: StartItem[]) => { setMine(next); bridge.call("set_settings", { patch: { trayItems: next } }).catch(() => undefined); };
-  const menu = (id: string, at: { x: number; y: number }) => bridge.call("tray_menu", { id, ...at }).catch(() => open(byId.get(id)!));
+  const menu = (id: string, at: { x: number; y: number }) => bridge.call("tray_menu", { id, ...px(at) }).catch(() => open(byId.get(id)!));
   const compact = useMemo(() => ({
     tile: (a: AppRef, mini: boolean) => { const t = byId.get(a.appId)!; return mini ? <TrayIconView t={{ ...t, badge: undefined }} size={14} color={t.colorIcon} /> : <TrayIconView t={t} size={18} color={t.colorIcon} />; },
     label: (a: AppRef) => label(byId.get(a.appId)!),
@@ -88,7 +90,7 @@ export function PromotedTray({ monitor }: { monitor: string }) {
   if (!list.length) return null;
   return (
     <span className="favTray" role="group" aria-label="Pinned tray icons">
-      {list.map((t) => <button key={t.id} className="key" title={t.name} aria-label={label(t)} onClick={() => open(t)} onContextMenu={(e) => { e.preventDefault(); bridge.call("tray_menu", { id: t.id, x: e.screenX, y: e.screenY }).catch(() => open(t)); }}><TrayIconView t={t} size={17} color={t.colorIcon} /></button>)}
+      {list.map((t) => <button key={t.id} className="key" title={t.name} aria-label={label(t)} onClick={() => open(t)} onContextMenu={(e) => { e.preventDefault(); bridge.call("tray_menu", { id: t.id, ...px({ x: e.screenX, y: e.screenY }) }).catch(() => open(t)); }}><TrayIconView t={t} size={17} color={t.colorIcon} /></button>)}
     </span>
   );
 }
