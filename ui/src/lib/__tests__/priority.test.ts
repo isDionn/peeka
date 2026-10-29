@@ -4,7 +4,7 @@ import { pickPrimary, RANK, timerKind, type ActivityKind } from "../priority";
 const A = (...k: ActivityKind[]) => k.map((kind) => ({ kind }));
 const kinds = (l: { kind: ActivityKind }[]) => l.map((a) => a.kind);
 /** Decision order, top to bottom. */
-const ORDER: ActivityKind[] = ["approval", "clip", "batteryCrit", "live", "meeting", "net", "alert", "burst", "rateLimit", "battery", "cpu", "timerEnd", "done", "summary", "musicStopped", "download", "music", "timer", "other"];
+const ORDER: ActivityKind[] = ["approval", "clip", "batteryCrit", "live", "meeting", "net", "alert", "burst", "rateLimit", "battery", "cpu", "timerEnd", "done", "summary", "musicStopped", "download", "update", "music", "timer", "other"];
 
 describe("pickPrimary: order", () => {
   it("empty list: no primary, no secondary", () => {

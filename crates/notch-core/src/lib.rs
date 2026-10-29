@@ -41,6 +41,7 @@ pub mod taskbar;
 pub mod timer;
 pub mod tint;
 pub mod tray;
+pub mod update;
 
 #[cfg(test)]
 pub(crate) mod test_util;

@@ -29,6 +29,14 @@ export function DownloadBump({ id, generic }: { id: string; generic: boolean }) 
     : <div className="peekBar"><button className="btn kk primary" onClick={go("download_open")}>Open</button><button className="btn kk gray" onClick={go("download_show_in_folder")}>Show in folder</button></div>;
 }
 
+/** A newer release exists (Rust `update_available`, the version). "Download" opens the page Rust remembers; either button dismisses it for good. */
+export const UpdateCenter = ({ version }: { version: string }) =>
+  <span className="ms"><Download /><span className="b6">Peeka {flat(version, 12)} is available</span></span>;
+export function UpdateBump({ onDone }: { onDone: () => void }) {
+  const done = (open: boolean) => () => { (open ? bridge.call("update_open") : Promise.resolve()).catch(() => undefined); bridge.call("update_dismiss").catch(() => undefined); onDone(); };
+  return <div className="peekBar"><button className="btn kk primary" onClick={done(true)}>Download</button><button className="btn kk gray" onClick={done(false)}>Dismiss</button></div>;
+}
+
 /** CPU above 95% for a long time (Rust `cpu_high {app}`; Rust makes the 60 s call, no timer here). Task Manager is `open_task_manager`. */
 export const CpuCenter = ({ app, generic, ghost }: { app: string | null; generic: boolean; /** The 40 px strip ghost (overheated), if any. */ ghost?: ReactNode }) =>
   <span className="ms">{ghost}<Cpu /><span className="b6">{app && !generic ? `${flat(app, 28)} is using a lot of CPU` : "CPU is very busy"}</span></span>;

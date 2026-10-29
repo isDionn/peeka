@@ -75,7 +75,7 @@ It runs locally, sends nothing anywhere, and other programs can add their own ca
 
 ## Privacy
 
-- 🏠 **Everything stays local.** Peeka's own code makes no outbound network requests: no HTTP client, no update check, no analytics or telemetry. The web UI's content security policy only allows `self` and Tauri IPC.
+- 🏠 **Everything stays local.** Peeka's only network request is one daily check for a newer version: a plain GET of `api.github.com/repos/isDionn/peeka/releases/latest` that sends nothing but a `Peeka/<version>` User-Agent (no cookies, no ID, no data about you or your PC) and reads the version number from the reply. Turn it off in Settings › "Check for updates". No analytics or telemetry. The web UI's content security policy only allows `self` and Tauri IPC.
 - 🙈 **Lock and presentation modes.** Peeka locks when Windows locks, on demand, or when a plugin asks (a plugin can never unlock). While locked, or while Windows is in presentation mode, the strip and bubble show generic labels instead of content, password rows are hidden, and nothing is sent to plugins.
 - 🌫️ **Passwords are blurred.** Password rows in the clipboard stay blurred until you hover or focus them; the real text is not in the page until then and disappears as soon as you leave.
 - ⏲️ **One-time codes clean up after themselves.** A code copied from a notification is cleared from the clipboard after 60 seconds, unless you have copied something else since.

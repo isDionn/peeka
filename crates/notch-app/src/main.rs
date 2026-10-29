@@ -12,6 +12,7 @@ mod clip_history;
 mod commands;
 #[cfg(windows)]
 mod downloads;
+mod update;
 mod extras;
 #[cfg(windows)]
 mod live;

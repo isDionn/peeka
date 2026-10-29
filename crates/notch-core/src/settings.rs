@@ -80,6 +80,9 @@ pub struct Settings {
     /// file gets it on.
     #[serde(default = "yes")]
     pub screen_tint: bool,
+    /// Once a day Peeka asks GitHub for the latest release number (`update`): the only network call. On by default.
+    #[serde(default = "yes")]
+    pub update_check: bool,
     /// Start's pinned grid with folders. None (an old file, or no folder made yet) = the page derives the grid from the
     /// strip pins and the app list, as before folders; set the first time the owner arranges it (`set_start_items`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -192,6 +195,7 @@ impl Default for Settings {
             celebrate: true,
             watch_downloads: true,
             screen_tint: true,
+            update_check: true,
             start_items: None,
             tray_items: None,
             taskbar_pins_imported: false,
@@ -221,6 +225,7 @@ pub struct UiSettings {
     pub celebrate: bool,
     pub watch_downloads: bool,
     pub screen_tint: bool,
+    pub update_check: bool,
     /// Read-only here; the page changes it with `taskbar_set_mode` ("full" | "auto" | "off").
     pub taskbar_hide: HideMode,
     /// Start's grid with folders; null = derived by the page. Written with `set_start_items`.
@@ -257,6 +262,7 @@ pub struct UiPatch {
     pub celebrate: Option<bool>,
     pub watch_downloads: Option<bool>,
     pub screen_tint: Option<bool>,
+    pub update_check: Option<bool>,
     /// The Hidden icons panel's order and groups, cleaned like Start's grid.
     pub tray_items: Option<Vec<StartItem>>,
 }
@@ -304,6 +310,7 @@ pub fn to_ui(s: &Settings, name_icon: impl Fn(&str) -> Option<(String, String)>)
         celebrate: s.celebrate,
         watch_downloads: s.watch_downloads,
         screen_tint: s.screen_tint,
+        update_check: s.update_check,
         taskbar_hide: s.taskbar_hide,
         start_items: s.start_items.clone(),
         tray_items: s.tray_items.clone(),
@@ -352,6 +359,9 @@ pub fn apply_patch(
     }
     if let Some(v) = patch.screen_tint {
         next.screen_tint = v;
+    }
+    if let Some(v) = patch.update_check {
+        next.update_check = v;
     }
     if let Some(v) = patch.clip_media {
         next.clip_media = v;
@@ -595,6 +605,7 @@ mod tests {
         assert!(s.autostart, "an old file starts with Windows too");
         assert!(s.watch_downloads, "an old file gets the download watch on (names only)");
         assert!(s.screen_tint, "an old file gets the screen tint on");
+        assert!(s.update_check, "an old file gets the daily version check on");
         assert!(s.color_icons && s.version == VERSION, "an old file gets colour icons");
         tmp.write("settings.json", b"{nope");
         assert_eq!(load(&path), Settings::default());

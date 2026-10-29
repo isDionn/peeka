@@ -26,7 +26,7 @@ import { useNetNotice, type NetNote } from "../lib/netNotice";
 import { pickPrimary, timerKind, type ActivityKind } from "../lib/priority";
 import { bubbleItem, LOCK_ALERT, LOCK_MUSIC, SideBubble } from "./SideBubble";
 import { ccLimit, createBatteryTiers, createBurst, createCcSessions, editLabel, type Burst, type CcSession } from "../lib/notes";
-import { BurstBump, BurstCenter, CpuBump, CpuCenter, DiffCard, DownloadBump, DownloadCenter, EditBump, EditCenter, MusicStoppedBump, MusicStoppedCenter, QuotaBump, QuotaCenter, resumeMusic, SessionChip } from "./Notes";
+import { BurstBump, BurstCenter, CpuBump, CpuCenter, DiffCard, DownloadBump, DownloadCenter, UpdateBump, UpdateCenter, EditBump, EditCenter, MusicStoppedBump, MusicStoppedCenter, QuotaBump, QuotaCenter, resumeMusic, SessionChip } from "./Notes";
 
 /** Keep the card shadow (notch-extra.css: 0 28px 72px) from being clipped by the window region: this much room at the sides and bottom (CSS px). */
 const SHADOW_SIDE = 72, SHADOW_BOTTOM = 110;
@@ -96,7 +96,7 @@ export interface IslandInit {
 /** When it starts with Windows, Rust opens the page with `?autostart=1`: no welcome card (it shows on a manual start). */
 const autoStarted = () => new URLSearchParams(location.search).get("autostart") === "1";
 
-type Kind = "rest" | "hov" | "edit" | "music" | "alert" | "osd" | "approval" | "plugin" | "shot" | "lock" | "charge" | "lowbat" | "burst" | "quota" | "musicstop" | "download" | "cpu" | "bt" | "timer" | "timerdone" | "net" | "away" | "shelfdrag" | "panel" | "jobdone" | "ky" | "kh" | "kb" | "diag" | IslandView;
+type Kind = "rest" | "hov" | "edit" | "music" | "alert" | "osd" | "approval" | "plugin" | "shot" | "lock" | "charge" | "lowbat" | "burst" | "quota" | "musicstop" | "download" | "update" | "cpu" | "bt" | "timer" | "timerdone" | "net" | "away" | "shelfdrag" | "panel" | "jobdone" | "ky" | "kh" | "kb" | "diag" | IslandView;
 interface Spec { key: string; mode: "peek" | "bump" | "card"; kw?: number; label: string; node: ReactNode }
 
 const OSD_MS = 1800;
@@ -160,7 +160,7 @@ function useSize(): [HTMLElement | null, (el: HTMLElement | null) => void, { w: 
 
 interface CenterOpts {
   media: Media | null; alert: Alert | null; osd: VolumeOsd | null; approval: ApprovalItem | null; plug: ProtrusionItem | null; composerLabel: string | null;
-  net: NetNote | null; shot: ClipPlain | null; timerDone: string | null; main: ReturnType<typeof useMainAssistant>; locked: boolean; alertsN: number; done: { title: string; took: string } | null; meeting: ProtrusionItem | null; burst: Burst | null; stopped: MusicStopped | null; dl: DownloadDone | null; cpu: CpuHigh | null; edit: CcEdit | null;
+  net: NetNote | null; shot: ClipPlain | null; timerDone: string | null; main: ReturnType<typeof useMainAssistant>; locked: boolean; alertsN: number; done: { title: string; took: string } | null; meeting: ProtrusionItem | null; burst: Burst | null; stopped: MusicStopped | null; dl: DownloadDone | null; update: string | null; cpu: CpuHigh | null; edit: CcEdit | null;
   /** Resting center (mascot, "Compass ready", counts or music); Island picks which piece shows for which card. */
   rest: ReactNode;
   /** The 40 px strip ghost in an event's mood (download, copy catch, task done, CPU busy); null = no ghost there. */
@@ -187,6 +187,7 @@ const centerOf = (kind: Kind, o: CenterOpts): ReactNode => {
     case "cpu": return o.cpu && <CpuCenter app={o.cpu.app} generic={o.locked} ghost={o.ghost(kind)} />;
     case "download": return o.dl && <DownloadCenter name={o.dl.name} generic={o.locked} ghost={o.ghost(kind)} />;
     case "edit": return o.edit && <EditCenter e={o.edit} generic={o.locked} />;
+    case "update": return o.update && <UpdateCenter version={o.update} />;
     case "musicstop": return o.stopped && <MusicStoppedCenter name={o.stopped.name} generic={o.locked} />;
     case "error": return <ErrorCenter />;
     case "bt": return o.bt && <BtCenter name={o.bt.name} />;
@@ -325,6 +326,9 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   useEffect(() => { if (!cpuHigh || pin || hold) return; const t = setTimeout(() => setCpuHigh(null), 10_000); return () => clearTimeout(t); }, [cpuHigh, pin, hold]);
   const [dl, setDl] = useState<DownloadDone | null>(init?.dl ?? null);
   useEffect(() => { if (!dl || pin || hold) return; const t = setTimeout(() => setDl(null), 8000); return () => clearTimeout(t); }, [dl, pin, hold]);
+  // newer release (Rust `update_available`, at most once a day): "Peeka X is available", Download / Dismiss; 20 s, and Rust brings it back on a later day until dismissed
+  const [upd, setUpd] = useState<string | null>(null);
+  useEffect(() => { if (!upd || pin || hold) return; const t = setTimeout(() => setUpd(null), 20_000); return () => clearTimeout(t); }, [upd, pin, hold]);
   // "Save diagnostics" wrote its file (Rust `diagnostics_saved`, Ctrl+Alt+Shift+D or Settings > About): "Open folder"; 8 s
   const [diag, setDiag] = useState(false);
   useEffect(() => { if (!diag || pin || hold) return; const t = setTimeout(() => setDiag(false), 8000); return () => clearTimeout(t); }, [diag, pin, hold]);
@@ -390,6 +394,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   if (quota && limited) acts.push({ kind: "rateLimit" }); // the peek goes as soon as the limit lifts
   if (stopped && !calm) acts.push({ kind: "musicStopped" });
   if (dl) acts.push({ kind: "download" });
+  if (upd && !calm) acts.push({ kind: "update" });
   if (cpuHigh && !calm) acts.push({ kind: "cpu" });
   if (summary && !calm) acts.push({ kind: "summary" });
   if (shotNow) acts.push({ kind: "clip" });
@@ -402,7 +407,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const plan = pickPrimary(acts, pinned ?? (frozen ? autoTop.current : null));
   if (!frozen) autoTop.current = plan.primary?.kind ?? null;
   const pk = plan.primary?.kind;
-  const planK: Kind | null = pk === "approval" ? "approval" : pk === "alert" ? "alert" : pk === "timerEnd" && timerDone ? "timerdone" : pk === "timer" || pk === "timerEnd" ? "timer" : pk === "net" ? "net" : pk === "battery" || pk === "batteryCrit" ? "lowbat" : pk === "burst" ? "burst" : pk === "rateLimit" ? "quota" : pk === "musicStopped" ? "musicstop" : pk === "download" ? "download" : pk === "edit" ? "edit" : pk === "cpu" ? "cpu" : pk === "summary" ? "away" : pk === "done" ? "jobdone"
+  const planK: Kind | null = pk === "approval" ? "approval" : pk === "alert" ? "alert" : pk === "timerEnd" && timerDone ? "timerdone" : pk === "timer" || pk === "timerEnd" ? "timer" : pk === "net" ? "net" : pk === "battery" || pk === "batteryCrit" ? "lowbat" : pk === "burst" ? "burst" : pk === "rateLimit" ? "quota" : pk === "musicStopped" ? "musicstop" : pk === "download" ? "download" : pk === "update" ? "update" : pk === "edit" ? "edit" : pk === "cpu" ? "cpu" : pk === "summary" ? "away" : pk === "done" ? "jobdone"
     : pk === "music" ? (pinned === "music" || (musicAuto && !calm) || (hold && !mkHover) ? "music" : null) /* owner: music controls only under the pointer or keyboard focus, never on their own over windows */ : pk === "live" || pk === "meeting" || pk === "other" ? "plugin" : null;
   const transient: Kind | null = osd ? "osd" : diag ? "diag" : pk === "clip" ? "shot" : shelfDrag ? "shelfdrag" : bt && !calm ? "bt" : charge && !calm ? "charge" : null;
   const base: Kind = viewK ?? (pk === "approval" ? "approval" : transient ?? planK ?? (hover && !mkHover ? "hov" : "rest"));
@@ -468,6 +473,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       bridge.on("notch://fullscreen", setFullscreen),
       bridge.on("music_stopped", setStopped),
       bridge.on("download_done", setDl),
+      bridge.on("update_available", setUpd),
       bridge.on("diagnostics_saved", () => setDiag(true)),
       bridge.on("cpu_high", setCpuHigh),
       // Rust's cursor poll is the truth for hover: a click-through window never gets pointerleave
@@ -692,6 +698,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     if (quota) return setQuota(false);
     if (stopped) return setStopped(null);
     if (dl) return setDl(null);
+    if (upd) return setUpd(null);
     if (diag) return setDiag(false);
     if (edit) return setEdit(null);
     if (cpuHigh) return setCpuHigh(null);
@@ -699,7 +706,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     if (charge) return setCharge(false);
     if (musicAuto) return setMusicAuto(false);
     if (pinned) return setPinned(null);
-  }, [user, osd, done, alert, shot, timerDone, closeTimerDone, netNote, dismissNet, summary, kind, musicAuto, media, battTier, burst, quota, stopped, dl, edit, cpuHigh, bt, charge, dismissBt, more, pinned, ackRecap, tucked]);
+  }, [user, osd, done, alert, shot, timerDone, closeTimerDone, netNote, dismissNet, summary, kind, musicAuto, media, battTier, burst, quota, stopped, dl, upd, edit, cpuHigh, bt, charge, dismissBt, more, pinned, ackRecap, tucked]);
   useEffect(() => {
     const down = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.defaultPrevented) back(); };
     document.addEventListener("keydown", down);
@@ -725,6 +732,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       case "edit": return edit && { key: "edit", mode: "bump", label: editLabel(edit, priv), node: <EditBump onShow={showDiff} /> };
       case "diff": return diffSid ? { key: "diff", mode: "card", kw: 620, label: "Changes", node: <DiffCard sid={diffSid} /> } : null;
       case "diag": return { key: "diag", mode: "bump", label: "Diagnostics saved", node: <div className="peekBar"><button className="btn kk primary" onClick={() => { bridge.call("diagnostics_open_folder").catch(() => undefined); setDiag(false); }}>Open folder</button></div> };
+      case "update": return upd ? { key: "update", mode: "bump", label: `Peeka ${flat(upd, 12)} is available`, node: <UpdateBump onDone={() => setUpd(null)} /> } : null;
       case "download": return dl && { key: "download", mode: "bump", label: priv ? "Download complete" : `Downloaded: ${flat(dl.name, 40)}`, node: <DownloadBump id={dl.id} generic={priv} /> };
       case "musicstop": return stopped && { key: "musicstop", mode: "bump", label: priv ? "Music paused" : `Music paused, ${stopped.name} disconnected`, node: <MusicStoppedBump onResume={() => { resumeMusic(); setStopped(null); }} /> };
       case "quota": return { key: "quota", mode: "bump", label: "Usage limit reached", node: <QuotaBump onOk={() => setQuota(false)} /> };
@@ -791,7 +799,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       </>
     );
   })();
-  const centerNode = centerOf(kind, { media, alert, osd, approval: kind === "approval" ? approvalTop : null, plug: surf.protrusion, composerLabel: composerLabel, net: netNote, shot: shotNow, timerDone: timerDone?.label ?? null, main, locked: priv, alertsN: alerts.length, done, meeting: meetingItem, burst, stopped, dl, cpu: cpuHigh, edit, rest, ghost: (k) => { const m = eventMood(k, priv); return m && <Mascot size={40} mood={m} isMainAssistant cursor={input.cursor} />; }, battery: batt, bt, timer, shelfCount: shelf.length, panel: panelLabel, quiet: hidden || fullscreen });
+  const centerNode = centerOf(kind, { media, alert, osd, approval: kind === "approval" ? approvalTop : null, plug: surf.protrusion, composerLabel: composerLabel, net: netNote, shot: shotNow, timerDone: timerDone?.label ?? null, main, locked: priv, alertsN: alerts.length, done, meeting: meetingItem, burst, stopped, dl, update: upd, cpu: cpuHigh, edit, rest, ghost: (k) => { const m = eventMood(k, priv); return m && <Mascot size={40} mood={m} isMainAssistant cursor={input.cursor} />; }, battery: batt, bt, timer, shelfCount: shelf.length, panel: panelLabel, quiet: hidden || fullscreen });
 
   const centerOld = useOld(centerKey, centerNode);
   const shapeOld = useOld(spec?.key ?? "none", spec?.node ?? null, spec?.mode === "card" ? spec.kw : undefined);
@@ -894,6 +902,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     else if (kind === "quota") setQuota(false);
     else if (kind === "musicstop") setStopped(null);
     else if (kind === "download") setDl(null);
+    else if (kind === "update") setUpd(null);
     else if (kind === "diag") setDiag(false);
     else if (kind === "edit") (showDiff ?? (() => setEdit(null)))();
     else if (kind === "cpu") setCpuHigh(null);
@@ -917,7 +926,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const say = !bump ? "" : kind === "approval" && approvalTop ? `${pluginName(approvalTop.plugin)} is asking for approval: ${flat(approvalTop.title, 120)}`
     : kind === "alert" && alert ? [alert.title, alert.subtitle].filter(Boolean).join(", ") : kind === "music" && media ? (priv ? LOCK_MUSIC : `Playing: ${trackTitle(media)}`) : spec!.label;
   // side bubble: activities after the main strip. None while a card is open, presenting/busy, or the island is hidden. While locked, only a generic icon.
-  const bubbleCtx = { away: summary ? awayText : null, net: netNote, media, timer, alert, prot, done, locked: priv, battery: batt, burst, stopped, dl, cpu: cpuHigh, edit };
+  const bubbleCtx = { away: summary ? awayText : null, net: netNote, media, timer, alert, prot, done, locked: priv, battery: batt, burst, stopped, dl, update: upd, cpu: cpuHigh, edit };
   const sideItems = calm || mode === "card" || (hidden && restShown) ? [] : plan.secondary.map((a) => bubbleItem(a.kind, bubbleCtx));
   const centerMax = Math.max(360, Math.min(424, Math.round(innerWidth * 0.4))); // center content is never wider than ~40% of the screen or 424 px (R2-Y1; Strip.tsx ISLAND_HALF keeps the tabs left of its widest center); overflow gets an ellipsis
 
