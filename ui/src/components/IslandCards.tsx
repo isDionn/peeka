@@ -171,7 +171,7 @@ const SystemBox = ({ sys, cpu, battery }: { sys: SysmonTick | null; cpu: number[
         <div>
           <Meter label="CPU" text={sys?.cpu == null ? dash : Math.round(sys.cpu) + "%"} ratio={sys?.cpu == null ? null : sys.cpu / 100} hot={(sys?.cpu ?? 0) >= 80} />
           <div className="t12 l3" style={{ display: "flex", justifyContent: "space-between" }}><span>Top app</span><span className="num">{sys?.topCpu ? flat(sys.topCpu, 24) : dash}</span></div>{/* the row is always there: the card doesn't shift when a reading arrives */}
-          <div className="spark" aria-hidden="true">{Array.from({ length: 16 }, (_, i) => cpu[cpu.length - 16 + i]).map((v, i) => <i key={i} className={v === undefined ? "empty" : undefined} style={{ height: v === undefined ? "4%" : Math.max(4, v * 2) + "%" }} />)}</div>
+          <div className="spark" aria-hidden="true">{Array.from({ length: 16 }, (_, i) => cpu[cpu.length - 16 + i]).map((v, i) => <i key={i} className={v === undefined ? "empty" : undefined} style={{ height: v === undefined ? "4%" : Math.max(4, Math.min(100, v)) + "%" }} />)}</div>
         </div>
         <div>
           <Meter label="Memory" text={sys?.memUsed == null || sys.memTotal == null ? dash : `${gb(sys.memUsed)} / ${gb(sys.memTotal)} GB`} ratio={sys?.memUsed == null || !sys.memTotal ? null : sys.memUsed / sys.memTotal} />

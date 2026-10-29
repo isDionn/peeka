@@ -267,6 +267,8 @@ describe("System history", () => {
     await settle(1200);
     expect(document.querySelectorAll(".spark i").length).toBe(16);
     expect(document.querySelectorAll(".spark i.empty").length).toBeLessThan(16);
+    // a bar is the sample's percent, never taller than its box (72% once drew at 144%, over the CPU row)
+    for (const i of document.querySelectorAll<HTMLElement>(".spark i")) expect(parseFloat(i.style.height)).toBeLessThanOrEqual(100);
   });
 });
 
