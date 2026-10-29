@@ -568,6 +568,17 @@ describe("window preview", () => {
     expect(document.querySelector(".preview")).toBeNull();
     expect((await fakeBridge.call("list_windows", { monitor: "m1" })).find((w) => w.hwnd === 3)!.active).toBe(true);
   });
+  it("the close button on a preview closes just that window", async () => {
+    render(<Shell monitor="m1" />);
+    await settle();
+    fireEvent.pointerEnter(chrome());
+    await settle(300);
+    fireEvent.click(document.querySelector<HTMLElement>('.preview .small[data-hwnd="3"]')!.nextElementSibling as HTMLElement);
+    await settle();
+    const left = (await fakeBridge.call("list_windows", { monitor: "m1" })).map((w) => w.hwnd);
+    expect(left).not.toContain(3);
+    expect(document.querySelectorAll(".preview .small")).toHaveLength(1);
+  });
   it("if the preview request fails the placeholder stays and the error does not propagate", async () => {
     const orig = fakeBridge.call.bind(fakeBridge) as (c: string, a?: unknown) => Promise<unknown>;
     vi.spyOn(fakeBridge, "call").mockImplementation(((cmd: string, a?: unknown) => (cmd === "window_preview" ? Promise.reject("io") : orig(cmd, a))) as never);

@@ -1,7 +1,7 @@
 // Window preview when hovering an app on the strip (mockup i, FPV §0i item 8: 26 corner, 13 shoulder, 340 ms slight-overshoot curve).
 // The image comes from `window_preview` (PrintWindow); until then the cached image or a placeholder shows. Some windows (DirectX, protected) may come back black.
 import { useEffect, useRef, useState } from "react";
-import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
+import { Pause, Play, SkipBack, SkipForward, X } from "lucide-react";
 import { bridge, type WindowInfo } from "../bridge";
 import { useMedia } from "../hooks";
 import type { StripItem } from "../lib/mergePins";
@@ -29,10 +29,13 @@ function usePreview(hwnd: number): string | null {
 function Thumb({ w, item, onPick }: { w: WindowInfo; item: StripItem; onPick: (w: WindowInfo) => void }) {
   const src = usePreview(w.hwnd);
   return (
-    <button className={"small" + (w.active ? " on" : "")} data-hwnd={w.hwnd} aria-label={flat(w.title, 80)} onClick={() => onPick(w)}>
-      <div className={"image" + (src ? "" : " loading")} aria-busy={!src}>{src && <img src={src} alt="" draggable={false} />}</div>
-      <div className="name"><AppIcon src={item.icon} color={item.colorIcon} size={14} /><span>{flat(w.title, 60)}</span></div>
-    </button>
+    <div className="pvWin">
+      <button className={"small" + (w.active ? " on" : "")} data-hwnd={w.hwnd} aria-label={flat(w.title, 80)} onClick={() => onPick(w)}>
+        <div className={"image" + (src ? "" : " loading")} aria-busy={!src}>{src && <img src={src} alt="" draggable={false} />}</div>
+        <div className="name"><AppIcon src={item.icon} color={item.colorIcon} size={14} /><span>{flat(w.title, 60)}</span></div>
+      </button>
+      <button type="button" className="pvClose" aria-label={`Close ${flat(w.title, 60)}`} title="Close window" onClick={() => bridge.call("close_window", { hwnd: w.hwnd }).catch(() => undefined)}><X /></button>
+    </div>
   );
 }
 
