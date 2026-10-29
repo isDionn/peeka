@@ -176,6 +176,13 @@ describe("Modules (j)", () => {
     expect(screen.getByRole("region", { name: "Claude chat" })).toBeTruthy();
     expect(screen.getByRole("textbox", { name: "Message to Claude" })).toBeTruthy();
   });
+  it("with Island only on there is no strip to open Settings in: the gear brings the strip back", async () => {
+    await fakeBridge.call("set_settings", { patch: { islandOnly: true } });
+    render(<Island monitor="m1" init={{ view: "modules" }} />);
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: "Show the strip" }));
+    await vi.waitFor(async () => expect((await fakeBridge.call("get_settings")).islandOnly).toBe(false));
+  });
   it("13 tabs (Claude chat last of Peeka's own) and a gear; General has the Compass box and a link to its Claude Code tab, then one place per module; quota bars, session states, Stop", async () => {
     fakeBridge.setSurfaces(SURFACES_J);
     const { container } = render(<Island monitor="m1" init={{ view: "modules" }} />);

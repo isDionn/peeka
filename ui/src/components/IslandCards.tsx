@@ -9,7 +9,7 @@ import { capTabs, flat, MASCOT_STATES, riskOf } from "../lib/plugin";
 import { AlertIcon } from "../lib/alertIcon";
 import { ageLabel } from "../lib/alerts";
 import { actionLabel } from "../lib/alerts";
-import { timerLeft, useAlerts, useClips, useMainAssistant, useSecond } from "../hooks";
+import { timerLeft, useAlerts, useClips, useMainAssistant, useSecond, useSettings } from "../hooks";
 import { answer, GuardBtn, Lead, SummaryBoxes, TabBlocks, TabGlyph, tabLabel } from "./Plugin";
 import { MeetingCard, ShelfSuggestRow } from "./Fidelity";
 import { WaveMascot } from "./CardsExtra";
@@ -416,6 +416,10 @@ function ModulesCardImpl({ media, pos, sys, cpu, surf, shelf, main, meeting, onP
     if (i < 0 || to < 0 || !order[to]) return;
     e.preventDefault(); hideTip(); setTab(order[to]); btns[to].focus();
   };
+  // Settings live in the strip: with Island only on, the gears bring the strip back instead of opening nothing
+  const islandOnly = useSettings()?.islandOnly;
+  const openPanel = (panel: "modules" | "plugins") => islandOnly ? bridge.call("set_settings", { patch: { islandOnly: false } }).catch(() => undefined) : sendX({ t: "open-panel", panel });
+  const gearLabel = islandOnly ? "Show the strip" : "Modules settings";
   const generalTabs = tabs.filter((t) => (t as typeof t & TabExt).general);
   const rest = surf.approvals.slice(1); // the first approval is in the Now box (GeneralTiles): not again in its plugin's box
   const hasSummary = surf.summary.length > 0 || rest.length > 0;
@@ -427,7 +431,7 @@ function ModulesCardImpl({ media, pos, sys, cpu, surf, shelf, main, meeting, onP
       : p === "calendar" ? (meeting ? <MeetingCard item={meeting} /> : <div className="box glass"><h4><Calendar />Calendar</h4><div className="t13 l2 b4">No upcoming meetings. Meetings come from a calendar plugin.</div></div>)
       : p === "timer" ? <TimerStart timer={timer} />
       : p === "system" ? <SystemBox sys={sys} cpu={cpu} battery={battery} />
-      : p === "usage" ? <UsageBox generic={generic} onSettings={() => sendX({ t: "open-panel", panel: "plugins" })} />
+      : p === "usage" ? <UsageBox generic={generic} onSettings={() => openPanel("plugins")} />
       : p === "notifications" ? <AlertsTab />
       : p === "claude" ? <ClaudeChatTab />
       : <GeneralTiles ids={core.map(([id]) => id)} go={(id) => { hideTip(); setTab(id); }} media={media} meeting={meeting} timer={timer} sys={sys} approvals={surf.approvals} onApproval={onApproval} generic={generic} battery={battery} cc={{ n: sessN, list: sessList, last: lastCc, limited }}
@@ -450,7 +454,7 @@ function ModulesCardImpl({ media, pos, sys, cpu, surf, shelf, main, meeting, onP
           })}
         </div>
         {tip && <span className="segTip" role="tooltip" style={{ left: tip.x }}>{tip.text}</span>}
-        <button className="mini" title="Modules settings" aria-label="Modules settings" onClick={() => sendX({ t: "open-panel", panel: "modules" })}><Gear /></button>
+        <button className="mini" title={gearLabel} aria-label={gearLabel} onClick={() => openPanel("modules")}><Gear /></button>
         <button className="close" title="Close (Esc)" aria-label="Close" onClick={onClose}><X /></button>
       </div>
       {shown !== "clipboard" && <div className="modBody" key={shown} role="tabpanel" aria-labelledby={idOf(shown)}>{body(shown)}</div>}
