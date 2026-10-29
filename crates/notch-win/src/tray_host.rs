@@ -106,6 +106,35 @@ pub fn start() {
 #[cfg(not(windows))]
 pub fn start() {}
 
+/// The host steps below Explorer's taskbar while this is set, so the reorder watcher must not pull it back.
+static ASIDE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Runs `f` with the host below Explorer's taskbar, so an `SHAppBarMessage` inside reaches Explorer itself.
+/// Measured on Windows 11: a forwarded ABM_SETPOS is answered TRUE but reserves nothing (the work area stays full and
+/// maximised windows go under the strip), while the same call sent straight to Explorer reserves the 30 px.
+#[cfg(windows)]
+pub fn aside<R>(f: impl FnOnce() -> R) -> R {
+    use std::sync::atomic::Ordering;
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, HWND_NOTOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE};
+    let Some(&host) = HOST.get() else { return f() };
+    let host = HWND(host as *mut _);
+    ASIDE.store(true, Ordering::SeqCst);
+    // SAFETY: our hidden tool window; Z-order only, never activated or moved. Not topmost = below Explorer's taskbar.
+    unsafe {
+        let _ = SetWindowPos(host, Some(HWND_NOTOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+    let out = f();
+    ASIDE.store(false, Ordering::SeqCst);
+    reassert_topmost(host);
+    out
+}
+
+#[cfg(not(windows))]
+pub fn aside<R>(f: impl FnOnce() -> R) -> R {
+    f()
+}
+
 /// Ask the listener to leave and make apps re-register with Explorer on the way out.
 #[cfg(windows)]
 pub fn stop() {
@@ -523,7 +552,7 @@ fn watch_explorer_reorder() -> Option<windows::Win32::UI::Accessibility::HWINEVE
         if object != OBJID_WINDOW.0 || child != 0 || hwnd.is_invalid() {
             return;
         }
-        if explorer_tray() == Some(hwnd) {
+        if explorer_tray() == Some(hwnd) && !ASIDE.load(std::sync::atomic::Ordering::SeqCst) {
             if let Some(&host) = HOST.get() {
                 reassert_topmost(HWND(host as *mut _));
             }

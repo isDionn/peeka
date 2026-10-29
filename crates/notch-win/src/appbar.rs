@@ -59,7 +59,8 @@ mod sys {
             data.rc = RECT { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
         }
         // SAFETY: a fully initialised APPBARDATA with its own size; `hwnd` is a strip window of this process.
-        let answer = unsafe { SHAppBarMessage(msg, &mut data) };
+        // Straight to Explorer, not through Peeka's tray host: a forwarded ABM_SETPOS reserves nothing (`aside`).
+        let answer = crate::tray_host::aside(|| unsafe { SHAppBarMessage(msg, &mut data) });
         (answer, Rect { left: data.rc.left, top: data.rc.top, right: data.rc.right, bottom: data.rc.bottom })
     }
 }
