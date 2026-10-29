@@ -14,6 +14,9 @@ fn cpu_ms() -> f64 {
 fn main() {
     #[cfg(windows)]
     {
+        // Peeka itself is per-monitor DPI aware (Tauri); without this a scaled monitor's GDI coordinates are virtualised
+        // SAFETY: a process-wide flag set once before any window or DC exists.
+        let _ = unsafe { windows::Win32::UI::HiDpi::SetProcessDpiAwarenessContext(windows::Win32::UI::HiDpi::DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
         let colors = std::env::args().any(|a| a == "--colors");
         for m in notch_win::monitors::list() {
             let band = notch_core::tint::region(&m);
@@ -31,7 +34,8 @@ fn main() {
             print!("monitor {} area {}x{}: min {:.2} ms, median {:.2} ms, avg {:.2} ms, max {:.2} ms", m.index, band.width(), band.height(), times[0], times[25], avg, times[49]);
             match (colors, last.as_deref().and_then(notch_core::tint::average)) {
                 (true, Some(c)) => println!(" colors {c:?}"),
-                (_, None) => println!(" SAMPLE FAILED"),
+                (_, None) if last.is_none() => println!(" SAMPLE FAILED"),
+                (_, None) => println!(" all dull and dark: default glow colour"),
                 _ => println!(),
             }
         }

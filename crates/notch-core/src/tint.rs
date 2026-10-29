@@ -1,6 +1,6 @@
 //! Screen tint for the strip/island glow (owner, 2026-10-26; whole screen 2026-10-30): every 2 s the monitor below each
-//! strip is shrunk to 16x9 px and reduced to three colours (left, centre, right), vivid pixels weighing most so a dark
-//! tab or title bar does not make the glow black. Privacy: the pixels stay in memory in the sampler
+//! strip is shrunk to 48x27 px and reduced to three colours (left, centre, right), vivid pixels weighing most so a dark
+//! tab or title bar does not make the glow black or grey. Privacy: the pixels stay in memory in the sampler
 //! (`notch_win::tint`), are never written to disk, logs or diagnostics and never reach plugins; only the three hex
 //! colours go to Peeka's own pages (`screen_tint`). No sample is even taken while `paused`.
 
@@ -8,21 +8,24 @@ use crate::model::{px, Monitor, Rect, STRIP_HEIGHT};
 use crate::presence::Presence;
 use serde::Serialize;
 
-/// The shrunk screen: 16 columns, 9 rows, BGRA (what a 32-bit top-down DIB holds).
-pub const COLS: usize = 16;
-pub const ROWS: usize = 9;
+/// The shrunk screen: 48 columns, 27 rows, BGRA (what a 32-bit top-down DIB holds). 16x9 averaged a vivid area with the
+/// dark UI around it into grey before the weighting could see it (owner's screen, 2026-10-30).
+pub const COLS: usize = 48;
+pub const ROWS: usize = 27;
+/// Left / centre / right column groups (5-6-5 of 16, scaled).
+const GROUPS: [std::ops::Range<usize>; 3] = [0..15, 15..33, 33..48];
 pub const BYTES: usize = COLS * ROWS * 4;
 /// The sampled area starts this far under the strip (clear of the strip's own bottom edge and glow), in CSS px.
 pub const BAND_GAP: f64 = 8.0;
 /// Weight floor so a group with no colourful pixel still has a plain average.
-const EPS: f32 = 0.005;
+const EPS: f32 = 0.0005;
 /// A group whose most colourful pixel (saturation * value) stays under this has no colour of its own (dark UI, grey, white).
-const DULL: f32 = 0.1;
-/// A dull, dark group is lifted to at least this value (brightest channel / 255), so it never glows black.
-const MIN_VALUE: f32 = 0.35;
+const DULL: f32 = 0.2;
+/// A coloured group darker than this (brightest channel / 255) is scaled up to it, hue kept: a glow has to be seen.
+const MIN_VALUE: f32 = 0.6;
 
 /// The `screen_tint` payload. `colors` null = sampling is off (setting, demo), unavailable on that monitor, or the whole
-/// screen is dull and dark; the page falls back to `--glow-color`.
+/// screen has no colour (dark UI, grey, white); the page falls back to `--glow-color`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct ScreenTint {
     pub monitor: String,
@@ -36,49 +39,44 @@ pub fn region(m: &Monitor) -> Rect {
     Rect { top: (m.rect.top + px(STRIP_HEIGHT, m.scale) + px(BAND_GAP, m.scale)).min(m.rect.bottom), ..m.rect }
 }
 
-/// Left / centre / right: the 16 columns split 5-6-5, as `#rrggbb`. Each group is a mean weighted by saturation * value,
-/// so a small vivid area beats a large dark one. A group with no colour of its own gets its plain mean; if that is darker
-/// than `MIN_VALUE` it is lifted to it. If all three are dull and dark: None (the page uses `--glow-color`). None also =
-/// not a whole BGRA screen.
+/// Left / centre / right as `#rrggbb`. Each group is a mean weighted by (saturation * value)^2, so a small vivid area beats
+/// a large dark one. A group with no colour of its own (dark UI, grey, white) takes the most colourful other group's
+/// colour; if no group has colour: None (the page uses `--glow-color`), never a black or grey glow. None also = not a
+/// whole BGRA screen.
 pub fn average(bgra: &[u8]) -> Option<[String; 3]> {
     if bgra.len() != BYTES {
         return None;
     }
     let part = |cols: std::ops::Range<usize>| {
-        let (mut sum, mut plain, mut top, mut wsum, mut n) = ([0f32; 3], [0f32; 3], 0f32, 0f32, 0f32);
+        let (mut sum, mut top, mut wsum) = ([0f32; 3], 0f32, 0f32);
         for row in 0..ROWS {
             for col in cols.clone() {
                 let p = &bgra[(row * COLS + col) * 4..][..4];
                 let c = [f32::from(p[2]), f32::from(p[1]), f32::from(p[0])];
                 let (hi, lo) = (c[0].max(c[1]).max(c[2]), c[0].min(c[1]).min(c[2]));
-                let s = if hi > 0.0 { (hi - lo) / hi } else { 0.0 };
-                let sv = s * hi / 255.0;
-                let w = sv + EPS;
+                let sv = if hi > 0.0 { (hi - lo) / 255.0 } else { 0.0 }; // saturation * value
+                let w = sv * sv + EPS;
                 top = top.max(sv);
                 wsum += w;
-                n += 1.0;
                 for i in 0..3 {
                     sum[i] += c[i] * w;
-                    plain[i] += c[i];
                 }
             }
         }
-        let dull = top < DULL;
-        let mut rgb = if dull { plain.map(|x| x / n) } else { sum.map(|x| x / wsum) };
-        let v = rgb[0].max(rgb[1]).max(rgb[2]) / 255.0;
-        let dark = dull && v < MIN_VALUE;
-        if dark {
-            // every channel moves the same share of the way to 255: black turns grey, a dark tint keeps its hue
-            let t = (MIN_VALUE - v) / (1.0 - v);
-            rgb = rgb.map(|x| x + (255.0 - x) * t);
+        let mut rgb = sum.map(|x| x / wsum);
+        let hi = rgb[0].max(rgb[1]).max(rgb[2]);
+        if hi > 0.0 && hi < MIN_VALUE * 255.0 {
+            rgb = rgb.map(|x| x * MIN_VALUE * 255.0 / hi);
         }
-        (dark, format!("#{:02x}{:02x}{:02x}", rgb[0].round() as u8, rgb[1].round() as u8, rgb[2].round() as u8))
+        (top, format!("#{:02x}{:02x}{:02x}", rgb[0].round() as u8, rgb[1].round() as u8, rgb[2].round() as u8))
     };
-    let parts = [part(0..5), part(5..11), part(11..16)];
-    if parts.iter().all(|p| p.0) {
+    let parts = GROUPS.map(part);
+    let best = parts.iter().max_by(|a, b| a.0.total_cmp(&b.0))?;
+    if best.0 < DULL {
         return None;
     }
-    Some(parts.map(|p| p.1))
+    let best = best.1.clone();
+    Some(parts.map(|(top, hex)| if top < DULL { best.clone() } else { hex }))
 }
 
 /// What pauses sampling: nothing new is sent, the page keeps the last colours.
@@ -142,16 +140,16 @@ mod tests {
 
     #[test]
     fn three_groups_from_bgra() {
-        let px = screen_of(|c| if c < 5 { [255, 0, 0] } else if c < 11 { [0, 255, 0] } else { [0, 0, 255] });
+        let px = screen_of(|c| if c < 15 { [255, 0, 0] } else if c < 33 { [0, 255, 0] } else { [0, 0, 255] });
         assert_eq!(average(&px).unwrap(), ["#ff0000", "#00ff00", "#0000ff"]);
         assert_eq!(average(&px[..10]), None, "a short buffer is not a screen");
     }
 
     #[test]
     fn a_small_vivid_area_beats_a_dark_bar() {
-        // dark grey everywhere, one orange pixel per group (1 of 45 / 54 pixels)
+        // dark grey everywhere, one orange pixel per group (1 of 405 / 486 pixels)
         let mut px = screen_of(|_| [10, 10, 10]);
-        for col in [2, 8, 13] {
+        for col in [7, 24, 40] {
             px[((ROWS - 1) * COLS + col) * 4..][..4].copy_from_slice(&[0, 128, 255, 255]);
         }
         for g in average(&px).unwrap() {
@@ -161,19 +159,18 @@ mod tests {
     }
 
     #[test]
-    fn black_never_glows_black() {
-        assert_eq!(average(&screen_of(|_| [0, 0, 0])), None, "all black: the page's own glow colour");
-        // a black group beside colour is lifted to grey
-        let c = average(&screen_of(|c| if c < 5 { [0, 0, 0] } else { [255, 0, 0] })).unwrap();
-        assert_eq!(c, ["#595959", "#ff0000", "#ff0000"]);
-        // dark grey is lifted too
-        assert_eq!(average(&screen_of(|c| if c < 5 { [20, 20, 20] } else { [255, 0, 0] })).unwrap()[0], "#595959");
+    fn never_a_black_or_grey_glow() {
+        for plain in [[0, 0, 0], [20, 20, 20], [128, 128, 128], [255, 255, 255]] {
+            assert_eq!(average(&screen_of(|_| plain)), None, "{plain:?}: the page's own glow colour");
+        }
+        // a dull group beside colour takes that colour
+        let c = average(&screen_of(|c| if c < 15 { [0, 0, 0] } else { [255, 0, 0] })).unwrap();
+        assert_eq!(c, ["#ff0000"; 3]);
     }
 
     #[test]
-    fn white_and_grey_stay_as_they_are() {
-        assert_eq!(average(&screen_of(|_| [255, 255, 255])).unwrap(), ["#ffffff"; 3]);
-        assert_eq!(average(&screen_of(|_| [128, 128, 128])).unwrap(), ["#808080"; 3]);
+    fn a_dark_colour_is_brightened_keeping_its_hue() {
+        assert_eq!(average(&screen_of(|_| [0, 60, 0])).unwrap(), ["#009900"; 3]);
     }
 
     #[test]
