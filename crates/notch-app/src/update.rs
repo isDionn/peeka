@@ -41,7 +41,8 @@ fn now_s() -> u64 {
 
 pub fn start(app: &AppHandle) {
     app.manage(State::default());
-    if crate::app::demo() {
+    // a build without an update channel (brand `updates_url: null`) never asks
+    if crate::app::demo() || notch_core::brand::UPDATES_URL.is_none() {
         return;
     }
     let handle = app.clone();

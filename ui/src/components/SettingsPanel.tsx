@@ -113,10 +113,10 @@ function Appearance({ settings }: { settings: Settings }) {
           <Row title="Download complete alert" sub="Watches the Downloads folder. Reads only name and size, never contents">
             <Switch on={settings.watchDownloads} label="Download complete alert" onChange={(v) => bridge.call("set_settings", { patch: { watchDownloads: v } })} />
           </Row>
-          <Row title="Check for updates" sub="Once a day, asks GitHub for the latest version number">
+          {BRAND.updatesUrl && <Row title="Check for updates" sub="Once a day, asks GitHub for the latest version number">
             <Switch on={settings.updateCheck} label="Check for updates" onChange={(v) => bridge.call("set_settings", { patch: { updateCheck: v } })} />
-          </Row>
-          <Row title="Screen colour glow" sub="Peeka reads a tiny blurred strip under the bar in memory to tint the glow. Nothing is saved.">
+          </Row>}{/* a build without an update channel never asks */}
+          <Row title="Screen colour glow" sub="Peeka shrinks the screen to a few dozen pixels in memory to tint the glow. Nothing is saved.">
             <Switch on={settings.screenTint} label="Screen colour glow" onChange={(v) => bridge.call("set_settings", { patch: { screenTint: v } })} />
           </Row>
           <Row title="Start with Windows" sub="Peeka starts when you sign in">
@@ -277,7 +277,7 @@ function About({ settings, onQuit }: { settings: Settings; onQuit?: () => void }
       <div className="list glass" style={NO_INDENT}>
         <Row title="Peeka" sub="A strip and island that replace the Windows taskbar. Assistants connect to it as plugins." />
         {BRAND.updatesUrl
-          ? <Row title="Updates" sub="Opens the latest release on GitHub. Peeka never checks on its own"><button className="btn kk glass" onClick={() => bridge.call("open_windows_settings", { uri: BRAND.updatesUrl! }).catch(() => undefined)}>Check for updates</button></Row>
+          ? <Row title="Updates" sub="Opens the latest release on GitHub"><button className="btn kk glass" onClick={() => bridge.call("open_windows_settings", { uri: BRAND.updatesUrl! }).catch(() => undefined)}>Check for updates</button></Row>
           : <Row title="Updates" sub="No update channel; this build never checks on its own"><span /></Row>}
         <Row title="Emergency shortcut" sub="Restores the taskbar"><Kbd keys={settings.shortcuts.emergency} /></Row>
         <Diagnostics />
