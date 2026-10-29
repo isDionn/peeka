@@ -37,6 +37,9 @@ pub struct Settings {
     /// Strips on the other monitors too (Start, Search, windows, clock).
     #[serde(default = "yes")]
     pub secondary_strips: bool,
+    /// No strips at all, only the island; the Windows taskbar and the Win key are left alone.
+    #[serde(default)]
+    pub island_only: bool,
     /// Notch's own "do not disturb" (its notices and protrusions keep quiet; Windows Focus is not touched).
     #[serde(default)]
     pub dnd: bool,
@@ -149,6 +152,11 @@ fn sixty() -> u32 {
 }
 
 impl Settings {
+    /// The taskbar mode in force: island only leaves the Windows taskbar alone whatever was chosen (the choice is kept).
+    pub fn taskbar_mode(&self) -> HideMode {
+        if self.island_only { HideMode::Off } else { self.taskbar_hide }
+    }
+
     pub fn clip_config(&self) -> crate::clip::Config {
         crate::clip::Config {
             history: self.clip_history,
@@ -170,6 +178,7 @@ impl Default for Settings {
             pins: vec![],
             shortcuts: shortcuts::defaults(),
             secondary_strips: true,
+            island_only: false,
             dnd: false,
             capture_volume_keys: true,
             alerts_api: false,
@@ -198,6 +207,7 @@ pub struct UiSettings {
     /// `notch --demo`: nothing is saved (the page shows a "Demo" badge). Never in the file.
     pub demo: bool,
     pub secondary_strips: bool,
+    pub island_only: bool,
     pub shortcuts: BTreeMap<ShortcutId, String>,
     pub shortcut_exceptions: Vec<UiException>,
     pub capture_volume_keys: bool,
@@ -233,6 +243,7 @@ pub struct UiException {
 #[serde(rename_all = "camelCase")]
 pub struct UiPatch {
     pub secondary_strips: Option<bool>,
+    pub island_only: Option<bool>,
     pub shortcuts: Option<BTreeMap<ShortcutId, String>>,
     pub shortcut_exceptions: Option<Vec<UiExceptionIn>>,
     pub capture_volume_keys: Option<bool>,
@@ -279,6 +290,7 @@ pub fn to_ui(s: &Settings, name_icon: impl Fn(&str) -> Option<(String, String)>)
     UiSettings {
         demo: false,
         secondary_strips: s.secondary_strips,
+        island_only: s.island_only,
         shortcuts,
         shortcut_exceptions,
         capture_volume_keys: s.capture_volume_keys,
@@ -310,6 +322,9 @@ pub fn apply_patch(
     let mut next = s.clone();
     if let Some(v) = patch.secondary_strips {
         next.secondary_strips = v;
+    }
+    if let Some(v) = patch.island_only {
+        next.island_only = v;
     }
     if let Some(v) = patch.capture_volume_keys {
         next.capture_volume_keys = v;
@@ -502,7 +517,7 @@ mod tests {
         let mut s = load(&path);
         assert_eq!(s, Settings::default());
         assert_eq!(s.taskbar_hide, HideMode::Full);
-        assert!(s.autostart && s.secondary_strips && !s.dnd);
+        assert!(s.autostart && s.secondary_strips && !s.dnd && !s.island_only);
         s.taskbar_hide = HideMode::Auto;
         s.pins.push(Pin { app_id: "exe:c:\\a.exe".into(), name: "A".into(), relaunch: None });
         save(&path, &s).unwrap();
@@ -599,5 +614,15 @@ mod tests {
         assert!(!load(&path).color_icons, "the user's later off is kept");
         tmp.write("settings.json", br#"{"version":1,"color_icons":false}"#);
         assert!(!load(&path).color_icons, "a versioned false is a choice");
+    }
+
+    #[test]
+    fn island_only_leaves_the_taskbar_alone_and_keeps_the_chosen_mode() {
+        let mut s = Settings { taskbar_hide: HideMode::Full, ..Settings::default() };
+        assert_eq!(s.taskbar_mode(), HideMode::Full);
+        s.island_only = true;
+        assert_eq!((s.taskbar_mode(), s.taskbar_hide), (HideMode::Off, HideMode::Full));
+        let p: UiPatch = serde_json::from_str(r#"{"islandOnly":false}"#).unwrap();
+        assert!(!apply_patch(&s, p, |_| None, |_| None).unwrap().island_only);
     }
 }

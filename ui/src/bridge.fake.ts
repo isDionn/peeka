@@ -173,7 +173,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     hidden = false; firstConnect = false; recap = null; calendar = structuredClone(DEFAULT_CALENDAR); bridgeState = { installed: true, healthy: true, lastEventAgoS: 120 };
     settings = {
       autostart: true, taskbarHide: "full", clipHistory: true, clipMedia: true, clipPasswordMin: 60,
-      secondaryStrips: true, captureVolumeKeys: true, alertsApi: false, mascotPranks: true, celebrate: true, watchDownloads: true, screenTint: true, colorIcons: false,
+      secondaryStrips: true, islandOnly: false, captureVolumeKeys: true, alertsApi: false, mascotPranks: true, celebrate: true, watchDownloads: true, screenTint: true, colorIcons: false,
       shortcuts: { search: "Ctrl+K", ask: "Ctrl+Space", focus_island: "Ctrl+Shift+Enter", hide_island: "Ctrl+Shift+A", emergency: "Ctrl+Alt+Shift+T" },
       shortcutExceptions: EXCEPTION_APPS.map((appId) => ({ ...ref(appId), name: APP_NAMES[appId] ?? EXCEPTION_NAMES[appId] ?? appId, keys: appId === "vscode" ? "Ctrl+K, Ctrl+Space" : "Ctrl+K" })),
     };

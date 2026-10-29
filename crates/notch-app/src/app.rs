@@ -417,7 +417,7 @@ fn setup(app: &AppHandle) -> Result<(), String> {
     // Demo: defaults, never the owner's file (`load` may also move a corrupt one aside), taskbar left alone.
     let settings =
         if is_demo { Settings { taskbar_hide: HideMode::Off, ..Settings::default() } } else { settings::load(&path) };
-    let mode = settings.taskbar_hide;
+    let mode = settings.taskbar_mode();
     // Always on: from here until a clean exit, the guard treats our end as a crash.
     set_alive(&data_dir, true);
     // Release only: a dev build must not put target\debug into the owner's startup list.
@@ -703,8 +703,11 @@ fn probe_once(app: AppHandle) {
 pub fn layout(app: &AppHandle) {
     let Some(n) = app.try_state::<Notch>() else { return };
     let monitors = notch_win::monitors::list();
-    let secondary = n.settings.lock().secondary_strips;
-    let plan = notch_core::screens::plan_layout(&monitors, secondary);
+    let (secondary, island_only) = {
+        let s = n.settings.lock();
+        (s.secondary_strips, s.island_only)
+    };
+    let plan = notch_core::screens::plan_layout(&monitors, secondary, island_only);
     // Before any window is built: a strip page asks `get_monitor` as soon as it loads, and an unknown monitor left it
     // blank for good (VM run 2: 2 of 4 starts showed no strip while the island was still being built).
     *n.monitors.lock() = monitors.clone();
@@ -751,7 +754,7 @@ pub fn layout(app: &AppHandle) {
             }
         }
     }
-    notch_win::taskbar::hide_secondary(secondary); // before `set_appbars` wakes the taskbar worker
+    notch_win::taskbar::hide_secondary(secondary && !island_only); // before `set_appbars` wakes the taskbar worker
     crate::taskbar::set_appbars(n.appbar.handles());
     fullscreen_poke(); // a strip built during fullscreen (monitor plugged in) hides at once, not after the 1 s re-check
 }
@@ -807,7 +810,11 @@ fn register_shortcuts(app: &AppHandle) -> bool {
     let list = n.settings.lock().shortcuts.clone();
     let gs = app.global_shortcut();
     let mut emergency = false;
+    let island_only = n.settings.lock().island_only;
     for s in &list {
+        if island_only && s.id == ShortcutId::Search {
+            continue; // only opens a strip panel
+        }
         // A key that types a character through AltGr here is never taken (it would eat that character).
         let why = shortcut_problem(&s.keys);
         let ok = why.is_none() && shortcut_of(&s.keys).is_some_and(|k| gs.register(k).is_ok());
@@ -828,6 +835,20 @@ fn register_shortcuts(app: &AppHandle) -> bool {
         }
     }
     emergency
+}
+
+/// Island only turned on or off: Ctrl+K (search) is a strip panel, so it is let go of or taken back live.
+pub fn sync_search_key(app: &AppHandle, island_only: bool) {
+    let Some(n) = app.try_state::<Notch>() else { return };
+    let keys = n.settings.lock().shortcuts.iter().find(|s| s.id == ShortcutId::Search).and_then(|s| shortcut_of(&s.keys));
+    let Some(keys) = keys else { return };
+    let gs = app.global_shortcut();
+    if island_only {
+        let _ = gs.unregister(keys);
+    } else {
+        let _ = gs.register(keys);
+        *n.gate.lock() = ShortcutGate::default(); // held again; the next foreground change lets go where an exception says so
+    }
 }
 
 fn on_shortcut(app: &AppHandle, pressed: &Shortcut, event: tauri_plugin_global_shortcut::ShortcutEvent) {
@@ -877,7 +898,10 @@ fn cursor_monitor(n: &Notch) -> Option<usize> {
 /// Shortcut exceptions: an app on a shortcut's list came to the front (or left).
 fn on_foreground(app: &AppHandle, exe: &str) {
     let Some(n) = app.try_state::<Notch>() else { return };
-    let list = n.settings.lock().shortcuts.clone();
+    let (list, island_only) = {
+        let s = n.settings.lock();
+        (s.shortcuts.clone(), s.island_only)
+    };
     let actions = n.gate.lock().on_foreground(&list, Some(exe));
     let gs = app.global_shortcut();
     for action in actions {
@@ -885,6 +909,9 @@ fn on_foreground(app: &AppHandle, exe: &str) {
             notch_core::shortcuts::GateAction::Register(id) => (id, true),
             notch_core::shortcuts::GateAction::Unregister(id) => (id, false),
         };
+        if island_only && id == ShortcutId::Search {
+            continue;
+        }
         let Some(keys) = list.iter().find(|s| s.id == id).and_then(|s| shortcut_of(&s.keys)) else { continue };
         let _ = if register { gs.register(keys) } else { gs.unregister(keys) };
     }

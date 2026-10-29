@@ -77,6 +77,8 @@ export interface Settings extends ClipSettings {
   /** The Hidden icons panel's order and groups (same shape; app ids are the tray's `exe:<path>`); absent / null = Windows's order. Written with `set_settings`. */
   trayItems?: StartItem[] | null;
   secondaryStrips: boolean;
+  /** No strip anywhere, only the island; the Windows taskbar and the Win key are left alone. */
+  islandOnly: boolean;
   shortcuts: Record<ShortcutId, string>;
   shortcutExceptions: ShortcutException[];
   /** Volume keys are swallowed; only Peeka's indicator appears. */

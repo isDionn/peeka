@@ -906,10 +906,12 @@ pub async fn set_settings(app: AppHandle, n: State<'_, Notch>, patch: UiPatch) -
         }
         return fail("Settings could not be saved.".into());
     }
-    let strips_changed = next.secondary_strips != old.secondary_strips;
+    let island_changed = next.island_only != old.island_only;
+    let strips_changed = next.secondary_strips != old.secondary_strips || island_changed;
     let icons_changed = next.color_icons != old.color_icons;
     let clip = (next.clip_config() != old.clip_config()).then(|| next.clip_config());
     let (keys, http) = (next.capture_volume_keys, next.alerts_api);
+    let island_only = next.island_only;
     *n.settings.lock() = next;
     if keys != old.capture_volume_keys {
         if keys {
@@ -923,6 +925,10 @@ pub async fn set_settings(app: AppHandle, n: State<'_, Notch>, patch: UiPatch) -
     }
     if let Some(cfg) = clip {
         crate::clip_history::configure(&app, cfg);
+    }
+    if island_changed {
+        crate::app::sync_search_key(&app, island_only);
+        crate::taskbar::apply(n.settings.lock().taskbar_mode(), false); // before layout wakes the taskbar worker
     }
     if strips_changed {
         let handle = app.clone();
@@ -1018,7 +1024,7 @@ pub fn diagnostics_open_folder(n: State<'_, Notch>) -> Res<()> {
 pub fn taskbar_set_mode(app: AppHandle, n: State<'_, Notch>, mode: HideMode) -> Res<()> {
     not_in_demo()?; // demo never hides the taskbar: hiding needs the crash marker on disk
     n.set_hide_mode(mode).map_err(|_| CmdError::Io)?;
-    crate::taskbar::apply(mode, true);
+    crate::taskbar::apply(n.settings.lock().taskbar_mode(), true);
     let _ = app.emit("settings_changed", ui_settings(&n));
     Ok(())
 }

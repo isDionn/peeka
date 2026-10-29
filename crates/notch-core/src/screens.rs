@@ -120,9 +120,10 @@ pub struct LayoutPlan {
     pub island: Option<IslandSpot>,
 }
 
-pub fn plan_layout(monitors: &[Monitor], secondary: bool) -> LayoutPlan {
+/// `island_only`: no strip anywhere, the island stays where it is.
+pub fn plan_layout(monitors: &[Monitor], secondary: bool, island_only: bool) -> LayoutPlan {
     LayoutPlan {
-        strips: monitors.iter().filter(|m| m.primary || secondary).map(|m| m.index).collect(),
+        strips: monitors.iter().filter(|m| !island_only && (m.primary || secondary)).map(|m| m.index).collect(),
         island: primary(monitors).map(|m| IslandSpot { monitor: m.index, rect: island_rect(m), scale: m.scale, hz: m.hz }),
     }
 }
@@ -275,21 +276,24 @@ mod tests {
     #[test]
     fn unplugging_the_second_monitor_removes_its_strip_and_the_island_stays_where_it_was() {
         let docked = sorted(vec![mon(0, 1920, 1080, 1.25, true), mon(1920, 2560, 1440, 1.0, false)]);
-        let before = plan_layout(&docked, true);
+        let before = plan_layout(&docked, true, false);
         assert_eq!((before.strips.as_slice(), before.island.unwrap().monitor), (&[0, 1][..], 0));
-        let after = plan_layout(&sorted(vec![mon(0, 1920, 1080, 1.25, true)]), true);
+        let after = plan_layout(&sorted(vec![mon(0, 1920, 1080, 1.25, true)]), true, false);
         assert_eq!(after.strips, [0]);
         assert_eq!(after.island, before.island, "the same spot: nothing moved");
-        assert_eq!(plan_layout(&docked, false).strips, [0], "secondary strips off: the primary only");
+        assert_eq!(plan_layout(&docked, false, false).strips, [0], "secondary strips off: the primary only");
+        let only = plan_layout(&docked, true, true);
+        assert!(only.strips.is_empty(), "island only: no strip on any monitor, the primary included");
+        assert_eq!(only.island, before.island, "and the island stays where it was");
     }
 
     #[test]
     fn closing_the_laptop_lid_moves_the_island_to_the_new_primary_and_the_open_card_keeps_its_clickable_region() {
         let docked = sorted(vec![mon(0, 1920, 1080, 1.25, true), mon(1920, 2560, 1440, 1.0, false)]);
-        let before = plan_layout(&docked, true).island.unwrap();
+        let before = plan_layout(&docked, true, false).island.unwrap();
         // The lid closes: Windows lists only the external screen and calls it primary.
         let lone = sorted(vec![mon(0, 2560, 1440, 1.0, true)]);
-        let after = plan_layout(&lone, true).island.unwrap();
+        let after = plan_layout(&lone, true, false).island.unwrap();
         assert_ne!((before.rect, before.scale), (after.rect, after.scale), "the island window moves and rescales");
         let screen = lone[0].rect;
         assert!(screen.covers(&after.rect), "the island window sits inside the new screen");
@@ -311,9 +315,9 @@ mod tests {
 
     #[test]
     fn a_smaller_new_primary_clamps_the_island_inside_it_and_no_monitor_leaves_the_island_alone() {
-        let small = plan_layout(&sorted(vec![mon(0, 700, 500, 1.0, true)]), true).island.unwrap();
+        let small = plan_layout(&sorted(vec![mon(0, 700, 500, 1.0, true)]), true, false).island.unwrap();
         assert!(small.rect.width() <= 700 && small.rect.height() <= 500);
-        let none = plan_layout(&[], true);
+        let none = plan_layout(&[], true, false);
         assert_eq!((none.strips.is_empty(), none.island), (true, None), "no screen listed: the window is not touched");
     }
 

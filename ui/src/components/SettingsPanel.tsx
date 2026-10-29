@@ -15,13 +15,13 @@ const NAV: [SettingsPage, string, typeof Keyboard][] = [["appearance", "Appearan
 
 const TASKBAR_MODES: [Settings["taskbarHide"], string][] = [["full", "Always hide"], ["auto", "Auto-hide"], ["off", "Keep Windows taskbar"]];
 /** Windows taskbar mode: read from Rust (`taskbarHide`), written with `taskbar_set_mode`; the choice is also kept locally until the change event arrives. */
-function TaskbarMode({ value }: { value: Settings["taskbarHide"] }) {
+function TaskbarMode({ value, disabled }: { value: Settings["taskbarHide"]; disabled?: boolean }) {
   const [mode, setMode] = useState(value);
   useEffect(() => setMode(value), [value]);
   return (
     <div className="seg glass segSmall" role="radiogroup" aria-label="Windows taskbar" onKeyDown={radioKeys}>
       {TASKBAR_MODES.map(([m, title]) => (
-        <button key={m} className={"segb" + (mode === m ? " on" : "")} role="radio" aria-checked={mode === m} tabIndex={mode === m ? 0 : -1} onClick={() => { setMode(m); bridge.call("taskbar_set_mode", { mode: m }).catch(() => setMode(value)); }}>{title}</button>
+        <button key={m} disabled={disabled} className={"segb" + (mode === m ? " on" : "")} role="radio" aria-checked={mode === m} tabIndex={mode === m ? 0 : -1} onClick={() => { setMode(m); bridge.call("taskbar_set_mode", { mode: m }).catch(() => setMode(value)); }}>{title}</button>
       ))}
     </div>
   );
@@ -99,7 +99,10 @@ function Appearance({ settings }: { settings: Settings }) {
       <button className="btn kk glass otherSettings" aria-expanded={more} onClick={() => setMore(!more)}><ChevronRight />More settings</button>
       {more && (
         <div className="list glass" style={NO_INDENT}>
-          <Row title="Taskbar mode" sub="Always hide, auto-hide, or keep Windows'"><TaskbarMode value={mode} /></Row>
+          <Row title="Island only" sub="Hide the top strip; the Windows taskbar stays">
+            <Switch on={settings.islandOnly} label="Island only" onChange={(v) => bridge.call("set_settings", { patch: { islandOnly: v } })} />
+          </Row>
+          <Row title="Taskbar mode" sub="Always hide, auto-hide, or keep Windows'"><TaskbarMode value={mode} disabled={settings.islandOnly} /></Row>
           <Row title="Handle volume keys" sub="Show Peeka's volume indicator instead of Windows'">
             <Switch on={settings.captureVolumeKeys} label="Handle volume keys" onChange={(v) => bridge.call("set_settings", { patch: { captureVolumeKeys: v } })} />
           </Row>

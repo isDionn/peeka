@@ -396,6 +396,17 @@ describe("Settings › Appearance: Start with Windows and taskbar mode", () => {
     expect(within(group).getByRole("radio", { name: "Keep Windows taskbar" }).getAttribute("aria-checked")).toBe("true");
     expect(container.textContent?.toLowerCase()).not.toContain("experimental");
   });
+  it("Island only is a switch that writes islandOnly and disables the taskbar mode choice", async () => {
+    const settings = await fakeBridge.call("get_settings");
+    const { rerender } = render(<SettingsPanel page="appearance" onPage={() => undefined} settings={settings} />);
+    fireEvent.click(screen.getByRole("button", { name: "More settings" }));
+    expect(screen.getByRole("radio", { name: "Auto-hide" }).hasAttribute("disabled")).toBe(false);
+    fireEvent.click(screen.getByRole("switch", { name: "Island only" }));
+    await settle();
+    expect((await fakeBridge.call("get_settings")).islandOnly).toBe(true);
+    rerender(<SettingsPanel page="appearance" onPage={() => undefined} settings={{ ...settings, islandOnly: true }} />);
+    expect(screen.getByRole("radio", { name: "Auto-hide" }).hasAttribute("disabled")).toBe(true);
+  });
   it("the selection follows when taskbarHide changes from outside", async () => {
     const settings = await fakeBridge.call("get_settings");
     const { rerender } = render(<SettingsPanel page="appearance" onPage={() => undefined} settings={settings} />);
