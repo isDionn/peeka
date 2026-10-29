@@ -1,7 +1,7 @@
 /* Wave 4: clipboard card, Clipboard tab, screen snip peek, Ctrl+K file/setting/plugin results, Settings › Clipboard.
    Rules come from the .pg / .tip2 / .eyeOpen blocks in yon-3d-son.html; actions are drawn only on .current (hovered, focused, selected row) (decision 15). */
 .clipInner{display:flex;flex-direction:column;gap:12px}
-.clipImages{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.clipImages{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}/* minmax: a long file name must not widen its column */
 .pg{position:relative;border-radius:var(--rPlat);corner-shape:squircle;padding:4px;cursor:grab;touch-action:none;transition:opacity .2s ease,transform .16s var(--ease)}
 .pg img,.pgNone{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:var(--rInner);corner-shape:squircle}
 .pgNone{display:grid;place-items:center;background:rgba(255,255,255,.08);color:var(--l3)}
@@ -25,9 +25,13 @@
 .clipList .row .rowAction{animation:actionIn .16s ease both}
 .clipList .row.current .rowAction{opacity:1}
 .clipList .row.current .time{opacity:0}
+/* the actions take the time and pin slot in the flow, so a long name ends before them instead of running under them */
+.clipList .row.current .rowAction{position:static;translate:none;flex:none}
+.clipList .row.current:has(.rowAction) :is(.time,.pinIcon){display:none}
 /* a clicked row keeps focus but draws no actions (mouse focus doesn't count): keep its time instead of an empty gap */
 .clipList .row[data-clip]:not(.current) .time{opacity:1}
 .clipList .row.dim>:not(.rowAction){opacity:.45}
+.clipList .row .t12{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}/* file size and folder: one line */
 .clipList .row:focus-visible{outline-offset:-2px;border-radius:var(--rInner)}
 .row .tip2{width:26px;height:26px;border-radius:var(--rInner);corner-shape:squircle;display:grid;place-items:center;flex:none;background:rgba(255,255,255,.08);color:var(--l2)}
 .row .tip2 svg.lucide{width:14px;height:14px}
