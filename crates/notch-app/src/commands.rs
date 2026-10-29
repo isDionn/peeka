@@ -1580,6 +1580,19 @@ pub fn download_show_in_folder(app: AppHandle, id: String) -> Res<()> {
     notch_win::downloads::show_in_folder(&path).then_some(()).ok_or(CmdError::Refused)
 }
 
+/// "Download" on the update notice: opens the release page Rust remembers (the page sends no address).
+#[tauri::command]
+pub fn update_open(app: AppHandle) -> Res<()> {
+    cmd::unlocked(crate::plugins::locked(&app))?;
+    crate::update::open(&app).then_some(()).ok_or(CmdError::Refused)
+}
+
+/// Dismiss (or Download) on the update notice: that version is not announced again.
+#[tauri::command]
+pub fn update_dismiss(app: AppHandle) {
+    crate::update::dismiss(&app);
+}
+
 /* ---------- Wave 5 (shapes: ui/src/bridge.ts, Wave 5 block; rules: notch_core::{preview, shelf, timer}) ---------- */
 
 use notch_core::preview::Plan;

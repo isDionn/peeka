@@ -12,7 +12,7 @@
 //! Wave 3 (`plugins.rs`): `plugins_changed`, `consent_changed`, `plugin_surfaces_changed`, `composer_event`,
 //! `plugin_stream`; the consent window loads `consent.html` (label `consent`). Wave 4: `lock_changed`
 //! (`notch_core::lock::LockState`), `clip_changed` (`clip_history.rs`). Wave 5 (`extras.rs`): `privacy_changed`,
-//! `input_tick`, `timer_changed`, `shelf_changed`, `shelf_drag`, `bluetooth_connected`, `music_stopped`, `download_done`, `cpu_high`, `fullscreen_screens` (`{island, strips}`: what the fullscreen app hides, per monitor), `approval_badge` (`{monitor, count}` or null: an approval waits while the cursor is on another monitor's strip). `screen_tint` (`notch_core::tint::ScreenTint`, every 2 s per strip monitor unless paused). Wave 6 (`mirror.rs`): `notifications_changed`
+//! `input_tick`, `timer_changed`, `shelf_changed`, `shelf_drag`, `bluetooth_connected`, `music_stopped`, `download_done`, `update_available` (the new version, once a day at most), `cpu_high`, `fullscreen_screens` (`{island, strips}`: what the fullscreen app hides, per monitor), `approval_badge` (`{monitor, count}` or null: an approval waits while the cursor is on another monitor's strip). `screen_tint` (`notch_core::tint::ScreenTint`, every 2 s per strip monitor unless paused). Wave 6 (`mirror.rs`): `notifications_changed`
 //! (`notch_core::mirror::MirrorView`). Assistant slots (`plugins.rs`, `privacy.rs`): `assistant_event` (`{type, data}`,
 //! held while the privacy gate is closed), `assistant_reply` (`{id, result}` or `{id, error: {code}}`: the answer to
 //! `assistant_request`). Commands: see `commands.rs`.
@@ -301,6 +301,8 @@ pub fn run() {
             crate::commands::clip_ocr,
             crate::commands::download_open,
             crate::commands::download_show_in_folder,
+            crate::commands::update_open,
+            crate::commands::update_dismiss,
             crate::commands::clip_drag,
             crate::commands::search_index_state,
             crate::commands::search_open,
@@ -518,6 +520,7 @@ fn setup(app: &AppHandle) -> Result<(), String> {
         });
     }
     app.manage(crate::downloads::State::default());
+    crate::update::start(app);
     crate::extras::start(app);
     crate::mirror::start(app);
     crate::plugins::start(app, data_dir.clone());

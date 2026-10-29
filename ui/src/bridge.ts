@@ -64,6 +64,8 @@ export interface Settings extends ClipSettings {
   celebrate: boolean;
   /** The Downloads folder is watched and `download_done` fires for finished files (name and size only; content isn't read and never goes to plugins). On by default. */
   watchDownloads: boolean;
+  /** Once a day Peeka asks GitHub for the latest version number (its only network call). On by default. */
+  updateCheck: boolean;
   /** The glow takes its colour from a thin band under the strip (`screen_tint`; pixels stay in memory, never stored or given to plugins). On by default. */
   screenTint: boolean;
   /** Color app icons (decision 14: off by default, monochrome). */
@@ -328,6 +330,10 @@ export interface Commands {
   download_open: { args: { id: string }; ret: void };
   /** Show a finished download selected in Explorer. `denied` while locked, `missing` if the id/file is gone. */
   download_show_in_folder: { args: { id: string }; ret: void };
+  /** The update notice's "Download": opens the release page Rust remembers in the browser. `denied` while locked, `refused` if there is none. */
+  update_open: { args: void; ret: void };
+  /** The update notice was dismissed (or used): that version is not announced again. */
+  update_dismiss: { args: void; ret: void };
   /** Clipboard card or Clipboard tab visible/closed: Rust turns on `WDA_EXCLUDEFROMCAPTURE` for the island window and removes it on close. The page waits for the `on: true` reply BEFORE the first frame; the return value says whether the island is now excluded from capture. `false`, an error or no reply = not excluded: the page draws the card but NEVER draws password rows (safe side). */
   clip_visible: { args: { on: boolean }; ret: boolean };
   lock_state: { args: void; ret: LockState };
@@ -529,6 +535,8 @@ export interface Events {
   approval_badge: ApprovalBadge | null;
   /** A new file finished in Downloads (size unchanged across two looks; .crdownload/.part/.tmp don't count). No path: use `id` with `download_open` / `download_show_in_folder`. Doesn't fire while `watchDownloads` is off or while locked. */
   download_done: DownloadDone;
+  /** A newer release exists (the version, e.g. "0.4.0"); at most once a day, never for a dismissed version, never while `updateCheck` is off. */
+  update_available: string;
   privacy_changed: PrivacyState;
   input_tick: InputTick;
   timer_changed: TimerState | null;

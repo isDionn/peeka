@@ -41,7 +41,7 @@ type W7Names = "recent_files" | "open_recent" | "app_recent" | "app_recent_open"
 type W9Names = "claude_chat_state" | "claude_chat_send" | "claude_chat_stop" | "claude_chat_new";
 /** Wi-Fi / Bluetooth long-press pickers (same sample data as Rust demo mode). */
 type W10Names = "wifi_networks" | "wifi_connect" | "bt_devices" | "bt_set";
-type W8Names = "save_diagnostics" | "diagnostics_open_folder" | "demo_restart" | "notif_copy_code" | "clip_open" | "clip_to_shelf" | "clip_preview" | "clip_ocr" | "clip_paste_plain" | "download_open" | "download_show_in_folder";
+type W8Names = "save_diagnostics" | "diagnostics_open_folder" | "demo_restart" | "notif_copy_code" | "clip_open" | "clip_to_shelf" | "clip_preview" | "clip_ocr" | "clip_paste_plain" | "download_open" | "download_show_in_folder" | "update_open" | "update_dismiss";
 const svg = (inner: string) => "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${inner}</g></svg>`);
 const GLYPH = {
   bluetooth: svg('<path d="m7 7 10 10-5 5V2l5 5L7 17"/>'),
@@ -173,7 +173,7 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     hidden = false; firstConnect = false; recap = null; calendar = structuredClone(DEFAULT_CALENDAR); bridgeState = { installed: true, healthy: true, lastEventAgoS: 120 };
     settings = {
       autostart: true, taskbarHide: "full", clipHistory: true, clipMedia: true, clipPasswordMin: 60,
-      secondaryStrips: true, islandOnly: false, captureVolumeKeys: true, alertsApi: false, mascotPranks: true, celebrate: true, watchDownloads: true, screenTint: true, colorIcons: false,
+      secondaryStrips: true, islandOnly: false, captureVolumeKeys: true, alertsApi: false, mascotPranks: true, celebrate: true, watchDownloads: true, updateCheck: true, screenTint: true, colorIcons: false,
       shortcuts: { search: "Ctrl+K", ask: "Ctrl+Space", focus_island: "Ctrl+Shift+Enter", hide_island: "Ctrl+Shift+A", emergency: "Ctrl+Alt+Shift+T" },
       shortcutExceptions: EXCEPTION_APPS.map((appId) => ({ ...ref(appId), name: APP_NAMES[appId] ?? EXCEPTION_NAMES[appId] ?? appId, keys: appId === "vscode" ? "Ctrl+K, Ctrl+Space" : "Ctrl+K" })),
     };
@@ -510,6 +510,8 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     // Fake OCR: an image whose source name contains "blank" has no text; the rest copies a sample line.
     clip_ocr: (a) => { const c = find(a.id); if (!c || lock.locked || c.kind === "password") throw "denied"; if (c.kind !== "image") throw "invalid"; log.push({ cmd: "clip_ocr", args: a }); return !/blank/i.test(c.source ?? ""); },
     download_open: (a) => { if (lock.locked) throw "denied"; if (/\.(exe|bat|cmd|ps1|lnk|msi)$/i.test(downloads.get(a.id) ?? "")) throw "denied"; if (!downloads.has(a.id)) throw "missing"; log.push({ cmd: "download_open", args: a }); },
+    update_open: () => { if (lock.locked) throw "denied"; log.push({ cmd: "update_open", args: undefined }); },
+    update_dismiss: () => { log.push({ cmd: "update_dismiss", args: undefined }); },
     download_show_in_folder: (a) => { if (lock.locked) throw "denied"; if (!downloads.has(a.id)) throw "missing"; log.push({ cmd: "download_show_in_folder", args: a }); },
   };
 
@@ -634,6 +636,8 @@ export function createFakeBridge(opts: { now?: Date; battery?: boolean } = {}) {
     setMirror: (p: Partial<MirrorState>) => { mirrorSet(p); },
     pushNotice: (n: Partial<Notice> & { id: string; app: string; title: string }) => { notices = [...notices.filter((x) => x.id !== n.id), { body: null, tile: "", tileMono: true, ripple: false, openLabel: "Open app", canOpen: true, at: nowMs(), hasCode: false, ...n }]; mirrorEmit(); },
     /** Preview/test: a download finished (`download_done`). */
+    /** Preview/test: a newer release was found (`update_available`). */
+    pushUpdate: (version: string) => emit("update_available", version),
     pushDownload: (d: { id: string; name: string; size: number }) => { downloads.set(d.id, d.name); emit("download_done", d); },
     setMirrorQuiet: (q: boolean) => { quiet = q; mirrorEmit(); },
     setPreviewDelay: (ms: number) => { previewDelay = ms; },

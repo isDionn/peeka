@@ -17,7 +17,7 @@ export const LOCK_MUSIC = "Music playing", LOCK_ALERT = "Alert";
 
 /** One row of the bubble and the "+N" list. No mascot here ever (one-mascot rule): the face is only an icon, cover or ring. */
 export interface BubbleItem { kind: ActivityKind; /** Inside of the 30 px circle. */ face: ReactNode; /** Small icon in the list. */ glyph: ReactNode; label: string; sub?: ReactNode }
-export interface BubbleCtx { away?: string | null; net?: "lost" | "back" | null; media: Media | null; timer: TimerState | null; alert: Alert | null; prot: ProtrusionItem | null; done: { title: string } | null; locked: boolean; battery?: Status["battery"]; burst?: Burst | null; stopped?: MusicStopped | null; dl?: DownloadDone | null; cpu?: CpuHigh | null; edit?: CcEdit | null }
+export interface BubbleCtx { away?: string | null; net?: "lost" | "back" | null; media: Media | null; timer: TimerState | null; alert: Alert | null; prot: ProtrusionItem | null; done: { title: string } | null; locked: boolean; battery?: Status["battery"]; burst?: Burst | null; stopped?: MusicStopped | null; dl?: DownloadDone | null; update?: string | null; cpu?: CpuHigh | null; edit?: CcEdit | null }
 
 const R = 13, C = 2 * Math.PI * R;
 /** Thin ring: `y` is the 0..1 filled ratio; `spin` is indeterminate progress (a spinning arc). */
@@ -72,6 +72,7 @@ export function bubbleItem(kind: ActivityKind, c: BubbleCtx): BubbleItem {
     case "net": return plain(<WifiOff />, c.net === "back" ? "Back online" : "Connection lost");
     case "clip": return plain(<Clipboard />, "Copied to clipboard");
     case "approval": return plain(<ShieldCheck />, "Awaiting approval");
+    case "update": return plain(<Download />, c.update ? `Peeka ${flat(c.update, 12)} is available` : "Update available");
     case "download": return plain(<Download />, locked || !c.dl ? "Download complete" : `Downloaded: ${flat(c.dl.name, 40)}`);
     default: return plain(<AlertIcon name={locked ? null : safeIcon(p?.icon)} />, shown && p ? flat(p.title, 60) : "Plugin");
   }

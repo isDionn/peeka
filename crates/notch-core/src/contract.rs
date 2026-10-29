@@ -90,6 +90,9 @@ pub const COMMANDS: &[&str] = &[
     // Peeka Phase C: "Download finished" (Downloads folder, names and sizes only)
     "download_open",
     "download_show_in_folder",
+    // Daily update check: the notice's Download (opens the release page Rust remembers) and dismiss
+    "update_open",
+    "update_dismiss",
     "search_index_state",
     "search_open",
     "search_ask",
@@ -216,6 +219,7 @@ pub const EVENTS: &[&str] = &[
     "bluetooth_connected",
     "music_stopped",
     "download_done",
+    "update_available",
     "cpu_high",
     "fullscreen_screens",
     "approval_badge",
