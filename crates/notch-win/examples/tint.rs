@@ -1,5 +1,5 @@
 //! Dev check for the screen tint (not shipped): `cargo run -p notch-win --example tint [--colors]` samples each
-//! monitor's band 50 times and prints the cost per sample; `--colors` also prints the three colours (VM checks only).
+//! monitor area 50 times and prints the cost per sample; `--colors` also prints the three colours (VM checks only).
 #[cfg(windows)]
 fn cpu_ms() -> f64 {
     use windows::Win32::Foundation::FILETIME;
@@ -16,7 +16,7 @@ fn main() {
     {
         let colors = std::env::args().any(|a| a == "--colors");
         for m in notch_win::monitors::list() {
-            let band = notch_core::tint::band(&m);
+            let band = notch_core::tint::region(&m);
             let mut times = vec![];
             let mut last = None;
             let cpu0 = cpu_ms();
@@ -28,7 +28,7 @@ fn main() {
             times.sort_by(f64::total_cmp);
             println!("cpu {:.2} ms per sample", (cpu_ms() - cpu0) / 50.0);
             let avg = times.iter().sum::<f64>() / times.len() as f64;
-            print!("monitor {} band 2x {}x{}: min {:.2} ms, median {:.2} ms, avg {:.2} ms, max {:.2} ms", m.index, band[0].width(), band[0].height(), times[0], times[25], avg, times[49]);
+            print!("monitor {} area {}x{}: min {:.2} ms, median {:.2} ms, avg {:.2} ms, max {:.2} ms", m.index, band.width(), band.height(), times[0], times[25], avg, times[49]);
             match (colors, last.as_deref().and_then(notch_core::tint::average)) {
                 (true, Some(c)) => println!(" colors {c:?}"),
                 (_, None) => println!(" SAMPLE FAILED"),

@@ -166,7 +166,7 @@ pub fn sharing(app: &AppHandle) -> bool {
 /// `screen_tint` every 2 s for each monitor with a strip (`notch_core::tint`). Off (setting, demo): null once, never a
 /// sample. Paused (lock, presentation, fullscreen, sharing, clipboard on screen): nothing sent, nothing sampled.
 fn tint_feed(app: AppHandle) {
-    use notch_core::tint::{band, Pause, Tint};
+    use notch_core::tint::{region, Pause, Tint};
     std::thread::spawn(move || {
         notch_win::com();
         let mut state: std::collections::HashMap<usize, Tint> = Default::default();
@@ -188,7 +188,7 @@ fn tint_feed(app: AppHandle) {
                 n.monitors.lock().iter().filter(|m| strips.contains(&format!("strip-{}", m.index))).cloned().collect();
             for m in monitors {
                 let pause = Pause { covered: cover == Some(m.index), ..base };
-                let sample = || notch_win::tint::sample(band(&m));
+                let sample = || notch_win::tint::sample(region(&m));
                 if let Some(t) = state.entry(m.index).or_default().step(&m.index.to_string(), on, &pause, sample) {
                     // the island sits on the primary monitor and doesn't know its index: it takes this copy (Glow.tsx, monitor "island")
                     if m.primary {

@@ -1,19 +1,19 @@
-//! The screen tint sample behind `notch_core::tint`: GDI `StretchBlt` (HALFTONE, which averages) of the two band halves
-//! beside the island into one 16x2 DIB (8 columns each). Not Windows.Graphics.Capture: an unpackaged app cannot drop its yellow border,
+//! The screen tint sample behind `notch_core::tint`: GDI `StretchBlt` (HALFTONE, which averages) of the whole monitor
+//! under the strip into one 16x9 DIB. Not Windows.Graphics.Capture: an unpackaged app cannot drop its yellow border,
 //! and it would mark Peeka itself as "capturing the screen" in the privacy keys `privacy::SCREEN` watches.
 //! No CAPTUREBLT: layered windows are left out, and the cursor does not flicker.
-//! Privacy: the 128 bytes are returned in memory only; nothing here logs or stores them.
+//! Privacy: the 576 bytes are returned in memory only; nothing here logs or stores them.
 
-/// The band shrunk to `tint::COLS` x `tint::ROWS` BGRA bytes; None = GDI failed or an empty band.
+/// The area shrunk to `tint::COLS` x `tint::ROWS` BGRA bytes; None = GDI failed or an empty area.
 #[cfg(windows)]
-pub fn sample(band: [notch_core::model::Rect; 2]) -> Option<Vec<u8>> {
+pub fn sample(area: notch_core::model::Rect) -> Option<Vec<u8>> {
     use notch_core::tint::{BYTES, COLS, ROWS};
     use windows::Win32::Graphics::Gdi::{
         CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, GdiFlush, GetDC, ReleaseDC, SelectObject,
         SetBrushOrgEx, SetStretchBltMode, StretchBlt, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HALFTONE,
         HGDIOBJ, SRCCOPY,
     };
-    if band.iter().any(|b| b.width() <= 0 || b.height() <= 0) {
+    if area.width() <= 0 || area.height() <= 0 {
         return None;
     }
     let info = BITMAPINFO {
@@ -42,11 +42,10 @@ pub fn sample(band: [notch_core::model::Rect; 2]) -> Option<Vec<u8>> {
                 let old = SelectObject(mem, HGDIOBJ(bmp.0));
                 SetStretchBltMode(mem, HALFTONE);
                 let _ = SetBrushOrgEx(mem, 0, 0, None); // required after HALFTONE
-                let half = (COLS / 2) as i32;
-                let ok = band.iter().zip([0, half]).all(|(b, x)| {
-                    StretchBlt(mem, x, 0, half, ROWS as i32, Some(screen), b.left, b.top, b.width(), b.height(), SRCCOPY)
-                        .as_bool()
-                });
+                let ok = StretchBlt(
+                    mem, 0, 0, COLS as i32, ROWS as i32, Some(screen), area.left, area.top, area.width(), area.height(), SRCCOPY,
+                )
+                .as_bool();
                 let _ = GdiFlush();
                 let px = (ok && !bits.is_null()).then(|| std::slice::from_raw_parts(bits as *const u8, BYTES).to_vec());
                 SelectObject(mem, old);
@@ -60,5 +59,18 @@ pub fn sample(band: [notch_core::model::Rect; 2]) -> Option<Vec<u8>> {
         }
         ReleaseDC(None, screen);
         out
+    }
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    /// Prints only the elapsed time of one sample of the primary monitor (no colours): `cargo test -p notch-win --lib -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn one_sample_costs() {
+        let m = crate::monitors::list().into_iter().next().expect("a monitor");
+        let t = std::time::Instant::now();
+        let ok = super::sample(notch_core::tint::region(&m)).is_some();
+        println!("one sample: {:.2} ms, ok {ok}", t.elapsed().as_secs_f64() * 1000.0);
     }
 }
