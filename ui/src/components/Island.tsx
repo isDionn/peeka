@@ -505,6 +505,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   // from the strip page: open panel label and "show intro again"
   // panel-open: opening a strip panel closes the open card (Y5)
   useEffect(() => onX((m) => { if (m.t === "ghost") setMkAside(m.on); else if (m.t === "panel") setPanelLabel(m.panel); else if (m.t === "panel-open") setUser((u) => { if (u === "welcome") markFirstRun(); return null; }); else if (m.t === "firstrun") setUser("welcome"); else if (m.t === "welcome?") sendX({ t: "welcome", open: userRef.current === "welcome" }); else if (m.t === "ask") openAsk(askTo()); else if (m.t === "card" && card) setUser(m.view); else if (m.t === "ext-go" && card) { openAsk("ext"); setExtFull(!!m.full); setExtTarget(m.target); } else if (m.t === "to-island") { const l = tabStops(); focusViaKeys(m.end ? l[l.length - 1] : l[0]); } }), []);
+  useEffect(() => { if (settings?.islandOnly) setPanelLabel(null); }, [settings?.islandOnly]); // Island only closes the strip with its panel open: the "closed" message never comes
   // while the welcome card is open the strip doesn't open the setup wizard (one thing at a time): open/closed is sent to the strip on every change
   const welcomeOpen = user === "welcome";
   useEffect(() => { sendX({ t: "welcome", open: welcomeOpen }); }, [welcomeOpen]);

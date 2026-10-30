@@ -72,4 +72,16 @@ describe("island over a fullscreen app", () => {
     expect(a.container.querySelector(".fsBand")).toBeTruthy();
     expect(handle(a.container)).toBeNull();
   });
+
+  it("Island only turned on from an open settings panel: the strip closes with it, the island lets go of its label", async () => {
+    const { sendX } = await import("../lib/xwin");
+    const a = render(<Island monitor="m1" init={{ view: null }} />);
+    await settle();
+    sendX({ t: "panel", panel: "settings" });
+    await settle(400);
+    expect(a.container.textContent).toContain("Peeka settings");
+    await act(async () => { await fakeBridge.call("set_settings", { patch: { islandOnly: true } }); });
+    await settle(400);
+    expect(a.container.textContent).not.toContain("Peeka settings");
+  });
 });
