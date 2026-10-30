@@ -108,6 +108,6 @@ html[data-kb] .sessSend:has(.sessInput:focus) { outline: 2px solid var(--focus);
 .sessNote.l3 { color: var(--l3); }
 
 /* The hanging 40 px ghost leads the center but stays out of its centering: the same room on the right keeps the text (clock, cover, title / the peek's label) on the screen's center line, with or without the ghost. */
-.islandMascot:has(> .ms:first-child > .mascot[data-hang]) { padding-right: 48px; }
+.islandMascot:has(> .ms:first-child > .mascot[data-hang]):not(:has(> .ms:only-child > .mascot:only-child)) { padding-right: 48px; } /* a ghost alone is the center itself */
 /* the cover's slot is always there, so a track without a cover doesn't shift the center */
 .coverSlot { width: 18px; height: 18px; flex: none; }
