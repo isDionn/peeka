@@ -184,6 +184,10 @@ describe("Modules (j)", () => {
     await settle();
     expect(document.querySelector(".settingsInner")).toBeTruthy(); // Settings › Modules, where the gear points
     expect((await fakeBridge.call("get_settings")).islandOnly).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "About" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Quit" }));
+    await settle();
+    expect(screen.getByText("Quit Peeka?")).toBeTruthy(); // Quit is in the island too, behind the same confirm
   });
   it("13 tabs (Claude chat last of Peeka's own) and a gear; General has the Compass box and a link to its Claude Code tab, then one place per module; quota bars, session states, Stop", async () => {
     fakeBridge.setSurfaces(SURFACES_J);

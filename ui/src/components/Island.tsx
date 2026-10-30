@@ -43,11 +43,12 @@ import { ISLAND_IDLE_HEIGHT, useWindowTall } from "../lib/windowTall";
 import { useFirstConnect, useIslandHidden, useRecap } from "../hooks.fidelity";
 import { ext } from "../ext";
 import { SettingsPanel, type SettingsPage } from "./SettingsPanel";
+import { QuitConfirm } from "./Menus";
 import { request as assistantRequest, useAssistantEvents } from "../lib/assistant";
 import { EmptyBoard, ErrorCard, ErrorCenter, FirstConnectCard, FirstConnectCenter, LoadingCenter, RecapCard, RecapCenter } from "./CardsExtra";
 
 /** Cards the user opens. Peeks that appear on their own (volume, alert, new track) stay below these. */
-export type IslandView = "diff" | "music-card" | "modules" | "noassistant" | "welcome" | "approval-card" | "composer" | "ext" | "clipboard" | "shelf" | "meeting" | "firstconnect" | "recap" | "error" | "settings";
+export type IslandView = "diff" | "music-card" | "modules" | "noassistant" | "welcome" | "approval-card" | "composer" | "ext" | "clipboard" | "shelf" | "meeting" | "firstconnect" | "recap" | "error" | "settings" | "quit";
 export interface IslandInit {
   view?: IslandView | null;
   /** Preview: self-closing peeks (volume, new track) stay open so screenshots are stable. */
@@ -760,7 +761,9 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       case "composer": return surf.composer && { key: "composer", mode: "card", kw: 620, label: "Ask", node: <ComposerCard owner={surf.composer} turns={composer.turns} send={composer.send} autoShelf={autoShelf} picked={picked} /> };
       case "music-card": return musicCard && { key: "music-card", mode: "card", kw: 520, label: "Music", node: musicCard };
       case "modules": return { key: "modules", mode: "card", kw: MOD_NARROW /* every tab, General included (owner: Places is 620 wide) */, label: "Modules: " + modName, node: <ModulesCard start={modStart} meeting={meetingItem} onPage={onModPage} onClose={back} media={media} pos={pos} sys={sys.tick} cpu={sys.cpu} surf={surf} shelf={shelf} main={main} onApproval={openApproval} timer={timer} generic={priv} battery={batt} sessN={nSess} sessList={sessList} lastCc={lastCc} limited={limited} onSettings={settings?.islandOnly ? (p) => { setSetPage(p); setUser("settings"); } : undefined} /> };
-      case "settings": return settings && { key: "settings", mode: "card", kw: 780, label: "Peeka settings", node: <SettingsPanel page={setPage} onPage={setSetPage} settings={settings} /> }; // Island only: no strip to hold them
+      // Island only: no strip to hold them. The island window is small (ISLAND_MAX), so the card fits it and scrolls inside.
+      case "settings": return settings && { key: "settings", mode: "card", kw: Math.min(780, innerWidth - 2 * SHADOW_SIDE), label: "Peeka settings", node: <div style={{ maxHeight: innerHeight - SHADOW_BOTTOM - 80, overflowY: "auto", scrollbarWidth: "thin", paddingTop: 28, maskImage: "linear-gradient(transparent 8px, #000 36px)" /* scrolled rows fade out under the card's corner buttons */ }}><SettingsPanel page={setPage} onPage={setSetPage} settings={settings} onQuit={() => setUser("quit")} /></div> };
+      case "quit": return { key: "quit", mode: "card", kw: 400, label: "Quit Peeka", node: <QuitConfirm onCancel={() => setUser("settings")} /> };
       case "meeting": return meetingItem && { key: "meeting", mode: "card", kw: 520, label: "Meeting", node: <MeetingCard item={meetingItem} /> };
       case "recap": return recap && { key: "recap", mode: "card", kw: 520, label: "Your week", node: <RecapCard week={recap} onDone={() => { ackRecap(); setUser(null); }} /> };
       case "firstconnect": return { key: "firstconnect", mode: "card", kw: 520, label: `${mainP ? pluginName(mainP) : "Assistant"} connected`, node: <FirstConnectCard onDone={() => { ackFc(); setUser(null); }} /> };
