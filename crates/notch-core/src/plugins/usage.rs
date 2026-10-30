@@ -38,23 +38,67 @@ pub fn codex_line(line: &str) -> Vec<Window> {
         .collect()
 }
 
+/// Session logs looked at, newest-written first, and how much of each one's end: every `token_count` event carries
+/// the counters, so the tail of a recent log holds the latest ones without reading a multi-megabyte rollout.
+const CODEX_FILES: usize = 12;
+const CODEX_TAIL: u64 = 512 * 1024;
+
+/// The newest Codex counters under `root` (`~/.codex/sessions`): the valid `rate_limits` event with the latest event
+/// timestamp across the recent logs, not the last line of the last-written file (a resumed old session writes last).
+/// ISO-8601 UTC timestamps order as plain strings.
+pub fn codex_latest(root: &std::path::Path) -> Vec<Window> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut files = Vec::new();
+    let mut dirs = vec![root.to_path_buf()];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                dirs.push(path);
+            } else if path.extension().is_some_and(|e| e == "jsonl") {
+                if let Ok(modified) = entry.metadata().and_then(|m| m.modified()) {
+                    files.push((modified, path));
+                }
+            }
+        }
+    }
+    files.sort_by(|a, b| b.0.cmp(&a.0));
+    let mut best: Option<(String, Vec<Window>)> = None;
+    for (_, path) in files.into_iter().take(CODEX_FILES) {
+        let Ok(mut file) = std::fs::File::open(path) else { continue };
+        let len = file.metadata().map_or(0, |m| m.len());
+        let mut bytes = Vec::new();
+        if file.seek(SeekFrom::Start(len.saturating_sub(CODEX_TAIL))).is_err() || file.read_to_end(&mut bytes).is_err() {
+            continue;
+        }
+        // a cut tail starts mid-line: that first line fails to parse and is skipped like any bad line
+        let found = String::from_utf8_lossy(&bytes).lines().rev().filter(|l| l.contains("rate_limits")).find_map(|line| {
+            let windows = codex_line(line);
+            let at = serde_json::from_str::<Value>(line).ok()?.get("timestamp")?.as_str()?.to_owned();
+            (!windows.is_empty()).then_some((at, windows))
+        });
+        if let Some(found) = found {
+            if best.as_ref().is_none_or(|b| found.0 > b.0) {
+                best = Some(found);
+            }
+        }
+    }
+    best.map(|b| b.1).unwrap_or_default()
+}
+
 /// The statusline collector retains only these four public Claude Code meter
 /// values. Everything else in the statusline payload is discarded before disk.
 pub fn claude_statusline(bytes: &[u8]) -> Option<Value> {
     let input: Value = serde_json::from_slice(bytes).ok()?;
     let limits = input.get("rate_limits")?;
     let mut kept = serde_json::Map::new();
-    for (from, to) in [("five_hour", "five_hour"), ("seven_day", "seven_day")] {
-        let meter = limits.get(from)?;
-        kept.insert(
-            to.into(),
-            json!({
-                "used_percentage": meter.get("used_percentage")?.as_f64()?,
-                "resets_at": meter.get("resets_at")?.clone(),
-            }),
-        );
+    // a plan can report only one of the two meters: keep whichever is there
+    for key in ["five_hour", "seven_day"] {
+        let Some(meter) = limits.get(key) else { continue };
+        let Some(used) = meter.get("used_percentage").and_then(Value::as_f64) else { continue };
+        kept.insert(key.into(), json!({ "used_percentage": used, "resets_at": meter.get("resets_at")?.clone() }));
     }
-    Some(Value::Object(kept))
+    (!kept.is_empty()).then_some(Value::Object(kept))
 }
 
 /// Decode the collector's deliberately small on-disk snapshot into the common
@@ -94,6 +138,31 @@ mod tests {
             got,
             serde_json::json!({"five_hour":{"used_percentage":84.0,"resets_at":1770000000},"seven_day":{"used_percentage":2.0,"resets_at":"soon"}})
         );
+    }
+    #[test]
+    fn claude_statusline_keeps_a_lone_meter() {
+        let got = claude_statusline(br#"{"rate_limits":{"five_hour":{"used_percentage":10,"resets_at":1770000000}}}"#).unwrap();
+        assert_eq!(got, serde_json::json!({"five_hour":{"used_percentage":10.0,"resets_at":1770000000}}));
+        assert!(claude_statusline(br#"{"rate_limits":{}}"#).is_none());
+    }
+    fn event(at: &str, used: u8) -> String {
+        format!(r#"{{"timestamp":"{at}","type":"event_msg","payload":{{"rate_limits":{{"primary":{{"used_percent":{used},"window_minutes":300,"resets_at":1}}}}}}}}"#)
+    }
+    #[test]
+    fn codex_takes_the_newest_event_not_the_newest_file() {
+        let tmp = crate::test_util::Tmp::new();
+        // the old session was written to last (resumed), so its file is newer on disk, but its event is older
+        tmp.write("2026/10/29/new.jsonl", format!("{}
+not json
+{}
+", event("2026-10-30T11:00:00.000Z", 5), r#"{"timestamp":"2026-10-30T12:00:00.000Z","payload":{"rate_limits":null}}"#).as_bytes());
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        tmp.write("2026/10/28/old.jsonl", format!("{}
+", event("2026-10-29T09:00:00.000Z", 90)).as_bytes());
+        let got = codex_latest(tmp.path());
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].used_percent, 5, "latest valid event wins; a null rate_limits line is skipped");
+        assert!(codex_latest(&tmp.path().join("nope")).is_empty());
     }
     #[test]
     fn reads_the_collectors_claude_snapshot() {

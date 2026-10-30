@@ -40,6 +40,13 @@
 .blockBox .quota + .t13, .blockBox .quota + .t12 { margin-top: 6px; }
 .box h4 .leadMascot { margin-block: -6px; }
 
+/* Usage tab: a row per agent (name, then two meters or one muted line); rows split by the same half-pixel hairline as .row */
+.usage .usageRow { position: relative; display: grid; grid-template-columns: 64px 1fr 1fr; column-gap: 20px; align-items: start; min-height: 64px; padding: 6px 0 8px; }
+.usage .usageRow + .usageRow::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: var(--divider); transform: scaleY(.5); transform-origin: 0 0; }
+.usage .usageName { margin-top: 8px; }
+.usage .usageNone { grid-column: 2 / -1; margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.usage .usageNone .btn { flex: none; }
+
 /* cards: empty, error, loading */
 .mkCenter.narrow { max-width: 460px; }
 .errorDetail { max-width: 400px; text-align: left; }

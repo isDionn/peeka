@@ -298,9 +298,14 @@ pub fn cc_statusline_main() -> ! {
         URL_SAFE_NO_PAD.decode(encoded).ok().and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
     });
     if let Some(command) = previous.and_then(|line| line.get("command").and_then(|v| v.as_str()).map(str::to_owned)) {
+        use std::os::windows::process::CommandExt;
         use std::process::{Command, Stdio};
-        if let Ok(mut child) =
-            Command::new("cmd").args(["/C", &command]).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
+        // raw_arg: Rust's own quoting (\") is not cmd's, and a command with its own quotes needs the outer pair
+        if let Ok(mut child) = Command::new("cmd")
+            .raw_arg(format!("/C \"{command}\""))
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
         {
             if let Some(mut stdin) = child.stdin.take() {
                 let _ = stdin.write_all(&raw);

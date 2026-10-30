@@ -188,43 +188,56 @@ const SystemBox = ({ sys, cpu, battery }: { sys: SysmonTick | null; cpu: number[
   );
 };
 
-type AgentUsage = { agent: string; windows: { usedPercent: number; windowMinutes: number; resetsAt?: number; resetsInSeconds?: number }[] };
+type UsageWindow = { usedPercent: number; windowMinutes: number; resetsAt?: number; resetsInSeconds?: number };
+type AgentUsage = { agent: string; windows: UsageWindow[] };
+// Always these three rows, in this order. `hint` is what the owner can do while an agent has no numbers.
+const USAGE_AGENTS = [
+  { id: "claude", name: "Claude", hint: "No data yet. Reinstall the Claude Code bridge in Settings, then send one message.", settings: true },
+  { id: "codex", name: "Codex", hint: "No data yet. Usage appears after your next Codex reply.", settings: false },
+  { id: "gemini", name: "Gemini", hint: "Not available. Gemini keeps no usage on this PC.", settings: false },
+];
 export function useAgentUsage() {
   const [rows, setRows] = useState<AgentUsage[] | null>(null);
-  const refresh = () => bridge.call("agent_usage").then((next) => setRows(next.filter((row) => row.windows.length > 0)), () => setRows([]));
-  useEffect(() => { refresh(); }, []);
-  return { rows, refresh };
+  // "resets in N s" is counted from now, once, so it keeps counting down while the card is open
+  const load = (refresh: boolean) => bridge.call("agent_usage", { refresh }).then((next) => setRows(next.map((row) => ({ ...row, windows: row.windows.map((w) => ({ ...w, resetsAt: w.resetsAt ?? (w.resetsInSeconds == null ? undefined : bridge.now().getTime() / 1000 + w.resetsInSeconds) })) }))), () => setRows([]));
+  useEffect(() => { load(false); }, []);
+  return { rows, refresh: () => load(true) };
 }
 
-const resetsIn = (w: AgentUsage["windows"][number]) => {
-  const at = w.resetsAt ? new Date(w.resetsAt * 1000) : new Date(Date.now() + (w.resetsInSeconds ?? 0) * 1000);
-  if (w.windowMinutes !== 300) return `Resets ${at.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" })}`;
-  const s = Math.max(0, Math.round((at.getTime() - Date.now()) / 1000)), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
-  return `Resets in ${h ? `${h}h ${m}m` : `${m}m`}`;
+const secondsLeft = (w: UsageWindow) => w.resetsAt == null ? null : Math.round(w.resetsAt - bridge.now().getTime() / 1000);
+const resetsIn = (s: number | null) => {
+  if (s == null) return "";
+  if (s <= 0) return "Window reset";
+  const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  return "Resets in " + (d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`);
 };
 
-/** Usage tab: one box per agent with data, two meters each (5-hour, Weekly). Side by side so both fit the 330 px body without scrolling. */
+/** Usage tab: one row per agent (Claude, Codex, Gemini), each with its 5-hour and Weekly meters; an agent without numbers says what to do instead. Three rows and the heading fit the 330 px body without scrolling.
+ *  A window whose reset time has passed reads 0%: the log is older than the reset, and the next reply writes a fresh one. */
 export function UsageBox({ generic, onSettings }: { generic: boolean; onSettings: () => void }) {
   const { rows, refresh } = useAgentUsage();
-  if (!rows || !rows.length) return (
-    <div className="box glass" style={{ minHeight: 148 }}>
-      <h4><Gauge />Usage</h4>
-      {rows && <div className="t13 l2 b4" style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 12 }}>No usage data yet. Claude needs the statusline bridge.<button className="btn kk glass" onClick={onSettings}>Open Settings</button></div>}
-    </div>
-  );
   return (
-    <div className="grid module" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
-      {rows.map((row) => (
-        <div className="box glass" key={row.agent} style={{ minHeight: 148 }}>
-          <h4><Gauge />{row.agent === "codex" ? "Codex" : row.agent === "claude" ? "Claude" : row.agent}<button className="mini" style={{ marginLeft: "auto" }} title="Refresh usage" aria-label="Refresh usage" onClick={refresh}><RefreshCw /></button></h4>
-          {row.windows.map((w) => (
-            <div key={w.windowMinutes}>
-              <Meter label={w.windowMinutes === 300 ? "5-hour" : "Weekly"} text={generic ? "Hidden" : w.usedPercent + "%"} ratio={generic ? null : w.usedPercent / 100} hot={!generic && w.usedPercent >= 80} />
-              <div className="t12 l3">{generic ? dash : resetsIn(w)}</div>
-            </div>
-          ))}
-        </div>
-      ))}
+    <div className="box glass usage" style={{ minHeight: 148 }}>
+      <h4><Gauge />Usage<button className="mini" style={{ marginLeft: "auto" }} title="Refresh usage" aria-label="Refresh usage" onClick={refresh}><RefreshCw /></button></h4>
+      {rows && USAGE_AGENTS.map((agent) => {
+        const windows = rows.find((r) => r.agent === agent.id)?.windows.slice().sort((x, y) => x.windowMinutes - y.windowMinutes);
+        return (
+          <div className="usageRow" key={agent.id}>
+            <span className="usageName t13 b6">{agent.name}</span>
+            {windows?.length ? windows.map((w) => {
+              const left = secondsLeft(w), used = left != null && left <= 0 ? 0 : w.usedPercent;
+              return (
+                <div key={w.windowMinutes}>
+                  <Meter label={w.windowMinutes === 300 ? "5-hour" : "Weekly"} text={generic ? "Hidden" : used + "%"} ratio={generic ? null : used / 100} hot={!generic && used >= 80} />
+                  <div className="t12 l3">{generic ? dash : resetsIn(left)}</div>
+                </div>
+              );
+            }) : (
+              <div className="usageNone t12 l3">{agent.hint}{agent.settings && <button className="btn kk glass" onClick={onSettings}>Open Settings</button>}</div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

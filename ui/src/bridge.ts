@@ -420,7 +420,7 @@ export interface Commands {
   /** Codex CLI, Cursor, Gemini CLI, GitHub Copilot CLI: Peeka's status-only hook per agent (Claude Code has its own row). */
   agent_bridges: { args: void; ret: AgentBridge[] };
   /** Offline plan meters from local agent session files only. */
-  agent_usage: { args: void; ret: { agent: string; windows: { usedPercent: number; windowMinutes: number; resetsAt?: number; resetsInSeconds?: number }[] }[] };
+  agent_usage: { args: { refresh: boolean }; ret: { agent: string; windows: { usedPercent: number; windowMinutes: number; resetsAt?: number; resetsInSeconds?: number }[] }[] };
   /** Same rules as `claude_bridge_install` (preview fingerprint, backup, merge, `refused` in demo mode), for one agent `id`. */
   agent_bridge_install: { args: { agent: string; fingerprint: string }; ret: AgentBridge };
   agent_bridge_remove: { args: { agent: string; fingerprint: string }; ret: AgentBridge };

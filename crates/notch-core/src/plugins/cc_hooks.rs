@@ -388,8 +388,10 @@ fn command_line(exe: &str, agent: &str) -> String {
     format!("{exe} {HOOK_ARG} {agent}")
 }
 
+/// Claude Code runs a `statusLine` command through a shell (Git Bash on Windows) that eats the backslashes of an
+/// unquoted path, so the exe goes in quoted with forward slashes, which bash, cmd and Claude Code's own examples take.
 fn statusline_command(exe: &str, previous: Option<&Value>) -> String {
-    let exe = if exe.contains(' ') { format!("\"{exe}\"") } else { exe.to_string() };
+    let exe = format!("\"{}\"", exe.replace('\\', "/"));
     let old = previous.map(|v| URL_SAFE_NO_PAD.encode(serde_json::to_vec(v).expect("JSON value")));
     format!("{exe} {STATUSLINE_ARG}{}", old.map(|v| format!(" {v}")).unwrap_or_default())
 }
@@ -405,6 +407,13 @@ fn statusline_previous(line: &Value) -> Result<Option<Value>, String> {
         .and_then(|b| serde_json::from_slice(&b).ok())
         .map(Some)
         .ok_or_else(|| "The Claude Code statusLine installed by Peeka could not be restored; leaving it alone.".into())
+}
+
+/// Claude's statusLine is Peeka's collector for `exe`, in the form [`statusline_command`] writes today.
+fn statusline_current(doc: &Value, exe: &str) -> bool {
+    let Some(line) = doc.get("statusLine").filter(|l| statusline_is_ours(l)) else { return false };
+    let Ok(previous) = statusline_previous(line) else { return false };
+    line.get("command").and_then(Value::as_str) == Some(statusline_command(exe, previous.as_ref()).as_str())
 }
 
 fn statusline_is_ours(line: &Value) -> bool {
@@ -566,7 +575,8 @@ pub fn status(a: &Agent, doc: &Value, exe: &str) -> (bool, bool) {
         handlers.into_iter().filter(|h| is_ours(h)).collect()
     };
     let any = a.events.iter().any(|(ev, _)| !ours(ev).is_empty());
-    let current = a.events.iter().all(|(ev, _)| ours(ev).contains(&&handler(a, exe, ev)));
+    let current = a.events.iter().all(|(ev, _)| ours(ev).contains(&&handler(a, exe, ev)))
+        && (a.id != "claude" || statusline_current(doc, exe));
     (any, current)
 }
 
@@ -963,6 +973,24 @@ mod tests {
         assert_eq!(statusline_previous(&doc["statusLine"]).unwrap(), Some(original.clone()));
         remove(&CLAUDE, &mut doc).unwrap();
         assert_eq!(doc["statusLine"], original);
+    }
+
+    #[test]
+    fn the_statusline_survives_a_shell_and_a_bridge_without_it_is_offered_a_repair() {
+        let mut doc = json!({"statusLine": {"type": "command", "command": "mine"}});
+        merge(&CLAUDE, &mut doc, EXE).unwrap();
+        let cmd = doc["statusLine"]["command"].as_str().unwrap();
+        assert!(cmd.starts_with(r#""C:/Program Files/Peeka/peeka.exe" --cc-statusline "#), "{cmd}");
+        assert!(!cmd.contains('\\'), "Git Bash would eat a backslash: {cmd}");
+
+        // hooks installed before the statusLine existed, or with the old unquoted backslash form: Reinstall
+        let mut old = doc.clone();
+        old["statusLine"]["command"] = json!(format!("{EXE} {STATUSLINE_ARG} {}", cmd.rsplit(' ').next().unwrap()));
+        assert_eq!(status(&CLAUDE, &old, EXE), (true, false));
+        old.as_object_mut().unwrap().remove("statusLine");
+        assert_eq!(status(&CLAUDE, &old, EXE), (true, false));
+        merge(&CLAUDE, &mut old, EXE).unwrap();
+        assert_eq!(status(&CLAUDE, &old, EXE), (true, true));
     }
 
     #[test]

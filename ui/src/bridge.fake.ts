@@ -71,8 +71,8 @@ const BT0: BtDevice[] = [
   { id: "demo-bt-keys", name: "MX Keys", kind: "input", battery: 45, connected: true },
   { id: "demo-bt-phone", name: "Pixel 8", kind: "phone", battery: 62, connected: false },
 ];
-const AGENT_USAGE = [
-  { agent: "codex", windows: [{ usedPercent: 84, windowMinutes: 300, resetsInSeconds: 39_000 }, { usedPercent: 32, windowMinutes: 10_080, resetsInSeconds: 259_200 }] },
+const AGENT_USAGE: { agent: string; windows: { usedPercent: number; windowMinutes: number; resetsAt?: number; resetsInSeconds?: number }[] }[] = [
+  { agent: "codex", windows: [{ usedPercent: 84, windowMinutes: 300, resetsInSeconds: 9_000 }, { usedPercent: 32, windowMinutes: 10_080, resetsInSeconds: 259_200 }] },
   { agent: "claude", windows: [{ usedPercent: 42, windowMinutes: 300, resetsInSeconds: 7_200 }, { usedPercent: 18, windowMinutes: 10_080, resetsInSeconds: 345_600 }] },
 ];
 const TRAY: TrayIcon[] = [
