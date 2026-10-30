@@ -24,7 +24,7 @@ const SHELL_STATES: Record<string, ShellInit> = {
 };
 // island states (mockup ids): b1 music peek, b2 player, e volume indicator, hov hover, x0 assistant not connected (resting), x1 Ctrl+Space, ilk first run, u alert, j System card
 const ISLAND_STATES: Record<string, IslandInit> = {
-  b1: { autoMusic: true, pin: true }, b2: { view: "music-card" }, e: { osd: { percent: 64, muted: false, device: "Buds Pro" }, pin: true }, hov: { hover: true },
+  ias: { view: "settings" }, b1: { autoMusic: true, pin: true }, b2: { view: "music-card" }, e: { osd: { percent: 64, muted: false, device: "Buds Pro" }, pin: true }, hov: { hover: true },
   x1: { view: "noassistant" }, ilk2: {}, ky: { view: "clipboard", card: "ky" }, kh: { view: "clipboard", card: "kh" }, kb: { view: "clipboard", card: "kb" }, h: { view: "clipboard" }, h2: { view: "clipboard" }, h3: { view: "clipboard" }, h1: { shot: true, pin: true }, kl: { view: "modules" }, ilk: { view: "welcome" }, j: { view: "modules" },
   c2: { view: "approval-card" }, c2r: { view: "approval-card" }, c3: { view: "approval-card" }, s: { view: "composer" },
   d2: { view: "composer", ask: "Remind me about tomorrow morning's meeting, and get the notes ready." },
