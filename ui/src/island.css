@@ -28,6 +28,9 @@
 .fsBand { position: absolute; left: 50%; top: 0; z-index: 5; height: var(--BAR); border-radius: 0 0 14px 14px; overflow: hidden; background: var(--strip); transform: translateX(-50%); pointer-events: auto; cursor: pointer; }
 /* the same tint glow the card continues (as under a strip); its round corners stay clear of a card's shoulders (Island.tsx: 2 * lineGap + 28) */
 .fsBand > .glowHost .glowField { top: 0; }
+.islandStage[data-noband] > :is(.dangling, .islandHit) { --BAR: 0px; }
+.islandStage > .dangling { transition: top var(--d-move) var(--ease); }   /* the band coming back as the card folds: no 30 px jump */
+.islandStage[data-noband] > .islandCenter { visibility: hidden; }
 /* no staggered entry on a card carrying a flying item: the flight measurement mustn't start from a shifted spot */
 .body:has([data-share]) { animation: none; }
 .islandHit { position: absolute; left: 50%; top: var(--BAR); transform: translateX(-50%); opacity: 0; pointer-events: none; }

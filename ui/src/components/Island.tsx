@@ -823,6 +823,8 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const holdW = panelOpen && restW.current > 0 && (kind === "panel" || kind === "rest" || kind === "hov") ? restW.current : 0;
   const mw = Math.max(cSize.w, holdW);
   const mode = spec?.mode ?? "none";
+  // no strip above (fullscreen app, Island only) and a card open: no empty band over it, the card hangs from the screen's top edge
+  const noBand = (fullscreen || !!settings?.islandOnly) && !fsHandle && mode === "card";
   const tw = mode === "none" ? mw : mode === "peek" ? mw + 40 : mode === "card" ? spec!.kw! : Math.max(mw + 24, sSize.w);
   const th = mode === "none" ? 0 : mode === "peek" ? 14 : sSize.h;
   const bumpHover = hover && mode === "bump";
@@ -940,13 +942,13 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const centerMax = Math.max(360, Math.min(424, Math.round(innerWidth * 0.4))); // center content is never wider than ~40% of the screen or 424 px (R2-Y1; Strip.tsx ISLAND_HALF keeps the tabs left of its widest center); overflow gets an ellipsis
 
   return (
-    <div className="islandStage" ref={stage} onKeyDown={crossKey} data-spring={box.moving ? "" : undefined} data-handle={fsHandle ? "" : undefined}
+    <div className="islandStage" ref={stage} onKeyDown={crossKey} data-spring={box.moving ? "" : undefined} data-handle={fsHandle ? "" : undefined} data-noband={noBand ? "" : undefined}
       onFocus={() => { if (document.documentElement.hasAttribute("data-kb")) setKbIn(true); }} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setKbIn(false); }}>
       <div className="srOnly" role="status" aria-live="polite" aria-atomic="true">{kind === "approval" ? "" : say}</div>
       <div className="srOnly" role="alert" aria-live="assertive" aria-atomic="true">{kind === "approval" ? say : ""}</div>
       {fsHandle
         ? <button className="fsHandle" data-hit aria-label="Open island" onPointerEnter={openByHandle} onPointerLeave={() => hoverIntent(false)} onClick={() => { byHandle.current = true; setUser("modules"); }} />
-        : (fullscreen || settings?.islandOnly) && <div className="fsBand" data-hit style={{ width: Math.max(mw + 24, 2 * lineGap + 28, settings?.islandOnly ? ISLAND_ONLY_W : 0) }} onPointerEnter={() => hoverIntent(true)} onClick={() => afterPick(onCenter)}><div className="glowHost"><GlowField monitor={ISLAND_TINT} /></div></div>}{/* no strip behind the island (fullscreen app, or Island only): its own strip-coloured band under the centre */}
+        : (fullscreen || settings?.islandOnly) && !noBand && <div className="fsBand" data-hit style={{ width: Math.max(mw + 24, 2 * lineGap + 28, settings?.islandOnly ? ISLAND_ONLY_W : 0) }} onPointerEnter={() => hoverIntent(true)} onClick={() => afterPick(onCenter)}><div className="glowHost"><GlowField monitor={ISLAND_TINT} /></div></div>}{/* no strip behind the island (fullscreen app, or Island only): its own strip-coloured band under the centre */}
       <button ref={center} className="islandCenter" data-hit aria-expanded={mode === "card" ? true : bump ? undefined : false} aria-label={ariaOverride ?? (bump ? `${say}. Open Modules` : `${parts.join(", ")}${mode === "card" ? "" : ". Open card"}`)}
         style={{ width: mw + 24, transform: "translateX(-50%)" }} data-hv={kind === "hov" || bumpHover ? "" : undefined}
         title={bumpHover ? "Open Modules" : undefined} onClick={(e) => { if (!(e.target as Element).closest?.(".mascot")) return afterPick(onCenter); const act = moodShown === "error" && restShown ? () => setUser("error") : card?.takesAsk ? () => openAsk("ext") : owner.current ? () => openAsk("composer") : onCenter; setTimeout(() => afterPick(act), SLAP_OPEN_MS); }}

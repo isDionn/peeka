@@ -33,7 +33,8 @@ describe("island over a fullscreen app", () => {
     await settle(200);
     expect(handle(a.container)).toBeNull();
     expect(a.container.querySelector(".islandCenter")?.getAttribute("aria-expanded")).toBe("true"); // the card is open
-    expect(a.container.querySelector(".fsBand")).toBeTruthy(); // with its own band where the strip used to be
+    expect(a.container.querySelector(".fsBand")).toBeNull(); // no empty band over the card: it hangs from the screen's top edge
+    expect(a.container.querySelector(".islandStage")?.hasAttribute("data-noband")).toBe(true);
     act(() => fakeBridge.emit("notch://island_leave", undefined as never));
     await settle(300);
     expect(handle(a.container)).toBeTruthy();
