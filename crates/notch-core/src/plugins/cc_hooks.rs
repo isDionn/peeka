@@ -1,7 +1,7 @@
 // Peeka — original implementation (MIT).
 //! Coding agents without a main assistant (`docs/plugin-api.md` "Claude Code" and "Other agents"): Peeka's own hook.
 //! `peeka.exe --cc-hook [agent [event]]` gets the hook's JSON on stdin and passes on only `{agent, kind, tool, reason,
-//! sid}` ([`hook_params`]; Claude Code's line adds the one-word [`origin`]); the receiver checks it again with the same rules as `cc.event`. [`install`] / [`uninstall`]
+//! sid, name}` ([`hook_params`]; Claude Code's line adds the one-word [`origin`]); the receiver checks it again with the same rules as `cc.event`. [`install`] / [`uninstall`]
 //! add or remove exactly Peeka's entries in the agent's hook config; the owner's other hooks stay. Status only: the
 //! hook never answers, so no agent waits on Peeka for a decision. Pure apart from the one file it is given.
 
@@ -175,8 +175,8 @@ pub fn salt(path: &Path) -> Option<Vec<u8>> {
 }
 
 /// The hook's stdin JSON -> `cc.event` params. Reads the event name, the tool name, the session id (only as the salted
-/// [`session_tag`], and only with a `salt`) and (stop_failure) `error` / (notification) `notification_type`, nothing
-/// else; a field that is not a [`word`] goes as null. None = not one of `a`'s events. The field names differ a little
+/// [`session_tag`], and only with a `salt`), the last folder of `cwd` as `name` ([`folder_name`], omitted when not
+/// valid) and (stop_failure) `error` / (notification) `notification_type`, nothing else; a field that is not a [`word`] goes as null. None = not one of `a`'s events. The field names differ a little
 /// across agents (`sessionId`, Cursor's `conversation_id`, `toolName`), so each is the first of its spellings present.
 pub fn hook_params(a: &Agent, raw: &Value, salt: Option<&[u8]>) -> Option<Value> {
     let event = raw.get("hook_event_name")?.as_str()?;
@@ -205,9 +205,10 @@ pub fn folder_name(cwd: &str) -> Option<&str> {
     cwd.split(['/', '\\']).rfind(|c| !c.is_empty()).filter(|n| is_name(n))
 }
 
-/// A `name` as the receiver accepts it: 1-64 chars, no control chars, no `/ \ :` (one folder name, not a path).
+/// A `name` as the receiver accepts it: 1-40 chars (the row shows 40; the hook line stays under 1 KiB with an edit's
+/// path), no control chars, no `/ \ :` (one folder name, not a path).
 pub fn is_name(s: &str) -> bool {
-    (1..=64).contains(&s.chars().count()) && !s.chars().any(|c| c.is_control() || matches!(c, '/' | '\\' | ':'))
+    (1..=40).contains(&s.chars().count()) && !s.chars().any(|c| c.is_control() || matches!(c, '/' | '\\' | ':'))
 }
 
 /// "Send to session": the longest message, in chars.
@@ -802,7 +803,7 @@ mod tests {
         assert_eq!(folder_name(r"C:\Users\me\Desktop\di10\Peeka"), Some("Peeka"));
         assert_eq!(folder_name(r"C:\work\My Project\"), Some("My Project"), "trailing separator");
         assert_eq!(folder_name("/home/me/peeka"), Some("peeka"));
-        for bad in [r"C:\", "", "/", &format!(r"C:\{}", "a".repeat(65)), "C:\\x\\a\u{7}b"] {
+        for bad in [r"C:\", "", "/", &format!(r"C:\{}", "a".repeat(41)), "C:\\x\\a\u{7}b"] {
             assert_eq!(folder_name(bad), None, "{bad:?}");
         }
         let none = hook_params(&CLAUDE, &json!({"hook_event_name": "Stop"}), None).unwrap();

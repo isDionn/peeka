@@ -258,6 +258,11 @@ describe("13 two sessions", () => {
     const peeka = screen.getByRole("group", { name: "Peeka" });
     expect(screen.getByRole("group", { name: "site" }).textContent).toContain("Waiting for you");
     expect(screen.queryByRole("textbox", { name: "Message to site" })).toBeNull(); // a Desktop session has no terminal to type into
+    act(() => fakeBridge.emit("cc_event", { kind: "permission", sid: "1a2b3c4d" }));
+    await settle(50);
+    expect((screen.getByRole("textbox", { name: "Message to Peeka" }) as HTMLInputElement).disabled).toBe(true); // Enter would answer the permission prompt
+    act(() => fakeBridge.emit("cc_event", { kind: "post_tool", sid: "1a2b3c4d" }));
+    await settle(50);
     const field = screen.getByRole("textbox", { name: "Message to Peeka" });
     fireEvent.change(field, { target: { value: "run the tests" } });
     fireEvent.submit(field.closest("form")!);

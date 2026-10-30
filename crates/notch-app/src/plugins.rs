@@ -268,7 +268,7 @@ fn cc_register(p: &Plugins, pipe: &NamedPipeServer, sid: &str, end: bool) {
 
 /// `peeka.exe --cc-hook [agent [event]]`, run by a coding agent for each hook event (before Tauri starts; `main.rs`;
 /// no agent = Claude Code, an unknown one sends nothing; `event` only when the payload has no `hook_event_name`, as
-/// Copilot's camelCase one). Reads the hook's JSON on stdin and sends Peeka only `{agent, kind, tool, reason, sid}` (`cc_hooks::hook_params`; `sid` = salted 8-hex tag of the session id), Claude Code adds `origin` (one word, `cc_hooks::origin`),
+/// Copilot's camelCase one). Reads the hook's JSON on stdin and sends Peeka only `{agent, kind, tool, reason, sid, name}` (`cc_hooks::hook_params`; `sid` = salted 8-hex tag of the session id, `name` = the cwd's last folder), Claude Code adds `origin` (one word, `cc_hooks::origin`),
 /// plus `edit {file, add, del}` for an Edit/Write inside the session cwd; that edit's diff stays in a local cache file (`cc_hooks::hook_line`). Never holds Claude Code up
 /// and never answers: no stdout at all (a PermissionRequest keeps Claude Code's own prompt), every path ends in exit
 /// 0, a 2 s watchdog ends it whatever happens, and a closed or busy pipe (Peeka not running) is given up at once.

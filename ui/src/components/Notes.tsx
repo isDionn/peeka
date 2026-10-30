@@ -81,7 +81,7 @@ export function SessionList({ n, list, last, locked, limited = false }: { n: num
           : <div className="sessRow" key={x.sid} role="group" aria-label={name}>
               <div className="sessHead">{mixed && <span className="agentDot" style={{ background: agentOf(x.agent).color }} aria-hidden="true" />}<span className="sideName">{mixed && `${agentOf(x.agent).name} · `}{name}</span><span className="t12 sessState" data-state={x.state}>{STATE[x.state]}</span></div>
               <div className="sessMeta t12 l3"><span className="sideName">{x.tool ? flat(x.tool, 24) : "event"}, {Math.max(0, Math.round((Date.now() - x.at) / 1000))}s ago</span>{originLabel(x.origin) && <span>{originLabel(x.origin)}</span>}</div>
-              {x.agent === "claude" && x.origin !== "desktop" && <SessionSend sid={x.sid} name={name} />}
+              {x.agent === "claude" && x.origin !== "desktop" && <SessionSend sid={x.sid} name={name} waiting={x.state === "waiting"} />}
             </div>;
       })}
       {list.length === 0 && !locked && last && <div className="sideRow"><span className="l3 sideName">Last activity: {last.tool ? flat(last.tool, 24) : "event"}, {ago}s ago</span></div>}
@@ -100,8 +100,9 @@ const SEND_ERR: Record<string, string> = {
   denied: "Not while locked, presenting or sharing",
 };
 
-/** A session row's message field: the text goes to that session as if typed in its terminal, then Enter (`cc_send`). Takes the keyboard only while focused (`typing_focus`). */
-function SessionSend({ sid, name }: { sid: string; name: string }) {
+/** A session row's message field: the text goes to that session as if typed in its terminal, then Enter (`cc_send`). Takes the keyboard only while focused (`typing_focus`).
+ *  Off while the session waits on a permission prompt: that Enter would answer the prompt. */
+function SessionSend({ sid, name, waiting }: { sid: string; name: string; waiting: boolean }) {
   const [text, setText] = useState("");
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -110,7 +111,7 @@ function SessionSend({ sid, name }: { sid: string; name: string }) {
   // the list closed while the field had the keyboard: give it back
   useEffect(() => () => { if (focused.current) bridge.call("typing_focus", { label: "island", on: false }).catch(() => undefined); }, []);
   const send = () => {
-    if (!text.trim() || busy) return;
+    if (!text.trim() || busy || waiting) return;
     setBusy(true);
     bridge.call("cc_send", { sid, text })
       .then(() => { setText(""); setNote({ ok: true, text: "Sent" }); })
@@ -120,9 +121,9 @@ function SessionSend({ sid, name }: { sid: string; name: string }) {
   return (
     <>
       <form className="sessSend" onSubmit={(e) => { e.preventDefault(); send(); }}>
-        <input className="sessInput" value={text} maxLength={2000} placeholder={`Message ${name}`} aria-label={`Message to ${name}`}
+        <input className="sessInput" value={text} maxLength={2000} disabled={waiting} placeholder={waiting ? "Answer its prompt in the terminal first" : `Message ${name}`} aria-label={`Message to ${name}`}
           onChange={(e) => { setText(e.target.value); setNote(null); }} onFocus={() => typing(true)} onBlur={() => typing(false)} />
-        <button type="submit" className="sessGo" aria-label={`Send to ${name}`} disabled={busy || !text.trim()} onMouseDown={(e) => e.preventDefault()}><ArrowUp size={13} strokeWidth={2.4} /></button>
+        <button type="submit" className="sessGo" aria-label={`Send to ${name}`} disabled={busy || waiting || !text.trim()} onMouseDown={(e) => e.preventDefault()}><ArrowUp size={13} strokeWidth={2.4} /></button>
       </form>
       {note && <div className={`t12 sessNote${note.ok ? " l3" : ""}`} role="status">{note.text}</div>}
     </>

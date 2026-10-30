@@ -99,6 +99,7 @@ html[data-kb] .sessSend:has(.sessInput:focus) { outline: 2px solid var(--focus);
 .sessInput { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; color: var(--l1); font: 12px var(--font); caret-color: var(--l1); }
 .sessInput:focus-visible { outline: none; }
 .sessInput::placeholder { color: var(--l3); }
+.sessInput:disabled { cursor: not-allowed; }
 .sessGo { flex: none; width: 24px; height: 24px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; background: var(--l1); color: var(--strip); transition: transform var(--d-press) var(--ease), opacity var(--d-fast) var(--ease-move); }
 .sessGo:active:not(:disabled) { transform: scale(.92); }
 .sessGo:disabled { opacity: .28; cursor: default; }
