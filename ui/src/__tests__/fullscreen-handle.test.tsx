@@ -64,4 +64,12 @@ describe("island over a fullscreen app", () => {
     expect(handle(a.container)).toBeNull();
     expect(a.container.querySelector(".fsBand")).toBeTruthy();
   });
+
+  it("Island only (no strip at all): the island brings its own band, no handle", async () => {
+    await act(async () => { await fakeBridge.call("set_settings", { patch: { islandOnly: true } }); });
+    const a = render(<Island monitor="m1" init={{ view: null }} />);
+    await settle();
+    expect(a.container.querySelector(".fsBand")).toBeTruthy();
+    expect(handle(a.container)).toBeNull();
+  });
 });

@@ -935,9 +935,9 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       onFocus={() => { if (document.documentElement.hasAttribute("data-kb")) setKbIn(true); }} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setKbIn(false); }}>
       <div className="srOnly" role="status" aria-live="polite" aria-atomic="true">{kind === "approval" ? "" : say}</div>
       <div className="srOnly" role="alert" aria-live="assertive" aria-atomic="true">{kind === "approval" ? say : ""}</div>
-      {fullscreen && (fsHandle
+      {fsHandle
         ? <button className="fsHandle" data-hit aria-label="Open island" onPointerEnter={openByHandle} onPointerLeave={() => hoverIntent(false)} onClick={() => { byHandle.current = true; setUser("modules"); }} />
-        : <div className="fsBand" data-hit style={{ width: Math.max(mw + 24, 2 * lineGap) }} onPointerEnter={() => hoverIntent(true)} />)}{/* no strip behind the island: its own strip-coloured band under the centre */}
+        : (fullscreen || settings?.islandOnly) && <div className="fsBand" data-hit style={{ width: Math.max(mw + 24, 2 * lineGap) }} onPointerEnter={() => hoverIntent(true)} />}{/* no strip behind the island (fullscreen app, or Island only): its own strip-coloured band under the centre */}
       <button ref={center} className="islandCenter" data-hit aria-expanded={mode === "card" ? true : bump ? undefined : false} aria-label={ariaOverride ?? (bump ? `${say}. Open Modules` : `${parts.join(", ")}${mode === "card" ? "" : ". Open card"}`)}
         style={{ width: mw + 24, transform: "translateX(-50%)" }} data-hv={kind === "hov" || bumpHover ? "" : undefined}
         title={bumpHover ? "Open Modules" : undefined} onClick={(e) => { if (!(e.target as Element).closest?.(".mascot")) return afterPick(onCenter); const act = moodShown === "error" && restShown ? () => setUser("error") : card?.takesAsk ? () => openAsk("ext") : owner.current ? () => openAsk("composer") : onCenter; setTimeout(() => afterPick(act), SLAP_OPEN_MS); }}
