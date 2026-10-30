@@ -26,8 +26,7 @@
 .fsHandle:hover::before, .fsHandle:focus-visible::before { opacity: .85; }
 .fsHandle:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: 0 0 6px 6px; }
 .fsBand { position: absolute; left: 50%; top: 0; z-index: 5; height: var(--BAR); border-radius: 0 0 14px 14px; overflow: hidden; background: var(--strip); transform: translateX(-50%); pointer-events: auto; cursor: pointer; }
-/* a card hangs from it: flat edge for its shoulders, and the same tint glow the card continues (as under a strip) */
-.fsBand[data-open] { border-radius: 0; }
+/* the same tint glow the card continues (as under a strip); its round corners stay clear of a card's shoulders (Island.tsx: 2 * lineGap + 28) */
 .fsBand > .glowHost .glowField { top: 0; }
 /* no staggered entry on a card carrying a flying item: the flight measurement mustn't start from a shifted spot */
 .body:has([data-share]) { animation: none; }

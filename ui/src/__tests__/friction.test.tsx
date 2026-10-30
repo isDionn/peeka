@@ -132,8 +132,8 @@ describe("Y4: the tab bar never shifts and is the same on every tab", () => {
   it("every tab has the same width, General included (Places is drawn for 620)", () => {
     expect(MOD_NARROW).toBe(620);
   });
-  it("the corner group has a fixed width (498) on the island center line, and × is always at the same screen point (independent of card width)", () => {
-    expect(css).toMatch(/\.modTop \{[^}]*justify-content: flex-end;[^}]*width: 498px/);
+  it("the tab row is centred on the card (it hugs the shown tabs; owner: ortala); other cards keep the 498 corner group", () => {
+    expect(css).toMatch(/\.modTop \{[^}]*width: fit-content;[^}]*margin-inline: auto;/);
     expect(css).toMatch(/\.cardBar \{[^}]*width: 498px/); // Modules and the card bar share the same corner group (R1-1)
     expect(css).toMatch(/\.modTop \.seg \{[^}]*flex: none;[^}]*max-width: 422px/);
     expect(css).not.toMatch(/\.modUst > \.mini \{[^}]*margin-left: auto/);

@@ -3,7 +3,7 @@
 .row .suggestionTag { margin-left: auto; }
 /* the tab bar is fixed-width and centered on the island's midline: its screen x stays put even when the card width changes (Y4) */
 /* right corner group: fixed width (498: 12 tabs + gear + ×), centered in the card; × sits at the same screen point on every card and Modules tab (card width ≥ 520) (R1-1) */
-.modTop { display: flex; align-items: center; justify-content: flex-end; gap: 10px; width: 498px; max-width: 100%; margin-inline: auto; }
+.modTop { display: flex; align-items: center; justify-content: flex-end; gap: 10px; width: fit-content; max-width: 100%; margin-inline: auto; }   /* hugs the tabs the owner kept, so the row sits on the card centre */
 .modTop .seg { flex: none; max-width: 422px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .modTop .seg::-webkit-scrollbar { display: none; }
 .modTop { position: relative; }
