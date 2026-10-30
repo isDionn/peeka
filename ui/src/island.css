@@ -16,6 +16,8 @@
 /* hover on the center / a peek: brightness as a CSS transition (was a JS spring writing a 0.5 px drop per frame, which softened the text at 1x; polish audit #7) */
 .islandCenter { transition: filter var(--d-fast) var(--ease-move); }
 .islandCenter[data-hv] { filter: brightness(1.2); }
+.islandCenter .mascot { transition: filter var(--d-fast) var(--ease-move); }
+.islandCenter[data-hv] .mascot { filter: brightness(calc(1 / 1.2)); }   /* the ghost keeps its own colours: brightened it went white (owner, 0.3.7) */
 /* a fullscreen app on this screen: only a small handle at the top centre; the rest of the island is folded away (not painted, not clickable).
    The hot zone (96 x 8) is a little bigger than the 40 x 4 pill it draws. Opened, the island brings its own strip-coloured band (no strip behind it). */
 .islandStage[data-handle] > :not(.fsHandle, .srOnly) { visibility: hidden; }

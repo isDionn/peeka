@@ -20,6 +20,8 @@ export function tintOf(c: unknown): Cols | null {
 const LAST = new Map<string, Cols | null>();
 
 const LAYERS = ["sL", "sR", "p3", "p1", "p2"];
+/** glow.css `.glowCopy` opacity transition. */
+const FADE_MS = 2500;
 interface Copy { cols: Cols | null; state: GlowState }
 const same = (a: Copy, b: Copy) => a.state === b.state && a.cols?.join() === b.cols?.join();
 
@@ -40,9 +42,16 @@ export function GlowField({ monitor }: { monitor: string }) {
   // a new colour or speed goes into the hidden copy, then the copies cross-fade (never animates a colour, never jumps the phase in view); the first frame already has the current colours
   const [cp, setCp] = useState<{ a: Copy; b: Copy; on: "a" | "b" }>(() => ({ a: { cols: tint, state: "idle" }, b: { cols: tint, state: "idle" }, on: "a" }));
   const key = `${state}|${tint?.join() ?? ""}`;
+  // a new swap waits until the last cross-fade has ended: swapping mid-fade repainted the copy still fading out (a hard jump)
+  const swapAt = useRef(0);
   useEffect(() => {
     const want: Copy = { cols: tint, state };
-    setCp((s) => (same(s[s.on], want) ? s : s.on === "a" ? { ...s, b: want, on: "b" } : { ...s, a: want, on: "a" }));
+    const t = setTimeout(() => setCp((s) => {
+      if (same(s[s.on], want)) return s;
+      swapAt.current = Date.now();
+      return s.on === "a" ? { ...s, b: want, on: "b" } : { ...s, a: want, on: "a" };
+    }), Math.max(0, swapAt.current + FADE_MS - Date.now()));
+    return () => clearTimeout(t);
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
   const ra = useRef<HTMLDivElement>(null), rb = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => phase(ra.current), [cp.a]);

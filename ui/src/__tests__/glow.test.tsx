@@ -1,9 +1,11 @@
 import { act, render } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeBridge } from "../bridge.fake";
 import { GlowField, glowOf, tintOf } from "../components/Glow";
 
 describe("Drift glow", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
   it("screen_tint colours: three #rrggbb (left, centre, right) become left, right, centre; anything else falls back (null)", () => {
     expect(tintOf(["#111111", "#222222", "#333333"])).toEqual(["#111111", "#333333", "#222222"]);
     expect(tintOf(null)).toBeNull();
@@ -19,16 +21,21 @@ describe("Drift glow", () => {
     expect(glowOf("off")).toBe("idle");
   });
 
-  it("only its own monitor's tint; a new colour goes into the hidden copy and the copies swap", () => {
+  it("only its own monitor's tint; a new colour goes into the hidden copy and the copies swap, never mid-fade", () => {
     const { container } = render(<GlowField monitor="m1" />);
     const copies = () => [...container.querySelectorAll<HTMLElement>(".glowCopy")];
     expect(copies().map((c) => c.style.opacity)).toEqual(["1", "0"]);
     act(() => fakeBridge.emit("screen_tint", { monitor: "m2", colors: ["#111111", "#222222", "#333333"] }));
     expect(copies().map((c) => c.style.opacity)).toEqual(["1", "0"]);
     act(() => fakeBridge.emit("screen_tint", { monitor: "m1", colors: ["#111111", "#222222", "#333333"] }));
+    act(() => vi.advanceTimersByTime(0));
     expect(copies().map((c) => c.style.opacity)).toEqual(["0", "1"]);
     expect(copies()[1].style.getPropertyValue("--c3")).toBe("#222222");
     act(() => fakeBridge.emit("screen_tint", { monitor: "m1", colors: null }));
+    act(() => vi.advanceTimersByTime(2000)); // 2 s later the next sample: the first fade (2.5 s) is still running
+    expect(copies().map((c) => c.style.opacity)).toEqual(["0", "1"]);
+    expect(copies()[0].style.getPropertyValue("--c1")).toBe(""); // the fading copy keeps its colours
+    act(() => vi.advanceTimersByTime(500));
     expect(copies().map((c) => c.style.opacity)).toEqual(["1", "0"]);
     expect(copies()[0].style.getPropertyValue("--c1")).toBe(""); // --glow-color
   });
@@ -47,6 +54,7 @@ describe("Drift glow", () => {
     const { Island, ISLAND_TINT } = await import("../components/Island");
     const { container } = render(<Island monitor="m1" init={{ view: null }} />);
     act(() => fakeBridge.emit("screen_tint", { monitor: ISLAND_TINT, colors: ["#ff0000", "#00ff00", "#0000ff"] }));
+    act(() => vi.advanceTimersByTime(0));
     const on = [...container.querySelectorAll<HTMLElement>("#island .glowCopy")].filter((c) => c.style.opacity === "1");
     expect(on.length).toBeGreaterThan(0);
     for (const c of on) expect(c.style.getPropertyValue("--c1")).toBe("#ff0000");
