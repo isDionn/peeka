@@ -343,6 +343,8 @@ pub fn cc_statusline_main() -> ! {
         // raw_arg: Rust's own quoting (\") is not cmd's, and a command with its own quotes needs the outer pair
         if let Ok(mut child) = Command::new("cmd")
             .raw_arg(format!("/C \"{command}\""))
+            // Peeka has no console of its own: without this every statusline refresh opened a console window
+            .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
