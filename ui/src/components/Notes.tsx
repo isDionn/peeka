@@ -1,8 +1,8 @@
 // Small peeks: notification burst, usage limit reached, "N sessions" chip. Logic lives in lib/notes.ts; Island picks, this file only draws.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Bell, Cpu, Download, FilePen, Gauge, Headphones } from "lucide-react";
+import { ArrowUp, Bell, Cpu, Download, FilePen, Gauge, Headphones } from "lucide-react";
 import { bridge, type CcDiff, type CcEdit } from "../bridge";
-import { agentOf, burstLabel, originLabel, type Burst, type CcSession } from "../lib/notes";
+import { agentOf, burstLabel, originLabel, type Burst, type CcSession, type CcState } from "../lib/notes";
 import { flat } from "../lib/plugin";
 
 export const BurstCenter = ({ b, generic }: { b: Burst; generic: boolean }) =>
@@ -44,7 +44,8 @@ export const CpuBump = () => <div className="peekBar"><button className="btn kk 
 
 /**
  * Open Claude Code sessions chip (>= 2): a 30 px tall pill left of the island, out of flow (the island doesn't shift). Clicking lists the known ones.
- * The hook gives only a salted short hash of the session id (`sid`): sessions are numbered "Session 1", "Session 2" with each one's last tool; those without a hash (main assistant) only count toward the total.
+ * The hook gives a salted short hash of the session id (`sid`) and the session folder's name: each row is that name ("Session N" while locked, presenting or shared, or without one),
+ * its state, last tool and a message field; those without a hash (main assistant) only count toward the total.
  */
 export function SessionChip({ n, list, edge, last, locked, limited = false }: { n: number; list: CcSession[]; edge: number; last: { tool: string | null; at: number } | null; locked: boolean; limited?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -73,10 +74,59 @@ export function SessionList({ n, list, last, locked, limited = false }: { n: num
     <div className="sideList sessionList" data-hit role="group" aria-label={mixed ? "Agent sessions" : "Claude Code sessions"}>
       <div className="sideRow"><span className="b6 sideName">{n} {what} open</span></div>
       {limited && <div className="sideRow"><Gauge aria-hidden="true" /><span className="l2 sideName">Usage limit reached</span></div>}
-      {list.map((x, i) => <div className="sideRow" key={x.sid}>{mixed && !locked && <span className="agentDot" style={{ background: agentOf(x.agent).color }} aria-hidden="true" />}<span className="l3 sideName">{mixed && !locked && `${agentOf(x.agent).name} · `}Session {i + 1}{!locked && `: ${x.tool ? flat(x.tool, 24) : "event"}, ${Math.max(0, Math.round((Date.now() - x.at) / 1000))}s ago`}</span>{!locked && originLabel(x.origin) && <span className="t12 l3">{originLabel(x.origin)}</span>}</div>)}
+      {list.map((x, i) => {
+        const name = !locked && x.name ? flat(x.name, 40) : `Session ${i + 1}`;
+        return locked
+          ? <div className="sideRow" key={x.sid}><span className="l3 sideName">{name}</span></div>
+          : <div className="sessRow" key={x.sid} role="group" aria-label={name}>
+              <div className="sessHead">{mixed && <span className="agentDot" style={{ background: agentOf(x.agent).color }} aria-hidden="true" />}<span className="sideName">{mixed && `${agentOf(x.agent).name} · `}{name}</span><span className="t12 sessState" data-state={x.state}>{STATE[x.state]}</span></div>
+              <div className="sessMeta t12 l3"><span className="sideName">{x.tool ? flat(x.tool, 24) : "event"}, {Math.max(0, Math.round((Date.now() - x.at) / 1000))}s ago</span>{originLabel(x.origin) && <span>{originLabel(x.origin)}</span>}</div>
+              {x.agent === "claude" && x.origin !== "desktop" && <SessionSend sid={x.sid} name={name} waiting={x.state === "waiting"} />}
+            </div>;
+      })}
       {list.length === 0 && !locked && last && <div className="sideRow"><span className="l3 sideName">Last activity: {last.tool ? flat(last.tool, 24) : "event"}, {ago}s ago</span></div>}
       {n > list.length && <div className="sideRow"><span className="l3 sideName">{list.length ? `${n - list.length} more can't be told apart` : "Sessions can't be told apart"}</span></div>}
     </div>
+  );
+}
+
+const STATE: Record<CcState, string> = { working: "Working", waiting: "Waiting for you", idle: "Idle" };
+/** Rust's `cc_send` error names. */
+const SEND_ERR: Record<string, string> = {
+  unknown: "This session can't take messages from Peeka",
+  missing: "This session has ended",
+  refused: "Couldn't reach this session's terminal",
+  invalid: "Plain text only, up to 2000 characters",
+  denied: "Not while locked, presenting or sharing",
+};
+
+/** A session row's message field: the text goes to that session as if typed in its terminal, then Enter (`cc_send`). Takes the keyboard only while focused (`typing_focus`).
+ *  Off while the session waits on a permission prompt: that Enter would answer the prompt. */
+function SessionSend({ sid, name, waiting }: { sid: string; name: string; waiting: boolean }) {
+  const [text, setText] = useState("");
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const focused = useRef(false);
+  const typing = (on: boolean) => { focused.current = on; bridge.call("typing_focus", { label: "island", on }).catch(() => undefined); };
+  // the list closed while the field had the keyboard: give it back
+  useEffect(() => () => { if (focused.current) bridge.call("typing_focus", { label: "island", on: false }).catch(() => undefined); }, []);
+  const send = () => {
+    if (!text.trim() || busy || waiting) return;
+    setBusy(true);
+    bridge.call("cc_send", { sid, text })
+      .then(() => { setText(""); setNote({ ok: true, text: "Sent" }); })
+      .catch((e) => setNote({ ok: false, text: SEND_ERR[String(e)] ?? "Couldn't send" }))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <>
+      <form className="sessSend" onSubmit={(e) => { e.preventDefault(); send(); }}>
+        <input className="sessInput" value={text} maxLength={2000} disabled={waiting} placeholder={waiting ? "Answer its prompt in the terminal first" : `Message ${name}`} aria-label={`Message to ${name}`}
+          onChange={(e) => { setText(e.target.value); setNote(null); }} onFocus={() => typing(true)} onBlur={() => typing(false)} />
+        <button type="submit" className="sessGo" aria-label={`Send to ${name}`} disabled={busy || waiting || !text.trim()} onMouseDown={(e) => e.preventDefault()}><ArrowUp size={13} strokeWidth={2.4} /></button>
+      </form>
+      {note && <div className={`t12 sessNote${note.ok ? " l3" : ""}`} role="status">{note.text}</div>}
+    </>
   );
 }
 

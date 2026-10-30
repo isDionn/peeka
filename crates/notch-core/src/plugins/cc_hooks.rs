@@ -1,7 +1,7 @@
 // Peeka — original implementation (MIT).
 //! Coding agents without a main assistant (`docs/plugin-api.md` "Claude Code" and "Other agents"): Peeka's own hook.
 //! `peeka.exe --cc-hook [agent [event]]` gets the hook's JSON on stdin and passes on only `{agent, kind, tool, reason,
-//! sid}` ([`hook_params`]; Claude Code's line adds the one-word [`origin`]); the receiver checks it again with the same rules as `cc.event`. [`install`] / [`uninstall`]
+//! sid, name}` ([`hook_params`]; Claude Code's line adds the one-word [`origin`]); the receiver checks it again with the same rules as `cc.event`. [`install`] / [`uninstall`]
 //! add or remove exactly Peeka's entries in the agent's hook config; the owner's other hooks stay. Status only: the
 //! hook never answers, so no agent waits on Peeka for a decision. Pure apart from the one file it is given.
 
@@ -175,8 +175,8 @@ pub fn salt(path: &Path) -> Option<Vec<u8>> {
 }
 
 /// The hook's stdin JSON -> `cc.event` params. Reads the event name, the tool name, the session id (only as the salted
-/// [`session_tag`], and only with a `salt`) and (stop_failure) `error` / (notification) `notification_type`, nothing
-/// else; a field that is not a [`word`] goes as null. None = not one of `a`'s events. The field names differ a little
+/// [`session_tag`], and only with a `salt`), the last folder of `cwd` as `name` ([`folder_name`], omitted when not
+/// valid) and (stop_failure) `error` / (notification) `notification_type`, nothing else; a field that is not a [`word`] goes as null. None = not one of `a`'s events. The field names differ a little
 /// across agents (`sessionId`, Cursor's `conversation_id`, `toolName`), so each is the first of its spellings present.
 pub fn hook_params(a: &Agent, raw: &Value, salt: Option<&[u8]>) -> Option<Value> {
     let event = raw.get("hook_event_name")?.as_str()?;
@@ -190,10 +190,35 @@ pub fn hook_params(a: &Agent, raw: &Value, salt: Option<&[u8]>) -> Option<Value>
     };
     let id = first(&["session_id", "sessionId", "conversation_id"]);
     let sid = salt.zip(id).filter(|(_, id)| (1..=256).contains(&id.len()));
-    Some(json!({
+    let mut p = json!({
         "agent": a.id, "kind": kind, "tool": w(&["tool_name", "toolName"]), "reason": reason,
         "sid": sid.map(|(k, id)| session_tag(k, id)),
-    }))
+    });
+    if let Some(n) = first(&["cwd"]).and_then(folder_name) {
+        p["name"] = n.into();
+    }
+    Some(p)
+}
+
+/// The session's name on the island: the last folder of its `cwd` (owner's call: the folder name only, never the path).
+pub fn folder_name(cwd: &str) -> Option<&str> {
+    cwd.split(['/', '\\']).rfind(|c| !c.is_empty()).filter(|n| is_name(n))
+}
+
+/// A `name` as the receiver accepts it: 1-40 chars (the row shows 40; the hook line stays under 1 KiB with an edit's
+/// path), no control chars, no `/ \ :` (one folder name, not a path).
+pub fn is_name(s: &str) -> bool {
+    (1..=40).contains(&s.chars().count()) && !s.chars().any(|c| c.is_control() || matches!(c, '/' | '\\' | ':'))
+}
+
+/// "Send to session": the longest message, in chars.
+pub const SEND_MAX: usize = 2000;
+
+/// The owner's message as it is typed into the session: trimmed, 1-[`SEND_MAX`] chars, no control char at all (no
+/// Enter, Tab or escape sequence; the single Enter that submits it is added by the sender, never taken from here).
+pub fn send_text(s: &str) -> Option<&str> {
+    let t = s.trim();
+    (1..=SEND_MAX).contains(&t.chars().count()).then_some(t).filter(|t| !t.chars().any(char::is_control))
 }
 
 /// `origin` of `cc.event`: where a Claude Code session was started.
@@ -735,11 +760,11 @@ mod tests {
         let p = hook_params(&CLAUDE, &raw, None).unwrap();
         assert_eq!(
             p,
-            json!({"agent": "claude", "kind": "pre_tool", "tool": "Bash", "reason": null, "sid": null}),
-            "no salt, no sid"
+            json!({"agent": "claude", "kind": "pre_tool", "tool": "Bash", "reason": null, "sid": null, "name": "hidden-project"}),
+            "no salt, no sid; the folder's name only"
         );
         let s = p.to_string();
-        for leak in ["rm -rf", "secret", "b.txt", "hunter22", "output", "hidden", "jsonl", "raw-session"] {
+        for leak in ["rm -rf", "secret", "b.txt", "hunter22", "output", "work", "jsonl", "raw-session"] {
             assert!(!s.contains(leak), "{leak}");
         }
         for bad in [r"C:\Windows\cmd.exe", "/usr/bin/bash", "rm -rf /", "Bash; echo x", &"a".repeat(65), "", "sécret"]
@@ -774,6 +799,28 @@ mod tests {
     }
 
     #[test]
+    fn a_message_is_plain_visible_text() {
+        assert_eq!(send_text("  run the tests  "), Some("run the tests"));
+        assert_eq!(send_text("çalıştır ✓ 🙂"), Some("çalıştır ✓ 🙂"));
+        assert_eq!(send_text(&"ş".repeat(SEND_MAX)).map(|t| t.chars().count()), Some(SEND_MAX));
+        for bad in ["", "   ", "two\nlines", "a\rb", "tab\there", "\u{1b}[2J", "x\u{7}", "c1\u{9b}", &"a".repeat(SEND_MAX + 1)] {
+            assert_eq!(send_text(bad), None, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn the_name_is_the_folder_only() {
+        assert_eq!(folder_name(r"C:\Users\me\Desktop\di10\Peeka"), Some("Peeka"));
+        assert_eq!(folder_name(r"C:\work\My Project\"), Some("My Project"), "trailing separator");
+        assert_eq!(folder_name("/home/me/peeka"), Some("peeka"));
+        for bad in [r"C:\", "", "/", &format!(r"C:\{}", "a".repeat(41)), "C:\\x\\a\u{7}b"] {
+            assert_eq!(folder_name(bad), None, "{bad:?}");
+        }
+        let none = hook_params(&CLAUDE, &json!({"hook_event_name": "Stop"}), None).unwrap();
+        assert!(none.get("name").is_none(), "no cwd, no name");
+    }
+
+    #[test]
     fn hmac_matches_rfc_4231() {
         let hex = |b: [u8; 32]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
         assert_eq!(
@@ -800,7 +847,7 @@ mod tests {
 
     #[test]
     fn the_raw_session_id_never_leaves_the_hook() {
-        let raw = json!({"hook_event_name": "Stop", "session_id": "9c1d2e3f-raw-id", "cwd": r"C:\work\hidden"});
+        let raw = json!({"hook_event_name": "Stop", "session_id": "9c1d2e3f-raw-id", "cwd": r"C:\hidden\work"});
         let p = hook_params(&CLAUDE, &raw, Some(&[7; 32])).unwrap();
         assert_eq!(p["sid"], json!(session_tag(&[7; 32], "9c1d2e3f-raw-id")));
         let s = p.to_string();
@@ -889,7 +936,7 @@ mod tests {
         let line = hook_line(&CLAUDE, &raw, Some(&[3; 32]), Some(&dir)).unwrap();
         assert_eq!(line["edit"], json!({"file": "src/a.rs", "add": 1, "del": 1}));
         let s = line.to_string();
-        assert!(!s.contains("secret") && !s.contains("work") && !s.contains("proj"), "no code, no absolute path: {s}");
+        assert!(!s.contains("secret") && !s.contains("work"), "no code, no absolute path: {s}");
         let sid = line["sid"].as_str().unwrap();
         let cached = read_diff(&dir, sid).unwrap();
         assert_eq!(cached.lines, ["-secret1", "+secret2"]);
@@ -1137,9 +1184,9 @@ mod tests {
         let p = hook_params(by("codex"), &codex, salt).unwrap();
         assert_eq!(
             p,
-            json!({"agent": "codex", "kind": "pre_tool", "tool": "Bash", "reason": null, "sid": session_tag(&[5; 32], "019a-codex-thread")})
+            json!({"agent": "codex", "kind": "pre_tool", "tool": "Bash", "reason": null, "sid": session_tag(&[5; 32], "019a-codex-thread"), "name": "secret-proj"})
         );
-        no_leak(&p, &["019a", "secret", ".env", "gpt-5", "turn-9", "jsonl"]);
+        no_leak(&p, &["019a", "work", ".env", "gpt-5", "turn-9", "jsonl"]);
         // Cursor postToolUse (cursor.com/docs/agent/hooks): the session is `conversation_id`
         let cursor = json!({"conversation_id": "conv-42", "generation_id": "gen-1", "model": "claude-x", "hook_event_name": "postToolUse",
             "cursor_version": "2.0", "workspace_roots": ["C:\\work\\secret-proj"], "user_email": "me@example.com",
@@ -1148,9 +1195,9 @@ mod tests {
         let p = hook_params(by("cursor"), &cursor, salt).unwrap();
         assert_eq!(
             p,
-            json!({"agent": "cursor", "kind": "post_tool", "tool": "Shell", "reason": null, "sid": session_tag(&[5; 32], "conv-42")})
+            json!({"agent": "cursor", "kind": "post_tool", "tool": "Shell", "reason": null, "sid": session_tag(&[5; 32], "conv-42"), "name": "secret-proj"})
         );
-        no_leak(&p, &["conv-42", "example.com", "secret", "passwords", "claude-x"]);
+        no_leak(&p, &["conv-42", "example.com", "work", "passwords", "claude-x"]);
         assert!(
             hook_params(by("cursor"), &json!({"hook_event_name": "preToolUse", "tool_name": "Shell"}), None).is_none(),
             "blocking events are not ours"
@@ -1162,9 +1209,9 @@ mod tests {
         let p = hook_params(by("gemini"), &gemini, None).unwrap();
         assert_eq!(
             p,
-            json!({"agent": "gemini", "kind": "post_tool", "tool": "write_file", "reason": null, "sid": null})
+            json!({"agent": "gemini", "kind": "post_tool", "tool": "write_file", "reason": null, "sid": null, "name": "secret-proj"})
         );
-        no_leak(&p, &["hunter2", "a.txt", "secret"]);
+        no_leak(&p, &["hunter2", "a.txt", "work"]);
         let n = json!({"session_id": "g-1", "hook_event_name": "Notification", "notification_type": "ToolPermission", "message": "Allow rm -rf?", "details": {}});
         let p = hook_params(by("gemini"), &n, None).unwrap();
         assert_eq!((p["kind"].as_str(), p["reason"].as_str()), (Some("notification"), Some("ToolPermission")));
@@ -1183,7 +1230,7 @@ mod tests {
         let p = hook_params(by("copilot"), &camel, salt).unwrap();
         assert_eq!(
             p,
-            json!({"agent": "copilot", "kind": "pre_tool", "tool": "bash", "reason": null, "sid": session_tag(&[5; 32], "cp-1")})
+            json!({"agent": "copilot", "kind": "pre_tool", "tool": "bash", "reason": null, "sid": session_tag(&[5; 32], "cp-1"), "name": "tmp"})
         );
         no_leak(&p, &["command", "/tmp"]);
         let err = json!({"hook_event_name": "ErrorOccurred", "error": {"message": "C:\\secret", "name": "Error"}});

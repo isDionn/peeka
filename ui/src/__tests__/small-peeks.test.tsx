@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeBridge } from "../bridge.fake";
 import { Island } from "../components/Island";
-import { ccLimit, createBatteryTiers, createBurst, createCcSessions, burstLabel } from "../lib/notes";
+import { ccLimit, ccStateOf, createBatteryTiers, createBurst, createCcSessions, burstLabel } from "../lib/notes";
 import { VOICE_THINKING, PROTRUSION } from "../plugin.fixtures";
 import type { Media } from "../bridge";
 
@@ -65,11 +65,29 @@ describe("pure logic", () => {
     expect(s.feed({ kind: "session_start", sid: "bbbbbbbb" }, 10)).toBe(2);
     expect(s.feed({ kind: "pre_tool", tool: "Bash", sid: "aaaaaaaa" }, 20)).toBe(2);
     expect(s.feed({ kind: "post_tool", sid: "aaaaaaaa" }, 30)).toBe(2);
-    expect(s.list(30)).toEqual([{ sid: "aaaaaaaa", agent: "claude", tool: "Bash", at: 30, origin: null }, { sid: "bbbbbbbb", agent: "claude", tool: null, at: 10, origin: null }]);
+    expect(s.list(30)).toEqual([{ sid: "aaaaaaaa", agent: "claude", tool: "Bash", at: 30, origin: null, name: null, state: "working" }, { sid: "bbbbbbbb", agent: "claude", tool: null, at: 10, origin: null, name: null, state: "idle" }]);
     expect(s.count(5020)).toBe(1); // b stayed silent for 5 s and dropped out
     expect(s.feed({ kind: "session_end", sid: "aaaaaaaa" }, 5100)).toBe(0);
     expect(s.feed({ kind: "stop", sid: "bbbbbbbb" }, 5200)).toBe(1); // a dropped session comes back with a new event
     expect(s.feed({ kind: "session_start" }, 5300)).toBe(2); // one without a sid (main assistant) is counted by the counter
+  });
+  it("session name: the folder name is carried and kept when a later event (or a locked one) has none", () => {
+    const s = createCcSessions();
+    s.feed({ kind: "session_start", sid: "aaaaaaaa", name: "Peeka" }, 0);
+    s.feed({ kind: "pre_tool", tool: "Bash", sid: "aaaaaaaa" }, 10);
+    expect(s.list(10)[0].name).toBe("Peeka");
+    s.feed({ kind: "stop", sid: "aaaaaaaa", name: "Renamed" }, 20);
+    expect(s.list(20)[0].name).toBe("Renamed");
+  });
+  it("session state: working on tools and prompts, waiting on a permission prompt, idle after a stop", () => {
+    expect(ccStateOf("pre_tool", null, "idle")).toBe("working");
+    expect(ccStateOf("prompt", null, "idle")).toBe("working");
+    expect(ccStateOf("permission", null, "working")).toBe("waiting");
+    expect(ccStateOf("notification", "permission_prompt", "working")).toBe("waiting");
+    expect(ccStateOf("notification", "idle_prompt", "working")).toBe("idle");
+    expect(ccStateOf("notification", "auth_success", "working")).toBe("working");
+    expect(ccStateOf("stop", null, "working")).toBe("idle");
+    expect(ccStateOf("stop_failure", "rate_limit", "working")).toBe("idle");
   });
 });
 
@@ -204,8 +222,8 @@ describe("13 two sessions", () => {
     await settle(100);
     fireEvent.click(screen.getByRole("button", { name: /2 sessions/ }));
     const list = screen.getByRole("group", { name: "Claude Code sessions" }).textContent!;
-    expect(list).toContain("Session 1: event");
-    expect(list).toContain("Session 2: Grep");
+    expect(list).toContain("Session 1Idleevent, 0s ago");
+    expect(list).toContain("Session 2WorkingGrep, 0s ago");
     expect(list).not.toContain("can't be told apart");
     expect(list).not.toContain("1a2b3c4d");
   });
@@ -215,7 +233,7 @@ describe("13 two sessions", () => {
     act(() => { fakeBridge.emit("cc_event", { kind: "session_start", sid: "1a2b3c4d", origin: "desktop" }); fakeBridge.emit("cc_event", { kind: "pre_tool", tool: "Grep", sid: "5e6f7a8b", origin: "terminal" }); fakeBridge.emit("cc_event", { kind: "stop", sid: "1a2b3c4d" }); });
     await settle(100);
     fireEvent.click(screen.getByRole("button", { name: /2 sessions/ }));
-    const rows = [...screen.getByRole("group", { name: "Claude Code sessions" }).querySelectorAll(".sideRow")].map((r) => r.textContent);
+    const rows = [...screen.getByRole("group", { name: "Claude Code sessions" }).querySelectorAll(".sessRow")].map((r) => r.textContent);
     expect(rows.find((r) => r?.includes("Session 1"))).toMatch(/Desktop$/); // kept from session_start
     expect(rows.find((r) => r?.includes("Session 2"))).not.toMatch(/Terminal|Desktop/);
   });
@@ -227,9 +245,36 @@ describe("13 two sessions", () => {
     fireEvent.click(screen.getByRole("button", { name: /2 sessions/ }));
     const group = screen.getByRole("group", { name: "Agent sessions" });
     expect(group.textContent).toContain("2 agent sessions open");
-    expect(group.textContent).toContain("Claude Code · Session 1: event");
-    expect(group.textContent).toContain("Codex · Session 2: Bash");
+    expect(group.textContent).toContain("Claude Code · Session 1Idle");
+    expect(group.textContent).toContain("Codex · Session 2WorkingBash");
     expect(group.querySelectorAll(".agentDot")).toHaveLength(2);
+  });
+  it("a row shows its folder name and takes a message; locked it is 'Session N' with no name and no field", { timeout: 20000 }, async () => {
+    render(<Island monitor="m1" init={{ view: null }} />);
+    await settle();
+    act(() => { fakeBridge.emit("cc_event", { kind: "session_start", sid: "1a2b3c4d", name: "Peeka", origin: "terminal" }); fakeBridge.emit("cc_event", { kind: "permission", sid: "5e6f7a8b", name: "site", origin: "desktop" }); });
+    await settle(100);
+    fireEvent.click(screen.getByRole("button", { name: /2 sessions/ }));
+    const peeka = screen.getByRole("group", { name: "Peeka" });
+    expect(screen.getByRole("group", { name: "site" }).textContent).toContain("Waiting for you");
+    expect(screen.queryByRole("textbox", { name: "Message to site" })).toBeNull(); // a Desktop session has no terminal to type into
+    act(() => fakeBridge.emit("cc_event", { kind: "permission", sid: "1a2b3c4d" }));
+    await settle(50);
+    expect((screen.getByRole("textbox", { name: "Message to Peeka" }) as HTMLInputElement).disabled).toBe(true); // Enter would answer the permission prompt
+    act(() => fakeBridge.emit("cc_event", { kind: "post_tool", sid: "1a2b3c4d" }));
+    await settle(50);
+    const field = screen.getByRole("textbox", { name: "Message to Peeka" });
+    fireEvent.change(field, { target: { value: "run the tests" } });
+    fireEvent.submit(field.closest("form")!);
+    await settle(50);
+    expect(fakeBridge.log.find((c) => c.cmd === "cc_send")).toMatchObject({ args: { sid: "1a2b3c4d", text: "run the tests" } });
+    expect(peeka.textContent).toContain("Sent");
+    expect((field as HTMLInputElement).value).toBe("");
+    act(() => fakeBridge.setLocked(true));
+    await settle(100);
+    const list = document.querySelector(".sessionList")?.textContent ?? "";
+    expect(list).not.toMatch(/Peeka|site/);
+    expect(document.querySelector(".sessInput")).toBeNull();
   });
   it("the chip does not change the island center box", { timeout: 20000 }, async () => {
     render(<Island monitor="m1" init={{ view: null }} />);

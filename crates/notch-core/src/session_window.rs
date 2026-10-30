@@ -58,6 +58,14 @@ pub fn window_owner(procs: &HashMap<u32, Proc>, start: u32, has_window: impl Fn(
     lineage(procs, start).into_iter().find(|&pid| has_window(pid))
 }
 
+/// Exe names a Claude Code session runs as: the native build, or the npm one under Node or Bun.
+const AGENT_EXES: [&str; 3] = ["claude.exe", "node.exe", "bun.exe"];
+
+/// "Send to session": the nearest Claude Code process above Peeka's hook process `hook` (its shell sits between).
+pub fn agent_proc(procs: &HashMap<u32, Proc>, hook: u32) -> Option<u32> {
+    lineage(procs, hook).into_iter().skip(1).find(|p| AGENT_EXES.iter().any(|e| procs[p].exe.eq_ignore_ascii_case(e)))
+}
+
 /// Accepts a plain session id (a UUID in practice): 1 to 128 ASCII letters, digits, `-` or `_`.
 pub fn valid_session(id: &str) -> bool {
     !id.is_empty() && id.len() <= 128 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
@@ -66,6 +74,23 @@ pub fn valid_session(id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_agent_is_the_nearest_claude_above_the_hook() {
+        // explorer -> WindowsTerminal -> pwsh -> claude -> bash -> peeka (hook)
+        let procs = tree(&[
+            (100, 4, "explorer.exe"),
+            (200, 100, "WindowsTerminal.exe"),
+            (300, 200, "pwsh.exe"),
+            (400, 300, "Claude.exe"),
+            (500, 400, "bash.exe"),
+            (600, 500, "peeka.exe"),
+            (700, 300, "node.exe"),
+        ]);
+        assert_eq!(agent_proc(&procs, 600), Some(400));
+        assert_eq!(agent_proc(&procs, 700), None, "the start itself never counts");
+        assert_eq!(agent_proc(&procs, 999), None);
+    }
 
     fn tree(entries: &[(u32, u32, &str)]) -> HashMap<u32, Proc> {
         entries.iter().map(|(pid, parent, exe)| (*pid, Proc { parent: *parent, exe: exe.to_string() })).collect()

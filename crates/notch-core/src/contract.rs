@@ -153,6 +153,7 @@ pub const COMMANDS: &[&str] = &[
     "agent_bridge_remove",
     "agent_bridge_preview",
     "cc_focus_terminal",
+    "cc_send",
     "cc_diff",
     "cc_diff_open",
     "permission_history",

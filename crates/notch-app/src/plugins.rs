@@ -44,6 +44,9 @@ pub struct Plugins {
     data_dir: PathBuf,
     /// When Peeka's own hook last delivered a valid line, per agent id (absent = never); the bridge rows read it.
     pub cc_seen: Mutex<HashMap<String, u64>>,
+    /// Claude Code sessions Peeka's own hook reported: `sid` -> (session process pid, its start time). The only
+    /// targets "Send to session" (`cc_send`) ever types into.
+    pub cc_pids: Mutex<HashMap<String, (u32, u64)>>,
 }
 
 /// Starts the pipe server and the 50 ms tick. A failure is a notice: Notch runs on without plugins.
@@ -57,6 +60,7 @@ pub fn start(app: &AppHandle, data_dir: PathBuf) {
         next: AtomicU64::new(1),
         data_dir,
         cc_seen: Mutex::new(HashMap::new()),
+        cc_pids: Mutex::new(HashMap::new()),
     });
     run(app, demo_outs);
     if crate::app::demo() {
@@ -215,20 +219,56 @@ async fn cc_connection(app: AppHandle, pipe: NamedPipeServer) {
             Err(_) => break, // the hook closed its end: what it wrote is in `buf`
         }
     }
-    let _ = pipe.disconnect();
     let line = buf.split(|b| *b == b'\n').next().unwrap_or_default();
-    let Some(p) = app.try_state::<Plugins>() else { return };
-    let Some(outs) = p.host.lock().cc_hook(line, now_ms()) else { return };
-    // valid, so `agent` is absent (= claude) or a known id
-    let agent =
-        serde_json::from_slice::<serde_json::Value>(line).ok().and_then(|v| v["agent"].as_str().map(str::to_owned));
-    p.cc_seen.lock().insert(agent.unwrap_or_else(|| "claude".into()), now_ms());
+    let Some(p) = app.try_state::<Plugins>() else {
+        let _ = pipe.disconnect();
+        return;
+    };
+    let Some(outs) = p.host.lock().cc_hook(line, now_ms()) else {
+        let _ = pipe.disconnect();
+        return;
+    };
+    // valid, so `agent` is absent (= claude) or a known id and `sid` is a tag
+    let v = serde_json::from_slice::<serde_json::Value>(line).unwrap_or_default();
+    let agent = v["agent"].as_str().unwrap_or("claude");
+    if let (true, Some(sid)) = (agent == "claude", v["sid"].as_str()) {
+        cc_register(&p, &pipe, sid, v["kind"] == "session_end");
+    }
+    let _ = pipe.disconnect();
+    p.cc_seen.lock().insert(agent.into(), now_ms());
     run(&app, outs);
+}
+
+/// Keeps `sid` -> its Claude Code process while the hook is still connected (the hook runs under that process; it is
+/// found by climbing from the pipe's client pid, nothing on the line names a pid). Climbs once per session; dead
+/// entries go when a new one comes.
+fn cc_register(p: &Plugins, pipe: &NamedPipeServer, sid: &str, end: bool) {
+    use notch_win::session_window::{agent_of_hook, started};
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::Pipes::GetNamedPipeClientProcessId;
+    let mut pids = p.cc_pids.lock();
+    if end {
+        pids.remove(sid);
+        return;
+    }
+    if pids.contains_key(sid) {
+        return;
+    }
+    let mut hook = 0u32;
+    let raw = std::os::windows::io::AsRawHandle::as_raw_handle(pipe);
+    // SAFETY: `pipe` is connected and held by the caller for the whole call.
+    if unsafe { GetNamedPipeClientProcessId(HANDLE(raw), &mut hook) }.is_err() {
+        return;
+    }
+    if let Some(found) = agent_of_hook(hook) {
+        pids.retain(|_, &mut (pid, at)| started(pid) == Some(at));
+        pids.insert(sid.to_owned(), found);
+    }
 }
 
 /// `peeka.exe --cc-hook [agent [event]]`, run by a coding agent for each hook event (before Tauri starts; `main.rs`;
 /// no agent = Claude Code, an unknown one sends nothing; `event` only when the payload has no `hook_event_name`, as
-/// Copilot's camelCase one). Reads the hook's JSON on stdin and sends Peeka only `{agent, kind, tool, reason, sid}` (`cc_hooks::hook_params`; `sid` = salted 8-hex tag of the session id), Claude Code adds `origin` (one word, `cc_hooks::origin`),
+/// Copilot's camelCase one). Reads the hook's JSON on stdin and sends Peeka only `{agent, kind, tool, reason, sid, name}` (`cc_hooks::hook_params`; `sid` = salted 8-hex tag of the session id, `name` = the cwd's last folder), Claude Code adds `origin` (one word, `cc_hooks::origin`),
 /// plus `edit {file, add, del}` for an Edit/Write inside the session cwd; that edit's diff stays in a local cache file (`cc_hooks::hook_line`). Never holds Claude Code up
 /// and never answers: no stdout at all (a PermissionRequest keeps Claude Code's own prompt), every path ends in exit
 /// 0, a 2 s watchdog ends it whatever happens, and a closed or busy pipe (Peeka not running) is given up at once.
@@ -469,9 +509,11 @@ pub fn run(app: &AppHandle, outs: Vec<Out>) {
                         app.emit("job_done", serde_json::json!({ "title": title, "took": took, "seconds": seconds }));
                 }
             }
-            Out::Ui(UiEvent::CcEvent { agent, kind, tool, reason, sid, origin }) => {
+            Out::Ui(UiEvent::CcEvent { agent, kind, tool, reason, sid, origin, name }) => {
                 crate::recap::count(app, notch_core::recap::Ev::Agent { kind: &kind, sid: sid.as_deref() });
-                let _ = app.emit("cc_event", serde_json::json!({ "agent": agent, "kind": kind, "tool": tool, "reason": reason, "sid": sid, "origin": origin }));
+                // locked, presenting or shared: the folder name stays here (the page shows "Session N")
+                let name = name.filter(|_| !crate::privacy::closed(app));
+                let _ = app.emit("cc_event", serde_json::json!({ "agent": agent, "kind": kind, "tool": tool, "reason": reason, "sid": sid, "origin": origin, "name": name }));
             }
             Out::Ui(UiEvent::CcEdit { sid, file, add, del }) => {
                 crate::recap::count(app, notch_core::recap::Ev::Edit { sid: sid.as_deref(), file: &file });
