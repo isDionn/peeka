@@ -82,7 +82,29 @@ button.peek { color: inherit; cursor: pointer; width: 44px; height: 14px; displa
 .sessionBtn:active { transform: scale(.96); }
 @media (hover: hover) and (pointer: fine) { .sessionBtn:hover { filter: brightness(1.28); } }
 .sessionBtn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.sessionList { left: auto; right: 0; }
+.sessionList { left: auto; right: 0; min-width: 260px; }
+/* a session row: name and state, last tool, and its message field */
+.sessRow { display: flex; flex-direction: column; gap: 5px; padding: 8px 10px; border-radius: var(--rInner); color: var(--l1); }
+.sessRow + .sessRow { box-shadow: inset 0 .5px 0 var(--divider); }
+.sessHead, .sessMeta { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; }
+.sessHead { font: 600 13px/1.2 var(--font); }
+.sessRow .sideName { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sessRow .agentDot { width: 8px; height: 8px; flex: none; border-radius: 50%; }
+.sessState { flex: none; font-weight: 500; color: var(--l3); }
+.sessState[data-state="working"] { color: var(--l1); }
+.sessState[data-state="waiting"] { color: #FF9F0A; }
+.sessSend { display: flex; align-items: center; gap: 6px; height: 30px; margin-top: 2px; padding: 0 3px 0 11px; border-radius: 15px; background: var(--e1); box-shadow: inset 0 0 0 1px var(--edge); transition: box-shadow var(--d-fast) var(--ease-move); }
+.sessSend:focus-within { box-shadow: inset 0 0 0 1px var(--glassEdge); }
+html[data-kb] .sessSend:has(.sessInput:focus) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sessInput { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; color: var(--l1); font: 12px var(--font); caret-color: var(--l1); }
+.sessInput:focus-visible { outline: none; }
+.sessInput::placeholder { color: var(--l3); }
+.sessGo { flex: none; width: 24px; height: 24px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; background: var(--l1); color: var(--strip); transition: transform var(--d-press) var(--ease), opacity var(--d-fast) var(--ease-move); }
+.sessGo:active:not(:disabled) { transform: scale(.92); }
+.sessGo:disabled { opacity: .28; cursor: default; }
+.sessGo:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sessNote { color: var(--redText); padding-left: 11px; }
+.sessNote.l3 { color: var(--l3); }
 
 /* The hanging 40 px ghost leads the center but stays out of its centering: the same room on the right keeps the text (clock, cover, title / the peek's label) on the screen's center line, with or without the ghost. */
 .islandMascot:has(> .ms:first-child > .mascot[data-hang]) { padding-right: 48px; }

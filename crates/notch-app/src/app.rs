@@ -350,6 +350,7 @@ pub fn run() {
             crate::commands::agent_bridge_remove,
             crate::commands::agent_bridge_preview,
             crate::commands::cc_focus_terminal,
+            crate::commands::cc_send,
             crate::commands::cc_diff,
             crate::commands::cc_diff_open,
             crate::commands::open_task_manager,

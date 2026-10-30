@@ -46,7 +46,16 @@ export const burstLabel = (count: number, apps: readonly string[], generic = fal
 export const ccLimit = (on: boolean, e: { kind: string; reason?: string | null }) =>
   e.kind === "stop_failure" && e.reason === "rate_limit" ? true : e.kind === "stop" || (e.kind === "notification" && e.reason === "quota_auto_resume_fired") ? false : on;
 
-export interface CcSession { sid: string; agent: string; tool: string | null; at: number; /** `cc_event` `origin`; the last one seen is kept. */ origin?: string | null }
+export type CcState = "working" | "waiting" | "idle";
+export interface CcSession { sid: string; agent: string; tool: string | null; at: number; /** `cc_event` `origin`; the last one seen is kept. */ origin?: string | null; /** The session folder's name (Rust sends none while locked/presenting/shared); the last one seen is kept. */ name?: string | null; state: CcState }
+
+/** What a session is doing after hook event `kind`: a permission prompt waits on the owner, a stop or the idle notice is idle, tools and prompts are work; other notifications keep `prev`. */
+export function ccStateOf(kind: string, reason: string | null | undefined, prev: CcState): CcState {
+  if (kind === "permission" || (kind === "notification" && reason === "permission_prompt")) return "waiting";
+  if (kind === "notification") return reason === "idle_prompt" ? "idle" : prev;
+  if (["stop", "stop_failure", "session_start", "session_end"].includes(kind)) return "idle";
+  return "working";
+}
 
 /** Each coding agent's name and accent (a dot in the sessions list; the mascot stays one ghost). Unknown ids fall back to Claude Code's. */
 export const AGENTS: Record<string, { name: string; color: string }> = {
@@ -79,7 +88,11 @@ export function createCcSessions(staleMs = 3_600_000, quietMs = 1_800_000) {
       prune(now);
       if (e.sid) {
         if (e.kind === "session_end") known.delete(e.sid);
-        else known.set(e.sid, { sid: e.sid, agent: e.agent ?? "claude", tool: e.tool ?? known.get(e.sid)?.tool ?? null, at: now, origin: e.origin ?? known.get(e.sid)?.origin ?? null }); // re-setting keeps the order: "Session 1" stays in place
+        else {
+          const was = known.get(e.sid);
+          // re-setting keeps the order: "Session 1" stays in place
+          known.set(e.sid, { sid: e.sid, agent: e.agent ?? "claude", tool: e.tool ?? was?.tool ?? null, at: now, origin: e.origin ?? was?.origin ?? null, name: e.name ?? was?.name ?? null, state: ccStateOf(e.kind, e.reason, was?.state ?? "idle") });
+        }
       } else {
         last = now;
         if (e.kind === "session_start") anon++;

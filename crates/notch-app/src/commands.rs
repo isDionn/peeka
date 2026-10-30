@@ -2296,6 +2296,25 @@ pub async fn cc_focus_terminal(app: AppHandle, session_id: String) -> Res<()> {
     })
 }
 
+/// "Send" on a session row: the owner's `text` typed into that Claude Code session's own console, then Enter
+/// (`notch_win::session_window::type_into`). Only a session Peeka's own hook reported (`unknown`), never while
+/// locked, presenting or shared (`denied`), plain text of at most 2000 chars (`invalid`); `missing` = that session's
+/// process is gone, `refused` = its console could not be joined. The text is never logged or kept.
+#[tauri::command]
+pub async fn cc_send(app: AppHandle, sid: String, text: String) -> Res<()> {
+    not_in_demo()?;
+    cmd::unlocked(crate::privacy::closed(&app))?;
+    let text = notch_core::plugins::cc_hooks::send_text(&text).ok_or(CmdError::Invalid)?.to_owned();
+    let p = app.try_state::<crate::plugins::Plugins>().ok_or(CmdError::Unknown)?;
+    let (pid, at) = p.cc_pids.lock().get(&sid).copied().ok_or(CmdError::Unknown)?;
+    if notch_win::session_window::started(pid) != Some(at) {
+        p.cc_pids.lock().remove(&sid);
+        return Err(CmdError::Missing);
+    }
+    let typed = tauri::async_runtime::spawn_blocking(move || notch_win::session_window::type_into(pid, &text));
+    typed.await.unwrap_or(false).then_some(()).ok_or(CmdError::Refused)
+}
+
 /// The last edit's diff for session `sid`, read on demand from the hook's local cache (`cc_hooks::read_diff`). Never
 /// while locked or presenting (`denied`); `missing` = no edit cached for it, or older than 30 min.
 #[tauri::command]

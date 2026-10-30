@@ -87,7 +87,11 @@ fn cc_event(p: &Value) -> Result<UiEvent, RpcErr> {
         None | Some(Value::Null) => None,
         Some(v) => Some(v.as_str().filter(|o| cc_hooks::ORIGINS.contains(o)).ok_or_else(|| bad("origin: terminal, desktop, cursor or vscode"))?.to_string()),
     };
-    Ok(UiEvent::CcEvent { agent: agent.into(), kind: kind.into(), tool: cc_word(p, "tool")?, reason: cc_word(p, "reason")?, sid, origin })
+    let name = match p.get("name") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(v.as_str().filter(|n| cc_hooks::is_name(n)).ok_or_else(|| bad("name: one folder name, 64 characters at most"))?.to_string()),
+    };
+    Ok(UiEvent::CcEvent { agent: agent.into(), kind: kind.into(), tool: cc_word(p, "tool")?, reason: cc_word(p, "reason")?, sid, origin, name })
 }
 
 /// fidelity-api.ts `AssistantCounts`.

@@ -438,6 +438,8 @@ export interface Commands {
   composer_kinds: { args: void; ret: ComposerKind[] };
   /** "Open terminal": brings Claude Code's terminal window forward using the row's `session` id. Errors: `unknown` | `not_connected` | `missing` | `refused` | `unsupported` (demo). */
   cc_focus_terminal: { args: { sessionId: string }; ret: void };
+  /** "Send" on a session row: `text` typed into that Claude Code session's own console, then Enter. Errors: `unknown` (Peeka's hook never placed it) | `denied` (locked, presenting, shared) | `invalid` (empty, over 2000 chars, a control char) | `missing` (it ended) | `refused` (its console can't be joined) | `unsupported` (demo). */
+  cc_send: { args: { sid: string; text: string }; ret: void };
   /** The last Edit/Write of hook session `sid` (`cc_edit.sid`), read on demand from the hook's local cache: at most 200 lines (`more` = lines past that). `denied` while locked or presenting, `missing` when nothing is cached (or it is older than 30 min). */
   cc_diff: { args: { sid: string }; ret: CcDiff };
   /** "Open in editor": that file with its default app. `denied` while locked/presenting or for a runnable file, `missing` when it's gone. */
@@ -558,7 +560,7 @@ export interface Events {
   meeting_changed: boolean;
   /** The main assistant's `cc.event`: a Claude Code hook event (drives the mascot state). `tool` is the tool name, `reason` the error class; no free text. */
   /** `agent`: claude | codex | cursor | gemini | copilot | opencode (absent = claude). */
-  cc_event: { agent?: string | null; kind: string; tool?: string | null; reason?: string | null; sid?: string | null; origin?: string | null };
+  cc_event: { agent?: string | null; kind: string; tool?: string | null; reason?: string | null; sid?: string | null; origin?: string | null; name?: string | null };
   /** Peeka's own hook only: an Edit/Write inside the session folder. `file` is relative to it; `file`/`add`/`del` are null while locked or presenting (generic label only). The diff itself comes only from `cc_diff`. */
   cc_edit: CcEdit;
   /** Claude chat: reply text as it streams. */
