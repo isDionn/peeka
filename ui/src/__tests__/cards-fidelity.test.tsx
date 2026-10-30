@@ -176,12 +176,14 @@ describe("Modules (j)", () => {
     expect(screen.getByRole("region", { name: "Claude chat" })).toBeTruthy();
     expect(screen.getByRole("textbox", { name: "Message to Claude" })).toBeTruthy();
   });
-  it("with Island only on there is no strip to open Settings in: the gear brings the strip back", async () => {
+  it("with Island only on there is no strip: the gear opens Settings in the island and Island only stays on", async () => {
     await fakeBridge.call("set_settings", { patch: { islandOnly: true } });
     render(<Island monitor="m1" init={{ view: "modules" }} />);
     await settle();
-    fireEvent.click(screen.getByRole("button", { name: "Show the strip" }));
-    await vi.waitFor(async () => expect((await fakeBridge.call("get_settings")).islandOnly).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: "Modules settings" }));
+    await settle();
+    expect(document.querySelector(".settingsInner")).toBeTruthy(); // Settings › Modules, where the gear points
+    expect((await fakeBridge.call("get_settings")).islandOnly).toBe(true);
   });
   it("13 tabs (Claude chat last of Peeka's own) and a gear; General has the Compass box and a link to its Claude Code tab, then one place per module; quota bars, session states, Stop", async () => {
     fakeBridge.setSurfaces(SURFACES_J);

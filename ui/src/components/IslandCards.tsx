@@ -9,7 +9,7 @@ import { capTabs, flat, MASCOT_STATES, riskOf } from "../lib/plugin";
 import { AlertIcon } from "../lib/alertIcon";
 import { ageLabel } from "../lib/alerts";
 import { actionLabel } from "../lib/alerts";
-import { timerLeft, useAlerts, useClips, useMainAssistant, useSecond, useSettings } from "../hooks";
+import { timerLeft, useAlerts, useClips, useMainAssistant, useSecond } from "../hooks";
 import { answer, GuardBtn, Lead, SummaryBoxes, TabBlocks, TabGlyph, tabLabel } from "./Plugin";
 import { MeetingCard, ShelfSuggestRow } from "./Fidelity";
 import { WaveMascot } from "./CardsExtra";
@@ -386,7 +386,7 @@ const CORE: [string, string, LucideIcon][] = [["general", "General", LayoutGrid]
 
 /** Modules card (mockup j): 11 tabs + gear; General = assistant | Claude Code | System. System monitoring runs while the card is open (Island starts it). */
 export const ModulesCard = memo(ModulesCardImpl); // Island re-renders every frame during the spring; the card only re-renders when its props change
-function ModulesCardImpl({ media, pos, sys, cpu, surf, shelf, main, meeting, onPage, onClose, onApproval, start, timer = null, generic = false, battery = null, sessN = 0, sessList = NO_SESS, lastCc = null, limited = false }: { /** Locked, presenting or screen shared (Island `priv`). */ generic?: boolean; battery?: Status["battery"]; sessN?: number; sessList?: CcSession[]; lastCc?: CcSessions["last"]; limited?: boolean; start?: string; timer?: TimerState | null; meeting: ProtrusionItem | null; onPage: (page: string, title: string) => void; onClose: () => void; media: Media | null; pos: number; sys: SysmonTick | null; cpu: number[]; surf: SurfacesView; shelf: ShelfItem[]; main: PluginInfo | null; onApproval: (id: string) => void }) {
+function ModulesCardImpl({ media, pos, sys, cpu, surf, shelf, main, meeting, onPage, onClose, onApproval, start, timer = null, generic = false, battery = null, sessN = 0, sessList = NO_SESS, lastCc = null, limited = false, onSettings }: { /** Island only (no strip): the gears open settings in the island instead. */ onSettings?: (page: "modules" | "plugins") => void; /** Locked, presenting or screen shared (Island `priv`). */ generic?: boolean; battery?: Status["battery"]; sessN?: number; sessList?: CcSession[]; lastCc?: CcSessions["last"]; limited?: boolean; start?: string; timer?: TimerState | null; meeting: ProtrusionItem | null; onPage: (page: string, title: string) => void; onClose: () => void; media: Media | null; pos: number; sys: SysmonTick | null; cpu: number[]; surf: SurfacesView; shelf: ShelfItem[]; main: PluginInfo | null; onApproval: (id: string) => void }) {
   // Settings › Modules: disabled ones are hidden, plugin tabs follow the saved order (all on until the list arrives)
   const [mods, setMods] = useState<ModuleEntry[] | null>(null);
   useEffect(() => { bridge.call("modules_get").then(setMods).catch(() => undefined); }, []);
@@ -429,10 +429,8 @@ function ModulesCardImpl({ media, pos, sys, cpu, surf, shelf, main, meeting, onP
     if (i < 0 || to < 0 || !order[to]) return;
     e.preventDefault(); hideTip(); setTab(order[to]); btns[to].focus();
   };
-  // Settings live in the strip: with Island only on, the gears bring the strip back instead of opening nothing
-  const islandOnly = useSettings()?.islandOnly;
-  const openPanel = (panel: "modules" | "plugins") => islandOnly ? bridge.call("set_settings", { patch: { islandOnly: false } }).catch(() => undefined) : sendX({ t: "open-panel", panel });
-  const gearLabel = islandOnly ? "Show the strip" : "Modules settings";
+  const openPanel = (panel: "modules" | "plugins") => onSettings ? onSettings(panel) : sendX({ t: "open-panel", panel });
+  const gearLabel = "Modules settings";
   const generalTabs = tabs.filter((t) => (t as typeof t & TabExt).general);
   const rest = surf.approvals.slice(1); // the first approval is in the Now box (GeneralTiles): not again in its plugin's box
   const hasSummary = surf.summary.length > 0 || rest.length > 0;
