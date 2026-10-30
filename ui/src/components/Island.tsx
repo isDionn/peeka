@@ -128,6 +128,8 @@ function Marquee({ text }: { text: string }) {
 }
 
 /** Card layer: focus moves in on open, Tab cycles inside, Esc calls `onClose`, focus returns to the opener on unmount. Peeks don't take focus (they appear on their own). */
+/** Island only: the notch is a real target (and holds the "N sessions" chip left of the ghost), not a 64 px sliver around it. */
+const ISLAND_ONLY_W = 280;
 const NO_MODULES_BTN = new Set(["modules", "lock", "welcome", "firstconnect", "recap", "ky", "ext"]);
 function Layer({ spec, onClose, onModules, measure, onBack }: { spec: Spec; onClose: () => void; onModules: () => void; measure: (el: HTMLDivElement | null) => void; /** The extension card is tucked under this one: "Back to <label>". */ onBack?: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -941,7 +943,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       <div className="srOnly" role="alert" aria-live="assertive" aria-atomic="true">{kind === "approval" ? say : ""}</div>
       {fsHandle
         ? <button className="fsHandle" data-hit aria-label="Open island" onPointerEnter={openByHandle} onPointerLeave={() => hoverIntent(false)} onClick={() => { byHandle.current = true; setUser("modules"); }} />
-        : (fullscreen || settings?.islandOnly) && <div className="fsBand" data-hit style={{ width: Math.max(mw + 24, 2 * lineGap) }} onPointerEnter={() => hoverIntent(true)} />}{/* no strip behind the island (fullscreen app, or Island only): its own strip-coloured band under the centre */}
+        : (fullscreen || settings?.islandOnly) && <div className="fsBand" data-hit style={{ width: Math.max(mw + 24, 2 * lineGap, settings?.islandOnly ? ISLAND_ONLY_W : 0) }} onPointerEnter={() => hoverIntent(true)} onClick={() => afterPick(onCenter)} />}{/* no strip behind the island (fullscreen app, or Island only): its own strip-coloured band under the centre */}
       <button ref={center} className="islandCenter" data-hit aria-expanded={mode === "card" ? true : bump ? undefined : false} aria-label={ariaOverride ?? (bump ? `${say}. Open Modules` : `${parts.join(", ")}${mode === "card" ? "" : ". Open card"}`)}
         style={{ width: mw + 24, transform: "translateX(-50%)" }} data-hv={kind === "hov" || bumpHover ? "" : undefined}
         title={bumpHover ? "Open Modules" : undefined} onClick={(e) => { if (!(e.target as Element).closest?.(".mascot")) return afterPick(onCenter); const act = moodShown === "error" && restShown ? () => setUser("error") : card?.takesAsk ? () => openAsk("ext") : owner.current ? () => openAsk("composer") : onCenter; setTimeout(() => afterPick(act), SLAP_OPEN_MS); }}
