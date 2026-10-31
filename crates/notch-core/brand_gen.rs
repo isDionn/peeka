@@ -32,12 +32,12 @@ fn brand_rs(json: &str) -> Result<String, String> {
     let (w, h) = (px(0)?, px(1)?);
     let reqs = v.get("page_requests").and_then(|x| x.as_array()).ok_or("brand: page_requests must be a list")?;
     let mut names = vec![];
-    for r in reqs.iter().take(65) {
+    for r in reqs.iter().take(129) {
         let n = r.as_str().unwrap_or_default();
         let mut cs = n.chars();
         let ok = n.len() <= 64 && cs.next().is_some_and(|c| c.is_ascii_lowercase()) && cs.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '.');
-        if !ok || names.len() == 64 {
-            return Err(format!("brand: page_requests: {r} is not a method name (a-z0-9_. , at most 64 names)"));
+        if !ok || names.len() == 128 {
+            return Err(format!("brand: page_requests: {r} is not a method name (a-z0-9_. , at most 128 names)"));
         }
         names.push(n.to_string());
     }
