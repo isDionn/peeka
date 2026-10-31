@@ -1594,7 +1594,7 @@ impl Host {
                 id: id.to_string(),
                 title: title.to_string(),
                 icon: icon.to_string(),
-                owner: "Peeka".into(),
+                owner: crate::brand::PRODUCT_NAME.into(),
                 on: !off.contains(*id),
             })
             .collect();
