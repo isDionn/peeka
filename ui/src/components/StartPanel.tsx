@@ -13,6 +13,7 @@ import { FileIcon } from "./Pano";
 import { useSettings } from "../hooks";
 import { parseSearchAnswer } from "../lib/search";
 import "../fidelity-settings.css";
+import { BRAND } from "../brand";
 
 const PIN_COUNT = 12;
 /** The last lists, so a reopened Start paints its grid at once instead of growing in after the calls. */
@@ -199,7 +200,7 @@ export function StartPanel({ monitor, pins, onClose, onSettings }: { monitor: Mo
       </div>
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <span style={{ display: "flex", gap: 14 }}>
-          {onSettings && <button className="smallLink" onClick={onSettings}><Settings />Peeka settings</button>}
+          {onSettings && <button className="smallLink" onClick={onSettings}><Settings />{BRAND.productName} settings</button>}
           {taskbarShown
             ? <button className="smallLink" onClick={() => { bridge.call("taskbar_set_mode", { mode: "full" }).catch(() => undefined); onClose(); }}><PanelBottom />Hide taskbar</button>
             : <button className="smallLink" onClick={() => { bridge.call("restore_taskbar"); onClose(); }}><PanelBottom />Restore taskbar</button>}

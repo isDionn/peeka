@@ -1,6 +1,7 @@
 // F8 weekly recap: the card's rows and the share image (1080x1350). Everything is drawn on the page from the counts
 // Rust sent; nothing is uploaded. Peeka never learns project names (the agent hook drops the folder), so the image has none.
 import type { RecapWeek } from "../bridge";
+import { BRAND } from "../brand";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 export const SHARE_W = 1080, SHARE_H = 1350;
@@ -92,7 +93,7 @@ export async function shareImage(w: RecapWeek, ghost: HTMLElement): Promise<Uint
     ctx.fillText(value, x1, y);
   });
   ctx.textAlign = "center"; ctx.fillStyle = "rgba(235,235,245,.6)"; ctx.font = `600 28px ${font}`;
-  ctx.fillText("Peeka", SHARE_W / 2, SHARE_H - 64);
+  ctx.fillText(BRAND.productName, SHARE_W / 2, SHARE_H - 64);
   const blob = await new Promise<Blob | null>((res) => c.toBlob(res, "image/png"));
   return blob ? new Uint8Array(await blob.arrayBuffer()) : null;
 }

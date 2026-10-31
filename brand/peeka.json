@@ -10,5 +10,7 @@
   "page_requests": [],
   "start_key_hook": true,
   "hide_taskbar": true,
-  "reserve_appbar": true
+  "reserve_appbar": true,
+  "mascot": true,
+  "hide": []
 }

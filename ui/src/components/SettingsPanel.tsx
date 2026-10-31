@@ -7,11 +7,11 @@ import { sendX } from "../lib/xwin";
 import { AppIcon, HoldButton, Kbd, NO_INDENT, radioKeys, Row, Switch } from "./common";
 import { Modules, Plugins } from "./PluginSettings";
 import { PluginExtras } from "./PluginExtras";
-import { BRAND } from "../brand";
+import { BRAND, brandHides } from "../brand";
 import "../fidelity-settings.css";
 
 export type SettingsPage = "appearance" | "shortcuts" | "plugins" | "modules" | "clipboard" | "mascot";
-const NAV: [SettingsPage, string, typeof Keyboard][] = [["appearance", "Appearance", LayoutPanelTop], ["shortcuts", "Shortcuts", Keyboard], ["plugins", "Plugins", Puzzle], ["modules", "Modules", LayoutGrid], ["clipboard", "Clipboard", Clipboard], ["mascot", "Mascot", Ghost]];
+const NAV = ([["appearance", "Appearance", LayoutPanelTop], ["shortcuts", "Shortcuts", Keyboard], ["plugins", "Plugins", Puzzle], ["modules", "Modules", LayoutGrid], ["clipboard", "Clipboard", Clipboard], ["mascot", "Mascot", Ghost]] as [SettingsPage, string, typeof Keyboard][]).filter(([id]) => id !== "mascot" || BRAND.mascot);
 
 const TASKBAR_MODES: [Settings["taskbarHide"], string][] = [["full", "Always hide"], ["auto", "Auto-hide"], ["off", "Keep Windows taskbar"]];
 /** Windows taskbar mode: read from Rust (`taskbarHide`), written with `taskbar_set_mode`; the choice is also kept locally until the change event arrives. */
@@ -92,8 +92,8 @@ function Appearance({ settings }: { settings: Settings }) {
             : <button className="btn kk glass" onClick={() => bridge.call("restore_taskbar")}>Restore taskbar</button>}
         </Row>
         <ImportPins />
-        <Row title="Lock Peeka" sub="Hides Clipboard and plugin cards">
-          <button className="btn kk glass" aria-label="Lock Peeka" onClick={() => bridge.call("lock_now").catch(() => undefined)}><Lock />Lock</button>
+        <Row title={`Lock ${BRAND.productName}`} sub="Hides Clipboard and plugin cards">
+          <button className="btn kk glass" aria-label={`Lock ${BRAND.productName}`} onClick={() => bridge.call("lock_now").catch(() => undefined)}><Lock />Lock</button>
         </Row>
       </div>
       <button className="btn kk glass otherSettings" aria-expanded={more} onClick={() => setMore(!more)}><ChevronRight />More settings</button>
@@ -103,10 +103,10 @@ function Appearance({ settings }: { settings: Settings }) {
             <Switch on={settings.islandOnly} label="Island only" onChange={(v) => bridge.call("set_settings", { patch: { islandOnly: v } })} />
           </Row>
           <Row title="Taskbar mode" sub="Always hide, auto-hide, or keep Windows'"><TaskbarMode value={mode} disabled={settings.islandOnly} /></Row>
-          <Row title="Handle volume keys" sub="Show Peeka's volume indicator instead of Windows'">
+          <Row title="Handle volume keys" sub={`Show ${BRAND.productName}'s volume indicator instead of Windows'`}>
             <Switch on={settings.captureVolumeKeys} label="Handle volume keys" onChange={(v) => bridge.call("set_settings", { patch: { captureVolumeKeys: v } })} />
           </Row>
-          <Row title="Alert endpoint for scripts" sub="Simple alert HTTP on 127.0.0.1. The key is in the Peeka folder">
+          <Row title="Alert endpoint for scripts" sub={`Simple alert HTTP on 127.0.0.1. The key is in the ${BRAND.productName} folder`}>
             <Switch on={settings.alertsApi} label="Alert endpoint for scripts" onChange={(v) => bridge.call("set_settings", { patch: { alertsApi: v } })} />
           </Row>
           <MirrorSetting />
@@ -116,10 +116,10 @@ function Appearance({ settings }: { settings: Settings }) {
           {BRAND.updatesUrl && <Row title="Check for updates" sub="Once a day, asks GitHub for the latest version number">
             <Switch on={settings.updateCheck} label="Check for updates" onChange={(v) => bridge.call("set_settings", { patch: { updateCheck: v } })} />
           </Row>}{/* a build without an update channel never asks */}
-          <Row title="Screen colour glow" sub="Peeka shrinks the screen to a few dozen pixels in memory to tint the glow. Nothing is saved.">
+          <Row title="Screen colour glow" sub={`${BRAND.productName} shrinks the screen to a few dozen pixels in memory to tint the glow. Nothing is saved.`}>
             <Switch on={settings.screenTint} label="Screen colour glow" onChange={(v) => bridge.call("set_settings", { patch: { screenTint: v } })} />
           </Row>
-          <Row title="Start with Windows" sub="Peeka starts when you sign in">
+          <Row title="Start with Windows" sub={`${BRAND.productName} starts when you sign in`}>
             <Switch on={settings.autostart} label="Start with Windows" onChange={(v) => bridge.call("set_settings", { patch: { autostart: v } })} />
           </Row>
         </div>
@@ -140,11 +140,11 @@ function MascotSettings({ settings }: { settings: Settings }) {
         <Row title="Celebrate finished tasks" sub="Up to 3 an hour">
           <Switch on={settings.celebrate} label="Celebrate finished tasks" onChange={(v) => bridge.call("set_settings", { patch: { celebrate: v } })} />
         </Row>
-        <Row title="Show intro again" sub="Introduces Peeka and the main assistant">
+        {!brandHides("settings.intro") && <Row title="Show intro again" sub={`Introduces ${BRAND.productName} and the main assistant`}>
           <button className="btn kk glass" aria-label="Show intro again" onClick={() => { resetFirstRun(); sendX({ t: "firstrun" }); }}>Show</button>
-        </Row>
+        </Row>}
       </div>
-      <div className="t12 l3 b4">The mascot is Peeka's own character. It sleeps while the main assistant is disconnected and hides when there isn't one.</div>
+      <div className="t12 l3 b4">The mascot is {BRAND.productName}'s own character. It sleeps while the main assistant is disconnected and hides when there isn't one.</div>
     </>
   );
 }
@@ -275,14 +275,14 @@ function About({ settings, onQuit }: { settings: Settings; onQuit?: () => void }
     <>
       <div className="t17 b6">About</div>
       <div className="list glass" style={NO_INDENT}>
-        <Row title="Peeka" sub="A strip and island that replace the Windows taskbar. Assistants connect to it as plugins." />
+        {!brandHides("settings.about-line") && <Row title={BRAND.productName} sub="A strip and island that replace the Windows taskbar. Assistants connect to it as plugins." />}
         {BRAND.updatesUrl
           ? <Row title="Updates" sub="Opens the latest release on GitHub"><button className="btn kk glass" onClick={() => bridge.call("open_windows_settings", { uri: BRAND.updatesUrl! }).catch(() => undefined)}>Check for updates</button></Row>
           : <Row title="Updates" sub="No update channel; this build never checks on its own"><span /></Row>}
         <Row title="Emergency shortcut" sub="Restores the taskbar"><Kbd keys={settings.shortcuts.emergency} /></Row>
         <Diagnostics />
-        <Row title="Demo mode" sub={settings.demo ? "Sample data, nothing is saved. Peeka restarts normally" : "Try Peeka with sample data. Nothing is saved; Peeka restarts"}><button className="btn kk glass" style={{ width: 92 }} onClick={() => bridge.call("demo_restart", { on: !settings.demo }).catch(() => undefined)}>{settings.demo ? "Stop demo" : "Try demo"}</button></Row>
-        {onQuit && <Row title="Quit Peeka" sub="The Windows taskbar comes back. You'll be asked to confirm first"><button className="btn kk glass destructive" onClick={onQuit}>Quit</button></Row>}
+        {!brandHides("settings.demo") && <Row title="Demo mode" sub={settings.demo ? `Sample data, nothing is saved. ${BRAND.productName} restarts normally` : `Try ${BRAND.productName} with sample data. Nothing is saved; ${BRAND.productName} restarts`}><button className="btn kk glass" style={{ width: 92 }} onClick={() => bridge.call("demo_restart", { on: !settings.demo }).catch(() => undefined)}>{settings.demo ? "Stop demo" : "Try demo"}</button></Row>}
+        {onQuit && <Row title={`Quit ${BRAND.productName}`} sub="The Windows taskbar comes back. You'll be asked to confirm first"><button className="btn kk glass destructive" onClick={onQuit}>Quit</button></Row>}
       </div>
     </>
   );

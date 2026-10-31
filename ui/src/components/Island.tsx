@@ -46,6 +46,7 @@ import { SettingsPanel, type SettingsPage } from "./SettingsPanel";
 import { QuitConfirm } from "./Menus";
 import { request as assistantRequest, useAssistantEvents } from "../lib/assistant";
 import { EmptyBoard, ErrorCard, ErrorCenter, FirstConnectCard, FirstConnectCenter, LoadingCenter, RecapCard, RecapCenter } from "./CardsExtra";
+import { BRAND, brandHides } from "../brand";
 
 /** Cards the user opens. Peeks that appear on their own (volume, alert, new track) stay below these. */
 export type IslandView = "diff" | "music-card" | "modules" | "noassistant" | "welcome" | "approval-card" | "composer" | "ext" | "clipboard" | "shelf" | "meeting" | "firstconnect" | "recap" | "error" | "settings" | "quit";
@@ -210,7 +211,7 @@ const centerOf = (kind: Kind, o: CenterOpts): ReactNode => {
     case "kh": return <ErrorCenter />;
     case "panel": return o.panel === "cleanup" ? <ApprovalShort /> : o.panel === "search"
       ? <span className="ms"><Search /><span className="b6">Search</span><Kbd keys="Ctrl+K" /></span>
-      : <span className="ms"><SettingsIcon /><span className="b6">Peeka settings</span></span>;
+      : <span className="ms"><SettingsIcon /><span className="b6">{BRAND.productName} settings</span></span>;
     case "composer": return <><span className="ms">{composerLabel ? <span className="l2">{composerLabel}</span> : <Kbd keys="Ctrl+Space" />}</span>{composerLabel && o.alertsN > 0 && <span className="t12 l3 num">{cap99(o.alertsN)} {o.alertsN === 1 ? "notification" : "notifications"}</span>}</>;
     case "music": return media && (
       <span className="ms">
@@ -222,7 +223,7 @@ const centerOf = (kind: Kind, o: CenterOpts): ReactNode => {
     case "music-card": return <span className="ms">{main && <Lead plugin={{ id: main.id, name: main.name, main: true }} mascot="music" />}<Bars still={o.quiet} /><span className="l2">{media?.playing ? "Playing" : "Paused"}</span></span>;
     case "alert": return alert && <AlertCenter alert={alert} main={main} />;
     case "osd": return <span className="ms">{osd?.muted ? <VolumeX /> : <Volume2 />}{osd?.muted ? <span className="b6">Muted</span> : <><span className="b6">Volume</span>{osd?.device && <span className="l3">{osd.device}</span>}</>}</span>;
-    case "welcome": return <span className="ms"><span className="b6">Peeka</span></span>;
+    case "welcome": return <span className="ms"><span className="b6">{BRAND.productName}</span></span>;
     default: return rest;
   }
 };
@@ -485,14 +486,13 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       bridge.on("notch://island_leave", () => { hoverIntent(false); setMkHover(false); setBubbleHover(false); setPtr(false); }),
       bridge.on("assistant_offline", setOffline),
       bridge.on("meeting_changed", setMeetingOn),
-      bridge.on("cc_edit", setEdit),
-      bridge.on("cc_event", (e) => {
+      ...(brandHides("module.cc") ? [] : [bridge.on("cc_edit", setEdit), bridge.on("cc_event", (e) => {
         ccFeed.current?.feed(e);
         setNSess(sessCount.feed(e, Date.now())); setSessList(sessCount.list(Date.now())); setLastCc({ tool: e.tool ?? null, at: Date.now() });
         if (e.kind === "stop_failure" && e.reason === "rate_limit") setQuota(true);
         setLimited((on) => ccLimit(on, e));
         if (e.kind === "tool_failed" || e.kind === "stop_failure") setCcErr({ tool: e.tool ?? null, reason: e.reason ?? null });
-      }),
+      })]),
       // task done: up to 3 an hour (mascot celebration, §0i item 19)
       bridge.on("job_done", (e) => { away.done(); const t = Date.now(); doneAt.current = doneAt.current.filter((x) => t - x < 3_600_000); if (doneAt.current.length >= 3) return; doneAt.current.push(t); setDone(e); }),
       bridge.on("clip_changed", (c) => { if (c.reason === "added" && c.item && c.item.kind !== "password" && stripKind(c.item)) setShot(c.item); }), // every image, file and link; plain text and passwords don't open it
@@ -653,7 +653,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     const was = presenting.current; presenting.current = input.presentation;
     if (!was && input.presentation && restShown) react("shy");
   }, [input.presentation]); // eslint-disable-line react-hooks/exhaustive-deps
-  prankEnv.current = { on: (settings?.mascotPranks ?? true) && restShown, dnd: !!status?.dnd || input.busy, presentation: priv, meeting: meetingOn || surf.protrusion?.icon === "calendar", music: !!media?.playing, cardOpen: !restShown, fullscreen };
+  prankEnv.current = { on: BRAND.mascot && (settings?.mascotPranks ?? true) && restShown, dnd: !!status?.dnd || input.busy, presentation: priv, meeting: meetingOn || surf.protrusion?.icon === "calendar", music: !!media?.playing, cardOpen: !restShown, fullscreen };
   const lastInputAgoMs = input.lastInputAgoMs;
   useEffect(() => {
     const env = {
@@ -738,7 +738,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       case "edit": return edit && { key: "edit", mode: "bump", label: editLabel(edit, priv), node: <EditBump onShow={showDiff} /> };
       case "diff": return diffSid ? { key: "diff", mode: "card", kw: 620, label: "Changes", node: <DiffCard sid={diffSid} /> } : null;
       case "diag": return { key: "diag", mode: "bump", label: "Diagnostics saved", node: <div className="peekBar"><button className="btn kk primary" onClick={() => { bridge.call("diagnostics_open_folder").catch(() => undefined); setDiag(false); }}>Open folder</button></div> };
-      case "update": return upd ? { key: "update", mode: "bump", label: `Peeka ${flat(upd, 12)} is available`, node: <UpdateBump onDone={() => setUpd(null)} /> } : null;
+      case "update": return upd ? { key: "update", mode: "bump", label: `${BRAND.productName} ${flat(upd, 12)} is available`, node: <UpdateBump onDone={() => setUpd(null)} /> } : null;
       case "download": return dl && { key: "download", mode: "bump", label: priv ? "Download complete" : `Downloaded: ${flat(dl.name, 40)}`, node: <DownloadBump id={dl.id} generic={priv} /> };
       case "musicstop": return stopped && { key: "musicstop", mode: "bump", label: priv ? "Music paused" : `Music paused, ${stopped.name} disconnected`, node: <MusicStoppedBump onResume={() => { resumeMusic(); setStopped(null); }} /> };
       case "quota": return { key: "quota", mode: "bump", label: "Usage limit reached", node: <QuotaBump onOk={() => setQuota(false)} /> };
@@ -752,7 +752,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       case "shelfdrag": return { key: "shelfdrag", mode: "bump", label: "Shelf", node: <ShelfBump main={main} /> };
       case "shelf": return { key: "shelf", mode: "card", kw: 620, label: "Shelf", node: <><ShelfCard items={shelf} main={main} generic={priv} />{!priv && <ShelfSuggestRow items={shelf} main={main} />}</> };
       case "clipboard": return { key: "clipboard", mode: "card", kw: 620, label: "Clipboard", node: <ClipboardView /> };
-      case "lock": return { key: "lock", mode: "card", kw: 520, label: "Peeka locked", node: <LockCard lock={lock} /> };
+      case "lock": return { key: "lock", mode: "card", kw: 520, label: `${BRAND.productName} locked`, node: <LockCard lock={lock} /> };
       case "approval": return approvalTop && { key: "approval:" + approvalTop.id, mode: "bump", label: approvalTop.title, node: <ApprovalBump a={approvalTop} dropMs={surf.dropStripMs} onlyDetail={surf.dropStripMs !== null} generic={priv} onDetail={() => { setDetailId(approvalTop.id); setUser("approval-card"); }} /> };
       case "plugin": return surf.protrusion && { key: "plugin:" + surf.protrusion.plugin.id, mode: "bump", label: surf.protrusion.title, node: <ProtrusionBump item={surf.protrusion} /> };
       case "approval-card": return approvalCard && { key: "approval-card:" + approvalCard.id, mode: "card", kw: 620, label: approvalCard.title, node: <ApprovalCard a={approvalCard} generic={priv} /> };
@@ -762,8 +762,8 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       case "music-card": return musicCard && { key: "music-card", mode: "card", kw: 520, label: "Music", node: musicCard };
       case "modules": return { key: "modules", mode: "card", kw: MOD_NARROW /* every tab, General included (owner: Places is 620 wide) */, label: "Modules: " + modName, node: <ModulesCard start={modStart} meeting={meetingItem} onPage={onModPage} onClose={back} media={media} pos={pos} sys={sys.tick} cpu={sys.cpu} surf={surf} shelf={shelf} main={main} onApproval={openApproval} timer={timer} generic={priv} battery={batt} sessN={nSess} sessList={sessList} lastCc={lastCc} limited={limited} onSettings={settings?.islandOnly ? (p) => { setSetPage(p); setUser("settings"); } : undefined} /> };
       // Island only: no strip to hold them. The island window is small (ISLAND_MAX), so the card fits it and scrolls inside.
-      case "settings": return settings && { key: "settings", mode: "card", kw: Math.min(780, innerWidth - 2 * SHADOW_SIDE), label: "Peeka settings", node: <div style={{ maxHeight: innerHeight - SHADOW_BOTTOM - 40, overflowY: "auto", scrollbarWidth: "thin", marginTop: -25, maskImage: "linear-gradient(transparent, #000 14px)" /* the heading shares the corner buttons' row (as in the strip's panel); scrolled rows fade at the top */ }}><SettingsPanel page={setPage} onPage={setSetPage} settings={settings} onQuit={() => setUser("quit")} /></div> };
-      case "quit": return { key: "quit", mode: "card", kw: 400, label: "Quit Peeka", node: <QuitConfirm onCancel={() => setUser("settings")} /> };
+      case "settings": return settings && { key: "settings", mode: "card", kw: Math.min(780, innerWidth - 2 * SHADOW_SIDE), label: `${BRAND.productName} settings`, node: <div style={{ maxHeight: innerHeight - SHADOW_BOTTOM - 40, overflowY: "auto", scrollbarWidth: "thin", marginTop: -25, maskImage: "linear-gradient(transparent, #000 14px)" /* the heading shares the corner buttons' row (as in the strip's panel); scrolled rows fade at the top */ }}><SettingsPanel page={setPage} onPage={setSetPage} settings={settings} onQuit={() => setUser("quit")} /></div> };
+      case "quit": return { key: "quit", mode: "card", kw: 400, label: `Quit ${BRAND.productName}`, node: <QuitConfirm onCancel={() => setUser("settings")} /> };
       case "meeting": return meetingItem && { key: "meeting", mode: "card", kw: 520, label: "Meeting", node: <MeetingCard item={meetingItem} /> };
       case "recap": return recap && { key: "recap", mode: "card", kw: 520, label: "Your week", node: <RecapCard week={recap} onDone={() => { ackRecap(); setUser(null); }} /> };
       case "firstconnect": return { key: "firstconnect", mode: "card", kw: 520, label: `${mainP ? pluginName(mainP) : "Assistant"} connected`, node: <FirstConnectCard onDone={() => { ackFc(); setUser(null); }} /> };
@@ -771,7 +771,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
       case "kb": return { key: "kb", mode: "card", kw: 620, label: "Clipboard", node: <div className="body"><EmptyBoard /></div> };
       case "kh": return { key: "kh", mode: "card", kw: 520, label: "Error", node: <ErrorCard title={probeErr.title} detail={probeErr.detail || undefined} onRetry={() => { if (!forced) { setProbe("loading"); setTryN((n) => n + 1); } }} /> };
       case "noassistant": return { key: "noassistant", mode: "card", kw: 520, label: mainP ? `${pluginName(mainP)} isn't connected` : "Assistant not connected", node: <AssistantOfflineCard main={mainP} /> };
-      case "welcome": return { key: "welcome", mode: "card", kw: 520, label: "Welcome to Peeka", node: <FirstRunCard mascot={!!mainP} onDone={() => { markFirstRun(); setUser(null); }} /> };
+      case "welcome": return { key: "welcome", mode: "card", kw: 520, label: `Welcome to ${BRAND.productName}`, node: <FirstRunCard mascot={!!mainP && BRAND.mascot} onDone={() => { markFirstRun(); setUser(null); }} /> };
       default: return null;
     }
   })();
@@ -783,7 +783,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   // resting center: with an assistant connected, mascot + "Compass ready" + counts (a); otherwise the ghost and music (x0; no clock: the strip's right side has it, RC7 owner), with a sleeping mascot if the assistant is installed but not connected
   const approvalsN = surf.approvals.length;
   const rest = ((): ReactNode => {
-    const lockIcon = lock.locked && <Lock aria-label="Peeka locked" />;
+    const lockIcon = lock.locked && <Lock aria-label={`${BRAND.productName} locked`} />;
     if (hidden && restShown) return <HiddenCenter />;
     if (consent && restShown) return <span className="ms"><ShieldCheck /><span className="b6">Plugin permission</span></span>;
     if (assistantUp && mainP && restShown && offline) return <OfflineRest />;
@@ -930,7 +930,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
   const assistantRest = assistantUp && mainP && (kind === "rest" || kind === "hov" || kind === "modules");
   const ariaOverride = hidden && restShown ? "Island hidden. Press Ctrl+Shift+A to show it" : asleep && restShown ? `${mainP ? pluginName(mainP) : "Assistant"} isn't connected. Open to launch it` : null;
   const parts = assistantRest ? [`${pluginName(mainP)} ready`, approvalsN ? `${cap99(approvalsN)} ${approvalsN === 1 ? "approval" : "approvals"}` : null, alerts.length ? `${cap99(alerts.length)} ${alerts.length === 1 ? "notification" : "notifications"}` : null].filter(Boolean)
-    : ["Peeka", media?.playing ? (priv ? LOCK_MUSIC : `Playing ${trackTitle(media)}`) : null].filter(Boolean);
+    : [BRAND.productName, media?.playing ? (priv ? LOCK_MUSIC : `Playing ${trackTitle(media)}`) : null].filter(Boolean);
   // a shown peek is announced to screen readers (approval: immediately, others: in turn) and the island button's name carries the peek (F-01, F-28)
   const bump = mode === "bump" && !!spec;
   useEffect(() => { if (!stage.current?.contains(document.activeElement)) setKbIn(false); }, [kind, spec?.key]); // blur may not fire when the focused element unmounts

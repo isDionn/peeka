@@ -7,6 +7,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import { bridge, type ClaudeChatState } from "../bridge";
 import { Mascot } from "../mascot";
 import "../claude-chat.css";
+import { BRAND } from "../brand";
 
 export type ChatMsg = { id: number; role: "user" | "claude" | "error"; text: string };
 type Snap = { msgs: ChatMsg[]; busy: boolean; streaming: boolean };
@@ -20,7 +21,7 @@ const set = (s: Partial<Snap>) => { snap = { ...snap, ...s }; subs.forEach((f) =
 const push = (role: ChatMsg["role"], text: string) => set({ msgs: [...snap.msgs, { id: nextId++, role, text }] });
 
 const ERRORS: Record<string, string> = {
-  denied: "Peeka is locked. Unlock it to chat.",
+  denied: `${BRAND.productName} is locked. Unlock it to chat.`,
   missing: "Claude Code isn't installed on this PC.",
   refused: "Claude is still answering. Stop it first.",
   invalid: "That message is empty or too long (8000 characters at most).",

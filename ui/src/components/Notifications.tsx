@@ -11,6 +11,7 @@ import { EmptyBoard } from "./CardsExtra";
 import { Lead } from "./Plugin";
 import { initial, MASCOT_STATES, pluginName } from "../lib/plugin";
 import { delOk, SAFE_ICON } from "./common";
+import { BRAND } from "../brand";
 
 /**
  * The notification has a one-time verification code (`hasCode`): "Copy code" calls `notif_copy_code`; Rust puts the code on the clipboard and clears it after 60 s.
@@ -89,7 +90,7 @@ export function NotificationList({ onReview, onClose, onEmpty }: { onReview: (a:
         <span className="t17 b6" style={{ flex: 1 }}>Notifications</span>
         <button className="btn kk glass" onClick={() => bridge.call("clear_alerts")}>Clear all</button>
       </div>
-      {hide && <div className="noResults" role="status">{lock.locked ? "Peeka is locked" : "Presenting"}: notification content is hidden{total > 0 ? ` (${total})` : ""}</div>}
+      {hide && <div className="noResults" role="status">{lock.locked ? `${BRAND.productName} is locked` : "Presenting"}: notification content is hidden{total > 0 ? ` (${total})` : ""}</div>}
       {/* while locked only the app name of Windows notifications is drawn; title and body never enter the DOM (Rust still sends them) */}
       {hide && mirror.length > 0 && <div className="notifs" role="list">
         {groups.map((g) => <div key={g[0].app} role="listitem" className="notif plat glass"><span className="app"><b aria-hidden="true">{initial(g[0].app)}</b>{g.length > 1 && <span className="badge">{g.length > 9 ? "9+" : g.length}</span>}</span><div style={{ flex: 1, minWidth: 0 }}><div className="b6">{g[0].app}</div><div className="t12 l3">{lock.locked ? "Locked" : "Hidden"}</div></div></div>)}

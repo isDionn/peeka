@@ -29,7 +29,7 @@ values; a test holds each one.
 
 | Field | Peeka | Used for |
 |---|---|---|
-| `product_name` | `Peeka` | window titles, own-notification filter, reserved plugin names |
+| `product_name` | `Peeka` | window titles, own-notification filter, reserved plugin names, the name in UI text |
 | `code_name` | `notch` | `%LOCALAPPDATA%\<code_name>`, pipes `\\.\pipe\<code_name>-<SID>` and `<code_name>-cc-<SID>`, Run value, identity stage folder |
 | `data_dir_env` | `NOTCH_DATA_DIR` | data folder override |
 | `exe_name` | `peeka` | diagnostics file, `.bak-` / `.tmp-` suffixes, Copilot `hooks/<exe>.json`, Gemini hook name, identity scripts |
@@ -41,6 +41,8 @@ values; a test holds each one.
 | `start_key_hook` | `true` | Win / Ctrl+Esc keyboard hook for Peeka's Start |
 | `hide_taskbar` | `true` | hiding the Windows taskbar (`false`: never touched, the Start key stays with Windows) |
 | `reserve_appbar` | `true` | reserving the top work area for the strip |
+| `mascot` | `true` | the ghost mascot (`false`: no ghost anywhere, no Settings › Mascot page, no pranks) |
+| `hide` | `[]` | UI parts left out: `module.claude` (Claude tab), `module.usage` (Usage tab), `module.cc` (Claude Code row on General, hook events ignored), `settings.agent-hooks` (agent hook rows in Settings › Plugins), `settings.about-line` (the About blurb), `settings.demo`, `settings.intro`; an unknown id stops the UI build |
 
 The Tauri side (`productName`, `mainBinaryName`, `identifier`, `bundle.publisher`) comes from a second file passed with
 `tauri build --config <file>`: the CLI merges it into `tauri.conf.json` (also for `tauri-build` at compile time) and

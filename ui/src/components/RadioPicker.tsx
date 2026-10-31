@@ -2,12 +2,13 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowUpRight, Bluetooth, Check, ChevronUp, Eye, EyeOff, Headphones, Keyboard, Laptop, LoaderCircle, Lock, Smartphone, Wifi, WifiHigh, WifiLow } from "lucide-react";
 import { bridge, type BtDevice, type WifiError, type WifiNetwork } from "../bridge";
 import "../radios.css";
+import { BRAND } from "../brand";
 
 // The Wi-Fi / Bluetooth lists that open in place under the Status tiles (RC4, ported from ui/concepts/rc4.tsx "radios").
 // Rows update in place and never reorder while the list is open (nothing moves under the cursor).
 
 /** `denied` (locked) shows a generic line only: network and device names are content. */
-const failNote = (e: unknown, kind: "wifi" | "bt") => (e === "denied" ? "Not available while Peeka is locked." : e === "unsupported" && kind === "wifi" ? "No Wi-Fi adapter found." : "Couldn't read the list.");
+const failNote = (e: unknown, kind: "wifi" | "bt") => (e === "denied" ? `Not available while ${BRAND.productName} is locked.` : e === "unsupported" && kind === "wifi" ? "No Wi-Fi adapter found." : "Couldn't read the list.");
 export const bars = (signal: number) => (signal < 34 ? 1 : signal < 67 ? 2 : 3);
 const BARS = { 1: WifiLow, 2: WifiHigh, 3: Wifi };
 const DEV_ICON: Record<BtDevice["kind"], typeof Wifi> = { audio: Headphones, input: Keyboard, phone: Smartphone, computer: Laptop, other: Bluetooth };
@@ -74,7 +75,7 @@ function WifiList({ onState }: { onState: (scanning: boolean) => void }) {
                     onChange={(e) => { setVal(e.target.value); setErr(""); }} />
                   <button type="button" className="pwEye" aria-label={show ? "Hide password" : "Show password"} aria-pressed={show} onClick={() => setShow(!show)}>{show ? <EyeOff /> : <Eye />}</button>
                 </div>
-                <div id="pkPwHint" className={"t11 " + (err ? "pwErr" : "l3")} role={err ? "alert" : undefined}>{err || "Windows keeps the password, Peeka never stores it."}</div>
+                <div id="pkPwHint" className={"t11 " + (err ? "pwErr" : "l3")} role={err ? "alert" : undefined}>{err || `Windows keeps the password, ${BRAND.productName} never stores it.`}</div>
                 <div className="pwActions"><button type="button" className="btn kk glass" onClick={close}>Cancel</button><button type="submit" className="btn kk primary" disabled={!val || !!busy}>Connect</button></div>
               </form>
             )}
@@ -120,7 +121,7 @@ function BtList() {
           );
         })}
       </div>
-      {other && <div className="t11 l3 pickNote">Peeka connects audio devices. Others connect by themselves or in Bluetooth settings.</div>}
+      {other && <div className="t11 l3 pickNote">{BRAND.productName} connects audio devices. Others connect by themselves or in Bluetooth settings.</div>}
     </>
   );
 }

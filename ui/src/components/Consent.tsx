@@ -10,9 +10,10 @@ import { scopeInfo, type Level } from "../lib/scopes";
 import { useGuard } from "../lib/useGuard";
 import { NotchIcon } from "./IslandCards";
 import { Panel } from "./common";
+import { BRAND } from "../brand";
 
 const GROUPS: [Level, string][] = [["low", "Low"], ["medium", "Medium"], ["high", "High"]];
-const RISK_NOTE = "The plugin states its own risk level. Peeka can't verify it.";
+const RISK_NOTE = `The plugin states its own risk level. ${BRAND.productName} can't verify it.`;
 /** "C:\Program Files\Compass\compass.exe" -> "C:\…\Compass\compass.exe" (drive and last two parts). */
 const shortPath = (p: string) => { const a = plain(p, 260).split("\\"); return a.length > 3 ? [a[0], "…", ...a.slice(-2)].join("\\") : a.join("\\"); };
 const mmss = (ms: number) => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
@@ -78,8 +79,8 @@ export function ConsentBody({ req, onClose }: { req: ConsentRequest; onClose: ()
           );
         })}
       </div>
-      <div className="t12 l2 b4">No plugin can see your passwords, keystrokes or Peeka settings, or run commands on your PC.</div>
-      <div className="t12 l3 b4">This plugin may use its own internet connection. Peeka can't control that.</div>
+      <div className="t12 l2 b4">No plugin can see your passwords, keystrokes or {BRAND.productName} settings, or run commands on your PC.</div>
+      <div className="t12 l3 b4">This plugin may use its own internet connection. {BRAND.productName} can't control that.</div>
       <div className="buttons">
         <button className="btn primary consentDeny" data-autofocus onClick={() => finish(false)}><X />Deny</button>
         <button ref={guard.ref} className="btn glass" data-guarded onClick={guard(() => finish(true))}>Allow</button>

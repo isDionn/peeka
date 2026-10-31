@@ -10,6 +10,7 @@ import { useFocusTrap } from "../lib/useFocusTrap";
 import { useSettings } from "../hooks";
 import { useIslandHidden } from "../hooks.fidelity";
 import type { MenuState } from "./Strip";
+import { BRAND } from "../brand";
 
 /** A menu built by its opener (Start's apps and folders): a title, then items; "hr" is a divider. Fixed at the pointer
  *  (or the focused item), kept inside `bounds` (the panel, so the window's click region covers it). */
@@ -78,9 +79,9 @@ export function ContextMenu({ menu, pins, windows, locked, onClose, onPins, onQu
   if (menu.kind === "strip") {
     const hideKeys = settings?.shortcuts.hide_island ?? "Ctrl+Shift+A";
     return (
-      <div ref={ref} className="context open hang" role="menu" aria-label="Peeka menu" style={{ left: menu.x }} data-hit onKeyDown={arrows}>
+      <div ref={ref} className="context open hang" role="menu" aria-label={`${BRAND.productName} menu`} style={{ left: menu.x }} data-hit onKeyDown={arrows}>
         {glowHost}
-        <div className="title"><AppWindow />Peeka</div>
+        <div className="title"><AppWindow />{BRAND.productName}</div>
         {settings?.taskbarHide === "off"
           ? <button role="menuitem" data-autofocus onClick={done(() => { bridge.call("taskbar_set_mode", { mode: "full" }).catch(() => undefined); })}><PanelBottom />Hide taskbar</button>
           : <button role="menuitem" data-autofocus onClick={done(() => bridge.call("restore_taskbar"))}><PanelBottom />Restore taskbar</button>}
@@ -88,7 +89,7 @@ export function ContextMenu({ menu, pins, windows, locked, onClose, onPins, onQu
           {hidden ? <Eye /> : <EyeOff />}{hidden ? "Show island" : "Hide island for now"}<span className="key-hint" style={{ marginLeft: "auto" }}>{hideKeys}</span>
         </button>
         <hr />
-        {!locked && <button role="menuitem" onClick={done(() => { bridge.call("lock_now").catch(() => undefined); })}><Lock />Lock Peeka</button>}
+        {!locked && <button role="menuitem" onClick={done(() => { bridge.call("lock_now").catch(() => undefined); })}><Lock />Lock {BRAND.productName}</button>}
         <button role="menuitem" onClick={done(() => onQuit?.())}><Power />Quit</button>
       </div>
     );
@@ -128,8 +129,8 @@ export function ContextMenu({ menu, pins, windows, locked, onClose, onPins, onQu
 export function QuitConfirm({ onCancel }: { onCancel: () => void }) {
   return (
     <div className="body" style={{ gap: 10 }}>
-      <div className="t17 b6">Quit Peeka?</div>
-      <div className="t13 l2 b4">The Windows taskbar comes back. The strip stays off until you open Peeka again.</div>
+      <div className="t17 b6">Quit {BRAND.productName}?</div>
+      <div className="t13 l2 b4">The Windows taskbar comes back. The strip stays off until you open {BRAND.productName} again.</div>
       <div className="buttons" style={{ justifyContent: "flex-end" }}>
         <button className="btn glass" data-autofocus onClick={onCancel}>Cancel</button>
         <button className="btn destructiveFill" onClick={() => { bridge.call("quit"); onCancel(); }}>Quit</button>

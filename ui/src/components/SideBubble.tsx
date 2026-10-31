@@ -11,6 +11,7 @@ import { flat } from "../lib/plugin";
 import type { ActivityKind } from "../lib/priority";
 import { SPRINGS } from "../motion/spring";
 import { useSpring } from "../motion/useSpring";
+import { BRAND } from "../brand";
 
 /** Generic labels on the strip and bubble while locked (ADR-0063 §6; decision 2026-10-17): track name, artist, cover and alert text never reach the DOM, title or aria. */
 export const LOCK_MUSIC = "Music playing", LOCK_ALERT = "Alert";
@@ -72,7 +73,7 @@ export function bubbleItem(kind: ActivityKind, c: BubbleCtx): BubbleItem {
     case "net": return plain(<WifiOff />, c.net === "back" ? "Back online" : "Connection lost");
     case "clip": return plain(<Clipboard />, "Copied to clipboard");
     case "approval": return plain(<ShieldCheck />, "Awaiting approval");
-    case "update": return plain(<Download />, c.update ? `Peeka ${flat(c.update, 12)} is available` : "Update available");
+    case "update": return plain(<Download />, c.update ? `${BRAND.productName} ${flat(c.update, 12)} is available` : "Update available");
     case "download": return plain(<Download />, locked || !c.dl ? "Download complete" : `Downloaded: ${flat(c.dl.name, 40)}`);
     default: return plain(<AlertIcon name={locked ? null : safeIcon(p?.icon)} />, shown && p ? flat(p.title, 60) : "Plugin");
   }

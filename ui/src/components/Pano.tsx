@@ -12,6 +12,7 @@ import { EmptyBoard } from "./CardsExtra";
 import { Lead } from "./Plugin";
 import { delOk } from "./common";
 import "../fidelity-settings.css";
+import { BRAND } from "../brand";
 
 /** Fixed fake placeholder: unrelated to the real password, only for the blurred-text look. Plain text arrives only on hover or keyboard focus. */
 const DUMMY = "a8F!k2Qm9Zr7vT";
@@ -325,7 +326,7 @@ export function LockCard({ lock }: { lock: LockState }) {
     <div className="body">
       <div className="mkCenter">
         <span className="notchIcon" style={{ width: 56, height: 56 }}><PanelTop /></span>
-        <div className="t15 b6">Peeka is locked</div>
+        <div className="t15 b6">{BRAND.productName} is locked</div>
         <div className="t13 l2 b4">Clipboard, notification content and plugin cards are hidden. The clock, pins and windows still work.</div>
         {lock.reason && WHY[lock.reason] && <div className="t12 l3 b4">{WHY[lock.reason]}</div>}
         {lock.reason !== "windows" && <button className="btn primary" data-autofocus onClick={() => bridge.call("lock_release").catch(noop)}><Fingerprint />Unlock</button>}
@@ -333,4 +334,4 @@ export function LockCard({ lock }: { lock: LockState }) {
     </div>
   );
 }
-export const LockCenter = () => <span className="ms"><Lock /><span className="b6">Peeka locked</span></span>;
+export const LockCenter = () => <span className="ms"><Lock /><span className="b6">{BRAND.productName} locked</span></span>;

@@ -4,6 +4,7 @@ import { ArrowUp, Bell, Cpu, Download, FilePen, Gauge, Headphones } from "lucide
 import { bridge, type CcDiff, type CcEdit } from "../bridge";
 import { agentOf, burstLabel, originLabel, type Burst, type CcSession, type CcState } from "../lib/notes";
 import { flat } from "../lib/plugin";
+import { BRAND } from "../brand";
 
 export const BurstCenter = ({ b, generic }: { b: Burst; generic: boolean }) =>
   <span className="ms"><Bell /><span className="b6">{flat(burstLabel(b.n, b.apps.map((a) => flat(a, 20)), generic), 60)}</span></span>;
@@ -31,7 +32,7 @@ export function DownloadBump({ id, generic }: { id: string; generic: boolean }) 
 
 /** A newer release exists (Rust `update_available`, the version). "Download" opens the page Rust remembers; either button dismisses it for good. */
 export const UpdateCenter = ({ version }: { version: string }) =>
-  <span className="ms"><Download /><span className="b6">Peeka {flat(version, 12)} is available</span></span>;
+  <span className="ms"><Download /><span className="b6">{BRAND.productName} {flat(version, 12)} is available</span></span>;
 export function UpdateBump({ onDone }: { onDone: () => void }) {
   const done = (open: boolean) => () => { (open ? bridge.call("update_open") : Promise.resolve()).catch(() => undefined); bridge.call("update_dismiss").catch(() => undefined); onDone(); };
   return <div className="peekBar"><button className="btn kk primary" onClick={done(true)}>Download</button><button className="btn kk gray" onClick={done(false)}>Dismiss</button></div>;
@@ -93,7 +94,7 @@ export function SessionList({ n, list, last, locked, limited = false }: { n: num
 const STATE: Record<CcState, string> = { working: "Working", waiting: "Waiting for you", idle: "Idle" };
 /** Rust's `cc_send` error names. */
 const SEND_ERR: Record<string, string> = {
-  unknown: "This session can't take messages from Peeka",
+  unknown: `This session can't take messages from ${BRAND.productName}`,
   missing: "This session has ended",
   refused: "Couldn't reach this session's terminal",
   invalid: "Plain text only, up to 2000 characters",

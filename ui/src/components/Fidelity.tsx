@@ -14,6 +14,7 @@ import { Mascot, type MascotHandle, type Mood } from "../mascot";
 import { REMINDER_PLUGIN, type ReminderItem } from "../lib/meetingReminder";
 import { Attr, JoinButton, Lead } from "./Plugin";
 import { NotchIcon } from "./IslandCards";
+import { BRAND } from "../brand";
 
 const noop = () => undefined;
 const refOf = (m: Pick<PluginInfo, "id" | "name">) => ({ id: m.id, name: m.name, main: true });
@@ -139,7 +140,7 @@ export function AssistantOfflineCard({ main = null }: { main?: PluginInfo | null
       <div className="mkCenter">
         {main ? <Mascot size={56} mood="sleeping" isMainAssistant /> : <NotchIcon size={56} />}
         <div className="t15 b6">{name} isn't connected</div>
-        <div className="t13 l2 b4">Peeka keeps working. Your questions come here once {name} is open.</div>
+        <div className="t13 l2 b4">{BRAND.productName} keeps working. Your questions come here once {name} is open.</div>
         {main?.launch && <div className="buttons" style={{ marginTop: 4 }}><button className="btn primary" data-autofocus onClick={() => { setErr(false); bridge.call("assistant_start").catch(() => setErr(true)); }}>Launch {name}</button></div>}
         {err && <div className="t12 l3" role="alert">Couldn't launch {name} right now</div>}
       </div>

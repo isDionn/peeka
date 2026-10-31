@@ -10,13 +10,13 @@ export const agoText = (s: number) => { const t = ageLabel(s); return t === "now
 import { flat, pluginName } from "../lib/plugin";
 import { scopeInfo } from "../lib/scopes";
 import { HoldButton, NO_INDENT } from "./common";
-import { BRAND } from "../brand";
+import { BRAND, brandHides } from "../brand";
 import "../fidelity-settings.css";
 import "./cards.css";
 
 export const bridgeSub = (s: BridgeState): string => {
   const ev = s.lastEventAgoS === null ? "" : ` · last event ${agoText(s.lastEventAgoS)}`;
-  return s.installed ? `Installed · ${s.healthy ? "connected to this Peeka" : "points to another copy"}${ev}` : "Not installed";
+  return s.installed ? `Installed · ${s.healthy ? `connected to this ${BRAND.productName}` : "points to another copy"}${ev}` : "Not installed";
 };
 
 const FAILED = "Didn't work. See the notification for why";
@@ -36,7 +36,7 @@ function ChangeBox({ box, file, label, busy, onApply }: { box: Box; file: string
   const name = baseName(file);
   return (
     <div ref={ref} className="row" style={{ display: "block" }} role="group" aria-label={`Changes to ${name}`}>
-      <div className="t12 l2">{pv.lines.length === 0 ? `Nothing to change in ${file}.` : <>{file}: <span className="num editCount"><span className="add">+{pv.add}</span> <span className="del">−{pv.del}</span></span> lines, only Peeka's hook. The first time, a copy of the original is kept as {name}.bak-{BRAND.exeName}.</>}</div>
+      <div className="t12 l2">{pv.lines.length === 0 ? `Nothing to change in ${file}.` : <>{file}: <span className="num editCount"><span className="add">+{pv.add}</span> <span className="del">−{pv.del}</span></span> lines, only {BRAND.productName}'s hook. The first time, a copy of the original is kept as {name}.bak-{BRAND.exeName}.</>}</div>
       {pv.lines.length > 0 && <pre className="code glass diffLines" style={{ margin: "8px 0" }} aria-label="Changes">{pv.lines.map((l, i) => <div key={i} className={l[0] === "+" ? "add" : l[0] === "-" ? "del" : undefined}>{l}</div>)}</pre>}
       {pv.more > 0 && <div className="t12 l3 num">{pv.more} more lines</div>}
       {pv.lines.length > 0 && <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}><button className="btn kk primary" disabled={busy} onClick={() => onApply(pv.fingerprint, ref.current?.offsetHeight ?? 0)}>{`${label} now`}</button></div>}
@@ -118,7 +118,7 @@ function AgentRows() {
         const label = !r.installed ? "Install" : ok ? "Remove" : "Reinstall";
         const mine = box?.id === r.id ? box.b : null;
         const open = !!mine && "pv" in mine;
-        const sub = failed === r.id ? FAILED : r.installed ? bridgeSub(r) : `Not installed · Install adds Peeka's hook to ${r.file} (backup kept)`;
+        const sub = failed === r.id ? FAILED : r.installed ? bridgeSub(r) : `Not installed · Install adds ${BRAND.productName}'s hook to ${r.file} (backup kept)`;
         return (
           <Fragment key={r.id}>
             <div className="row">
@@ -158,8 +158,7 @@ export function PluginExtras() {
   const label = main ? `Revoke ${pluginName(main)}'s access` : "Revoke plugin access";
   return (
     <>
-      <BridgeRow />
-      <AgentRows />
+      {!brandHides("settings.agent-hooks") && <><BridgeRow /><AgentRows /></>}
       <div className="settingsFoot">
         <button className="btn kk glass" aria-expanded={hist} onClick={() => setHist(!hist)}>Permission history</button>
         {list.length > 0 && <HoldButton danger label={label} icon={<X />} onDone={() => list.forEach((p) => bridge.call("plugin_remove", { id: p.id }))} />}

@@ -19,6 +19,7 @@ import { ExtStripKey } from "./ExtStripKey";
 import { IslandHiddenGlyph } from "./IslandHidden";
 import { useIslandHidden } from "../hooks.fidelity";
 import { cap99 } from "../lib/plugin";
+import { BRAND } from "../brand";
 
 export type PanelKind = "setup" | "calendar" | "start" | "status" | "search" | "appearance" | "shortcuts" | "plugins" | "modules" | "clipboard" | "mascot" | "quit" | "notif" | "cleanup" | "tray" | "more";
 export type MenuState = { kind: "app"; appId: string; x: number } | { kind: "strip"; x: number };
@@ -304,7 +305,7 @@ export function Strip({ monitor, windows, pins, status, openPanel, onPanel, onMe
 
   return (
     <>
-    <header ref={bar} className="bar" data-hit aria-label="Peeka strip" onKeyDown={crossKey} style={{ "--slot": fit.slot + "px", transform: slide } as CSSProperties}
+    <header ref={bar} className="bar" data-hit aria-label={`${BRAND.productName} strip`} onKeyDown={crossKey} style={{ "--slot": fit.slot + "px", transform: slide } as CSSProperties}
       onContextMenu={(e) => { if (e.target === e.currentTarget || (e.target as HTMLElement).closest(".empty")) { e.preventDefault(); onMenu({ kind: "strip", x: e.clientX }); } }}>
       {monitor.primary && <div className="glowHost"><GlowField monitor={monitor.id} /></div>}{/* the strip's slice of the Drift glow (the island window draws the rest) */}
       {!monitor.primary && badge > 0 && <span className="approvalBadge" role="status" aria-label={`${badge} awaiting approval`}>{badge > 9 ? "9+" : badge} {badge === 1 ? "approval" : "approvals"}</span>}

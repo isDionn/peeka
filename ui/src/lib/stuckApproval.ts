@@ -1,10 +1,11 @@
 import type { ApprovalItem, PluginRef, ProtrusionItem } from "../bridge";
 import { flat } from "./plugin";
+import { BRAND } from "../brand";
 
 /** Stuck-agent reminder: an approval waiting this long gets one gentle peek (no sound), shown for SHOW_MS. */
 export const STUCK_MS = 180_000, SHOW_MS = 10_000;
 export const STUCK_GENERIC = "Waiting for you";
-const STUCK_PLUGIN: PluginRef = { id: "peeka.approval-reminder", name: "Peeka", main: false };
+const STUCK_PLUGIN: PluginRef = { id: "peeka.approval-reminder", name: BRAND.productName, main: false };
 
 /** Notes when each approval was first seen, forgets the answered ones, and returns the one to remind about now (once per id). */
 export function stuckApproval(first: Map<string, number>, done: Set<string>, approvals: ApprovalItem[], now: number): ApprovalItem | null {

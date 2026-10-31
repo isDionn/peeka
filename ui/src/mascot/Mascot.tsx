@@ -1,4 +1,5 @@
 import { PanelTop } from "lucide-react";
+import { BRAND } from "../brand";
 import { useEffect, useImperativeHandle, useRef, useState, type DragEvent, type ReactNode, type Ref } from "react";
 import { Ghost, type Fidget } from "./ghost";
 import { DAZE_SIZE, HANG, sizePlan, type Mood } from "./moods";
@@ -53,6 +54,7 @@ export interface MascotProps {
 }
 
 export function Mascot(props: MascotProps) {
+  if (!BRAND.mascot) return null; // a brand without the ghost (brand file `mascot: false`)
   if (!props.isMainAssistant) {
     return <>{props.fallback ?? <span className="mascot-neutral" style={{ width: props.size, height: props.size }} aria-hidden="true"><PanelTop size={Math.round(props.size * .8)} strokeWidth={1.5} /></span>}</>;
   }

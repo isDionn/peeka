@@ -17,6 +17,7 @@ import "../panel-surface.css";
 import { onX, sendX } from "../lib/xwin";
 import { Strip, type MenuState, type PanelKind } from "./Strip";
 import { STRIP_IDLE_HEIGHT, useWindowTall } from "../lib/windowTall";
+import { BRAND } from "../brand";
 
 export interface ShellInit { panel?: PanelKind | null; menu?: MenuState | null; review?: Alert | null; /** Preview: Ctrl+K opens with this text and this selected row (mockup ara1, ara2). */ query?: string; sel?: number; /** Preview: setup wizard at this step (0-based). */ setupStep?: number; /** Preview: the setup wizard opens by itself on first run (in the product, only in Tauri). */ setup?: boolean }
 const SETTINGS_PAGES: (PanelKind | null)[] = ["appearance", "shortcuts", "plugins", "modules", "clipboard", "mascot"];
@@ -194,10 +195,10 @@ export function Shell({ monitor: monitorId, init, center }: { monitor: string; i
       <Panel glow={glow} side="center" width={640} label="Search" dataKind="search" open={shown === "search"} onClose={close}>
         <SearchPanel onClose={close} initialQuery={init?.query} initialSel={init?.sel} />
       </Panel>
-      <Panel glow={glow} side="center" width={780} label="Peeka settings" dataKind="settings" open={SETTINGS_PAGES.includes(shown)} onClose={close}>
+      <Panel glow={glow} side="center" width={780} label={`${BRAND.productName} settings`} dataKind="settings" open={SETTINGS_PAGES.includes(shown)} onClose={close}>
         {settings && <SettingsPanel page={panel === "shortcuts" || panel === "plugins" || panel === "modules" || panel === "clipboard" || panel === "mascot" ? panel : "appearance"} onPage={(p: SettingsPage) => setPanel(p)} settings={settings} onQuit={() => setPanel("quit")} />}
       </Panel>
-      <Panel glow={glow} side="center" width={400} label="Quit Peeka" dataKind="quit" open={shown === "quit"} onClose={close}>
+      <Panel glow={glow} side="center" width={400} label={`Quit ${BRAND.productName}`} dataKind="quit" open={shown === "quit"} onClose={close}>
         <QuitConfirm onCancel={close} />
       </Panel>
       <SetupPanel open={shown === "setup"} onClose={close} startStep={init?.setupStep} />

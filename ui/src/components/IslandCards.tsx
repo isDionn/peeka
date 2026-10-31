@@ -20,6 +20,7 @@ import { ClipboardView } from "./Pano";
 import { ShelfCard, TimerBump, TimerCenter } from "./Extras";
 import { ClaudeChatTab } from "./ClaudeChat";
 import { sendX } from "../lib/xwin";
+import { BRAND, brandHides } from "../brand";
 
 /* ---- peek rows (.cik): strip-colored, thin ---- */
 
@@ -304,10 +305,10 @@ function GeneralTiles({ ids, go, media, meeting, timer, sys, approvals, onApprov
       )}
       {plug && <div className="genPlug">{plug}</div>}
       <div className="genTile glass genGlance">
-        <div className="genRow" style={{ gridArea: "cc" }}>
+        {!brandHides("module.cc") && <div className="genRow" style={{ gridArea: "cc" }}>
           <button ref={ccHead} type="button" className="genHead" aria-label="Claude Code sessions, show list" aria-expanded={sessOpen} onClick={() => setSessOpen(true)}><Terminal aria-hidden="true" />Claude Code<ChevronRight aria-hidden="true" /></button>
           <div className="t13 genLine genVal">{cc.n ? <><span className="b6 genLive">{cc.n} session{cc.n === 1 ? "" : "s"} open</span>{cc.last && <span className="l3">{ago((Date.now() - cc.last.at) / 1000)}</span>}</> : <span className="l3">No open sessions</span>}</div>
-        </div>
+        </div>}
         {on("clipboard") && (
           <div className={"genRow" + (fresh ? " info" : "")} style={{ gridArea: "clip" }}>
             <Head name="Clipboard" icon={Clipboard} go={() => go("clipboard")} />
@@ -393,7 +394,7 @@ function ModulesCardImpl({ media, pos, sys, cpu, surf, shelf, main, meeting, onP
   const on = (id: string) => mods?.find((m) => m.id === id)?.on ?? true;
   const rank = (t: { title: string }) => { const i = mods?.findIndex((m) => m.id === t.title.toLowerCase()) ?? -1; return i < 0 ? 999 : i; };
   const tabs = capTabs(surf.tabs).filter((t) => on(t.title.toLowerCase())).sort((a, b) => rank(a) - rank(b));
-  const core = CORE.filter(([id]) => on(id));
+  const core = CORE.filter(([id]) => on(id) && !((id === "claude" || id === "usage") && brandHides(`module.${id}`)));
   const [tab, setTab] = useState(start ?? "general");
   const cur = tabs.find((t) => t.plugin.id + "/" + t.id === tab);
   const page = cur ? "plugin" : core.some(([id]) => id === tab) ? tab : (core[0]?.[0] ?? "general");
@@ -478,7 +479,7 @@ const Center = ({ children }: { children: ReactNode }) => <div className="body">
 
 export const NotchIcon = ({ size }: { size: number }) => <span className="notchIcon" style={{ width: size, height: size }}><PanelTop /></span>;
 
-const TITLE = "Welcome to Peeka";
+const TITLE = `Welcome to ${BRAND.productName}`;
 const STRIP = "This strip replaces the taskbar: your apps on the left, the island in the middle, the clock and status on the right.";
 const SEARCH = "Press Ctrl+K to search apps, windows, files and settings.";
 const STEPS: { d: string; note?: string }[] = [

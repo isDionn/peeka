@@ -5,6 +5,7 @@ import { bridge, type MirrorState } from "../bridge";
 import { useSettings } from "../hooks";
 import { Kbd, NO_INDENT, Panel, Row, Switch } from "./common";
 import "../fidelity-settings.css";
+import { BRAND } from "../brand";
 
 export const SETUP_KEY = "notch.setup";
 const OLD_SETUP_KEY = "notch.kurulum"; // the pre-English key: moved to SETUP_KEY once so existing users don't see the wizard again
@@ -61,7 +62,7 @@ function Step({ n }: { n: number }) {
   }
   return (
     <div className="list glass" style={NO_INDENT}>
-      <Row title="You're all set" sub="Change anything later in Peeka settings: click the Windows button on the strip." />
+      <Row title="You're all set" sub={`Change anything later in ${BRAND.productName} settings: click the Windows button on the strip.`} />
     </div>
   );
 }
