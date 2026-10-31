@@ -1,6 +1,7 @@
 // Settings › Plugins (mockup aye) and Settings › Modules (mockup aym). Revoking: scopes turn off one by one, the connection drops, the plugin is removed.
 import { useEffect, useState, type KeyboardEvent } from "react";
-import { Bell, Clipboard, Cpu, Calendar, Ghost, GripVertical, Inbox, LayoutGrid, Music, Terminal, Timer, TriangleAlert, Users, type LucideIcon } from "lucide-react";
+import { Bell, Clipboard, Cpu, Calendar, Gauge, Ghost, GripVertical, Inbox, LayoutGrid, MessageCircle, Music, Terminal, Timer, TriangleAlert, Users, type LucideIcon } from "lucide-react";
+import { BRAND, brandHides, type Hidden } from "../brand";
 import { bridge, type ModuleEntry, type PluginInfo } from "../bridge";
 import { usePlugins } from "../hooks";
 import { flat, pluginName } from "../lib/plugin";
@@ -70,7 +71,9 @@ export function Plugins() {
   );
 }
 
-const ICONS: Record<string, LucideIcon> = { "layout-grid": LayoutGrid, music: Music, clipboard: Clipboard, inbox: Inbox, calendar: Calendar, timer: Timer, cpu: Cpu, bell: Bell, ghost: Ghost, terminal: Terminal, users: Users };
+const ICONS: Record<string, LucideIcon> = { "layout-grid": LayoutGrid, music: Music, clipboard: Clipboard, inbox: Inbox, calendar: Calendar, timer: Timer, cpu: Cpu, bell: Bell, ghost: Ghost, terminal: Terminal, users: Users, gauge: Gauge, "message-circle": MessageCircle };
+/** Core modules a brand can leave out (brand file `hide`): not listed either. */
+const BRAND_HIDE: Record<string, Hidden> = { claude: "module.claude", usage: "module.usage", sessions: "module.cc" };
 
 export function Modules() {
   const [list, setList] = useState<ModuleEntry[]>([]);
@@ -81,23 +84,32 @@ export function Modules() {
     if (from === to || to < 0 || to >= list.length) return;
     const next = [...list]; next.splice(to, 0, next.splice(from, 1)[0]); save(next);
   };
-  const key = (i: number) => (e: KeyboardEvent) => { if (e.key === "ArrowUp") { e.preventDefault(); move(i, i - 1); } else if (e.key === "ArrowDown") { e.preventDefault(); move(i, i + 1); } };
+  const toggle = (m: ModuleEntry) => (on: boolean) => save(list.map((x) => (x.id === m.id ? { ...x, on } : x)));
+  const rows = list.map((m, i) => ({ m, i })).filter(({ m }) => !(BRAND_HIDE[m.id] && brandHides(BRAND_HIDE[m.id])));
+  // the built-in ones keep a fixed place on the card (no handle); plugin tabs follow this order
+  const core = rows.filter(({ m }) => m.owner === BRAND.productName), plug = rows.filter(({ m }) => m.owner !== BRAND.productName);
+  // arrow keys step over the built-in rows to the next plugin tab
+  const key = (i: number) => (e: KeyboardEvent) => { const d = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0, to = d && plug[plug.findIndex((r) => r.i === i) + d]; if (!d) return; e.preventDefault(); if (to) move(i, to.i); };
+  const iconOf = (m: ModuleEntry) => { const Icon = ICONS[m.icon] ?? LayoutGrid; return <Icon />; };
   return (
     <>
       <div className="t17 b6">Modules</div>
-      <div className="list glass" style={{ "--indent": "30px" } as React.CSSProperties}>
-        {list.map((m, i) => {
-          const Icon = ICONS[m.icon] ?? LayoutGrid;
-          return (
+      <div className="list glass" style={{ "--indent": "28px" } as React.CSSProperties}>
+        {core.map(({ m }) => <div className="row" key={m.id}>{iconOf(m)}<span className="text">{m.title}</span><Switch on={m.on} label={m.title} onChange={toggle(m)} /></div>)}
+      </div>
+      {plug.length > 0 && <>
+        <div className="sectionHead"><span>From plugins · drag to reorder</span></div>
+        <div className="list glass" style={{ "--indent": "30px" } as React.CSSProperties}>
+          {plug.map(({ m, i }) => (
             <div className="row" key={m.id} draggable onDragStart={() => setDrag(i)} onDragOver={(e) => e.preventDefault()} onDrop={() => { if (drag !== null) move(drag, i); setDrag(null); }} onDragEnd={() => setDrag(null)}
               style={drag === i ? { opacity: 0.5 } : undefined}>
               <button className="handle" aria-label={`Reorder ${m.title}: use the up and down arrow keys`} onKeyDown={key(i)}><GripVertical /></button>
-              <Icon /><span className="text">{m.title}</span><span className="t12 l3">{m.owner}</span>
-              <Switch on={m.on} label={m.title} onChange={(on) => save(list.map((x) => (x.id === m.id ? { ...x, on } : x)))} />
+              {iconOf(m)}<span className="text">{m.title}</span><span className="t12 l3">{m.owner}</span>
+              <Switch on={m.on} label={m.title} onChange={toggle(m)} />
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      </>}
     </>
   );
 }

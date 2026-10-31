@@ -163,7 +163,8 @@ pub fn sharing(app: &AppHandle) -> bool {
     extras(app).is_some_and(|x| x.privacy.lock().screen)
 }
 
-/// `screen_tint` every 2 s for each monitor with a strip (`notch_core::tint`). Off (setting, demo): null once, never a
+/// `screen_tint` every 2 s for each monitor with a strip, and for the primary one in Island only (no strip: the island's
+/// glow went purple for good, owner 2026-11-01) (`notch_core::tint`). Off (setting, demo): null once, never a
 /// sample. Paused (lock, presentation, fullscreen, sharing, clipboard on screen): nothing sent, nothing sampled.
 fn tint_feed(app: AppHandle) {
     use notch_core::tint::{region, Pause, Tint};
@@ -173,7 +174,10 @@ fn tint_feed(app: AppHandle) {
         loop {
             std::thread::sleep(Duration::from_secs(2));
             let Some(n) = app.try_state::<Notch>() else { continue };
-            let on = n.settings.lock().screen_tint && !crate::app::demo();
+            let (on, island_only) = {
+                let s = n.settings.lock();
+                (s.screen_tint && !crate::app::demo(), s.island_only)
+            };
             let base = Pause {
                 // the privacy gate (lock, presentation / busy, sharing); the fields below add the tint's own pauses
                 locked: crate::privacy::closed(&app),
@@ -185,7 +189,7 @@ fn tint_feed(app: AppHandle) {
             let cover = notch_win::apps::foreground_cover_monitor();
             let strips: Vec<String> = n.strips.lock().keys().cloned().collect();
             let monitors: Vec<_> =
-                n.monitors.lock().iter().filter(|m| strips.contains(&format!("strip-{}", m.index))).cloned().collect();
+                n.monitors.lock().iter().filter(|m| strips.contains(&format!("strip-{}", m.index)) || (island_only && m.primary)).cloned().collect();
             for m in monitors {
                 let pause = Pause { covered: cover == Some(m.index), ..base };
                 let sample = || notch_win::tint::sample(region(&m));

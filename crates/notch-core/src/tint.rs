@@ -26,9 +26,12 @@ const MIN_SHARE: f32 = 0.04;
 const HUES: usize = 12;
 /// A coloured group darker than this (brightest channel / 255) is scaled up to it, hue kept: a glow has to be seen.
 const MIN_VALUE: f32 = 0.6;
+/// The glow over a screen with no colour (dark UI, grey, white): a soft light grey, never black and no longer the brand's
+/// purple, which read as "the glow ignores my screen" (owner, 2026-11-01).
+const NEUTRAL: &str = "#c8ccd4";
 
-/// The `screen_tint` payload. `colors` null = sampling is off (setting, demo), unavailable on that monitor, or the whole
-/// screen has no colour (dark UI, grey, white); the page falls back to `--glow-color`.
+/// The `screen_tint` payload. `colors` null = sampling is off (setting, demo) or unavailable on that monitor; the page
+/// falls back to `--glow-color`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct ScreenTint {
     pub monitor: String,
@@ -45,8 +48,8 @@ pub fn region(m: &Monitor) -> Rect {
 /// Left / centre / right as `#rrggbb`. Each group takes its dominant hue: colourful pixels go into `HUES` hue bins weighted
 /// by (saturation * value)^2 and the heaviest bin's mean is the colour, so orange walls under a blue sky stay orange instead
 /// of averaging to grey (owner's game screen, 2026-10-30). A group needs `MIN_SHARE` colourful pixels; one without takes the
-/// most colourful other group's colour; if no group has colour: None (the page uses `--glow-color`), never a black or grey
-/// glow. None also = not a whole BGRA screen.
+/// most colourful other group's colour; if no group has colour: `NEUTRAL` on all three, never a black glow. None = not a
+/// whole BGRA screen.
 pub fn average(bgra: &[u8]) -> Option<[String; 3]> {
     if bgra.len() != BYTES {
         return None;
@@ -84,7 +87,7 @@ pub fn average(bgra: &[u8]) -> Option<[String; 3]> {
     let parts = GROUPS.map(part);
     let best = parts.iter().max_by(|a, b| a.0.total_cmp(&b.0))?;
     if best.0 < MIN_SHARE {
-        return None;
+        return Some([NEUTRAL; 3].map(String::from));
     }
     let best = best.1.clone();
     Some(parts.map(|(share, hex)| if share < MIN_SHARE { best.clone() } else { hex }))
@@ -163,7 +166,7 @@ mod tests {
         for col in [7, 24, 40] {
             px[((ROWS - 1) * COLS + col) * 4..][..4].copy_from_slice(&[0, 128, 255, 255]);
         }
-        assert_eq!(average(&px), None);
+        assert_eq!(average(&px).unwrap(), [NEUTRAL; 3]);
         // one orange column per group (27 of 405 / 486 pixels, over 4%)
         let px = screen_of(|c| if [7, 24, 40].contains(&c) { [255, 128, 0] } else { [10, 10, 10] });
         for g in average(&px).unwrap() {
@@ -173,9 +176,9 @@ mod tests {
     }
 
     #[test]
-    fn never_a_black_or_grey_glow() {
+    fn a_screen_without_colour_glows_soft_grey_never_black() {
         for plain in [[0, 0, 0], [20, 20, 20], [128, 128, 128], [255, 255, 255]] {
-            assert_eq!(average(&screen_of(|_| plain)), None, "{plain:?}: the page's own glow colour");
+            assert_eq!(average(&screen_of(|_| plain)).unwrap(), [NEUTRAL; 3], "{plain:?}");
         }
         // a dull group beside colour takes that colour
         let c = average(&screen_of(|c| if c < 15 { [0, 0, 0] } else { [255, 0, 0] })).unwrap();

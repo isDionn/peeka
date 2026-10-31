@@ -181,4 +181,10 @@ describe("General home: nothing shifts between states", () => {
     const h = await home();
     expect(h.places).toEqual(PLACES.filter((p) => p !== "genMusic"));
   });
+  it("the Claude Code sessions row turns off in Settings › Modules like a tab", async () => {
+    const order = (await bridge.call("modules_get")).map((m) => m.id);
+    await bridge.call("modules_set", { order, off: ["sessions"] });
+    const h = await home();
+    expect(h.places).toEqual(PLACES.filter((p) => p !== "cc"));
+  });
 });

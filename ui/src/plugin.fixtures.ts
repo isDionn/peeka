@@ -83,8 +83,8 @@ export const PLUGINS: PluginInfo[] = [
 
 // Core module ids are wire names shared with Rust (CORE_MODULES) and stay as they are.
 export const MODULES: ModuleEntry[] = [
-  ["general", "layout-grid", "General", 1, "Peeka"], ["music", "music", "Music", 1, "Peeka"], ["clipboard", "clipboard", "Clipboard", 1, "Peeka"], ["shelf", "inbox", "Shelf", 1, "Peeka"], ["calendar", "calendar", "Calendar", 1, "Peeka"],
-  ["timer", "timer", "Timer", 1, "Peeka"], ["system", "cpu", "System", 1, "Peeka"], ["notifications", "bell", "Notifications", 1, "Peeka"],
+  ["general", "layout-grid", "General", 1, "Peeka"], ["sessions", "terminal", "Claude Code sessions", 1, "Peeka"], ["music", "music", "Music", 1, "Peeka"], ["clipboard", "clipboard", "Clipboard", 1, "Peeka"], ["shelf", "inbox", "Shelf", 1, "Peeka"], ["calendar", "calendar", "Calendar", 1, "Peeka"],
+  ["timer", "timer", "Timer", 1, "Peeka"], ["system", "cpu", "System", 1, "Peeka"], ["usage", "gauge", "Usage", 1, "Peeka"], ["notifications", "bell", "Notifications", 1, "Peeka"], ["claude", "message-circle", "Claude", 1, "Peeka"],
   ["compass", "ghost", "Compass", 1, "Compass plugin"], ["claude code", "terminal", "Claude Code", 1, "Compass plugin"], ["team", "users", "Team", 1, "Compass plugin"],
 ].map(([id, icon, title, on, owner]) => ({ id: String(id), title: String(title), icon: String(icon), owner: String(owner), on: !!on }));
 

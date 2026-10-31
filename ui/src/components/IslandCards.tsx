@@ -305,7 +305,7 @@ function GeneralTiles({ ids, go, media, meeting, timer, sys, approvals, onApprov
       )}
       {plug && <div className="genPlug">{plug}</div>}
       <div className="genTile glass genGlance">
-        {!brandHides("module.cc") && <div className="genRow" style={{ gridArea: "cc" }}>
+        {on("sessions") && !brandHides("module.cc") && <div className="genRow" style={{ gridArea: "cc" }}>
           <button ref={ccHead} type="button" className="genHead" aria-label="Claude Code sessions, show list" aria-expanded={sessOpen} onClick={() => setSessOpen(true)}><Terminal aria-hidden="true" />Claude Code<ChevronRight aria-hidden="true" /></button>
           <div className="t13 genLine genVal">{cc.n ? <><span className="b6 genLive">{cc.n} session{cc.n === 1 ? "" : "s"} open</span>{cc.last && <span className="l3">{ago((Date.now() - cc.last.at) / 1000)}</span>}</> : <span className="l3">No open sessions</span>}</div>
         </div>}
@@ -446,7 +446,7 @@ function ModulesCardImpl({ media, pos, sys, cpu, surf, shelf, main, meeting, onP
       : p === "usage" ? <UsageBox generic={generic} onSettings={() => openPanel("plugins")} />
       : p === "notifications" ? <AlertsTab />
       : p === "claude" ? <ClaudeChatTab />
-      : <GeneralTiles ids={core.map(([id]) => id)} go={(id) => { hideTip(); setTab(id); }} media={media} meeting={meeting} timer={timer} sys={sys} approvals={surf.approvals} onApproval={onApproval} generic={generic} battery={battery} cc={{ n: sessN, list: sessList, last: lastCc, limited }}
+      : <GeneralTiles ids={[...core.map(([id]) => id), ...(on("sessions") ? ["sessions"] : [])] /* "sessions" is General's row, not a tab */} go={(id) => { hideTip(); setTab(id); }} media={media} meeting={meeting} timer={timer} sys={sys} approvals={surf.approvals} onApproval={onApproval} generic={generic} battery={battery} cc={{ n: sessN, list: sessList, last: lastCc, limited }}
           plug={hasSummary || generalTabs.length > 0 ? <>
             <SummaryBoxes surf={{ ...surf, approvals: rest }} onDetail={onApproval} generic={generic} />
             {/* a plugin's General tab is a link here; its blocks live on its own tab, so any length fits the 330 px body without scrolling */}

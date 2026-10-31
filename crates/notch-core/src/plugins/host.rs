@@ -246,15 +246,18 @@ pub struct ModuleEntry {
 
 /// Notch's own Modules tabs (id, title, icon). The ids are wire names (saved settings and UI; registry.rs maps the old
 /// Turkish ids on load); plugin tabs are "<plugin id>/<tab id>".
-pub const CORE_MODULES: [(&str, &str, &str); 8] = [
+pub const CORE_MODULES: [(&str, &str, &str); 11] = [
     ("general", "General", "layout-grid"),
+    ("sessions", "Claude Code sessions", "terminal"), // General's session count row, not a tab
     ("music", "Music", "music"),
     ("clipboard", "Clipboard", "clipboard"),
     ("shelf", "Shelf", "inbox"),
     ("calendar", "Calendar", "calendar"),
     ("timer", "Timer", "timer"),
     ("system", "System", "cpu"),
+    ("usage", "Usage", "gauge"),
     ("notifications", "Notifications", "bell"),
+    ("claude", "Claude", "message-circle"),
 ];
 
 /// A clipboard item as `clipboard.read` would return it. shortcut: no source yet (Wave 4 fills `Host::clipboard`); the
