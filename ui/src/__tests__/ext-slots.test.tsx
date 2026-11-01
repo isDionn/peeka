@@ -100,6 +100,22 @@ describe("assistant slots: card", () => {
     expect(screen.getByText("target:n7")).toBeTruthy();
   });
 
+  it("Esc in full view goes back to compact; the next Esc closes; × closes from full view", async () => {
+    setExtForTest(sample(true));
+    render(<Island monitor="m1" init={{ view: null }} />);
+    await settle();
+    act(() => sendX({ t: "ext-go", full: true }));
+    await vi.waitFor(() => expect(card()?.dataset.size).toBe("full"));
+    fireEvent.keyDown(card()!, { key: "Escape" });
+    await vi.waitFor(() => expect(card()?.dataset.size).toBe("compact"));
+    fireEvent.keyDown(card()!, { key: "Escape" });
+    await vi.waitFor(() => expect(card()).toBeNull());
+    act(() => sendX({ t: "ext-go", full: true }));
+    await vi.waitFor(() => expect(card()?.dataset.size).toBe("full"));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await vi.waitFor(() => expect(card()).toBeNull());
+  });
+
   it("music or clipboard over the card tucks it: Back to Sample brings it back at the same size", async () => {
     setExtForTest(sample(true));
     render(<Island monitor="m1" init={{ view: null }} />);

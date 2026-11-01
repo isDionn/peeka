@@ -133,9 +133,9 @@ function Marquee({ text }: { text: string }) {
 /** Island only: the notch is a real target (and holds the "N sessions" chip left of the ghost), not a 64 px sliver around it. */
 const ISLAND_ONLY_W = 280;
 const NO_MODULES_BTN = new Set(["modules", "lock", "welcome", "firstconnect", "recap", "ky", "ext"]);
-function Layer({ spec, onClose, onModules, measure, onBack }: { spec: Spec; onClose: () => void; onModules: () => void; measure: (el: HTMLDivElement | null) => void; /** The extension card is tucked under this one: "Back to <label>". */ onBack?: () => void }) {
+function Layer({ spec, onClose, onEsc, onModules, measure, onBack }: { spec: Spec; onClose: () => void; /** Esc: one step back (full view → compact), × still closes. */ onEsc: () => void; onModules: () => void; measure: (el: HTMLDivElement | null) => void; /** The extension card is tucked under this one: "Back to <label>". */ onBack?: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
-  useFocusTrap(ref, onClose, spec.mode === "card", () => document.querySelector<HTMLElement>(".islandCenter"));
+  useFocusTrap(ref, onEsc, spec.mode === "card", () => document.querySelector<HTMLElement>(".islandCenter"));
   const set = useCallback((el: HTMLDivElement | null) => { ref.current = el; measure(el); }, [measure]);
   const isCard = spec.mode === "card";
   const mods = spec.key === "modules";
@@ -713,11 +713,12 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
     if (musicAuto) return setMusicAuto(false);
     if (pinned) return setPinned(null);
   }, [user, osd, done, alert, shot, timerDone, closeTimerDone, netNote, dismissNet, summary, kind, musicAuto, media, battTier, burst, quota, stopped, dl, upd, edit, cpuHigh, bt, charge, dismissBt, more, pinned, ackRecap, tucked]);
+  const esc = useCallback(() => (user === "ext" && extFull ? setExtFull(false) : back()), [user, extFull, back]);
   useEffect(() => {
-    const down = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.defaultPrevented) back(); };
+    const down = (e: KeyboardEvent) => { if (e.key === "Escape" && !e.defaultPrevented) esc(); };
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
-  }, [back]);
+  }, [esc]);
 
   /* ---- content ---- */
   const pos = Math.floor(position()); // seconds: so the card's props don't change on spring frames
@@ -975,7 +976,7 @@ export function Island({ monitor, init }: { monitor: string; init?: IslandInit }
           <div className="tone" ref={toneEl} />
           <div className="glowHost"><GlowField monitor={ISLAND_TINT} /></div>
           {shapeOld !== null && <div className="islandInner leaving" data-leaving aria-hidden="true" style={{ width: shapeOld.width ?? "max-content" }} ref={(el) => { if (el) el.inert = true; }}>{shapeOld.node}</div>}
-          {spec && <Layer key={spec.key} spec={spec} onClose={back} onModules={toModules} measure={setShapeEl} onBack={tucked && (user === "music-card" || user === "clipboard") ? () => setUser("ext") : undefined} />}
+          {spec && <Layer key={spec.key} spec={spec} onClose={back} onEsc={esc} onModules={toModules} measure={setShapeEl} onBack={tucked && (user === "music-card" || user === "clipboard") ? () => setUser("ext") : undefined} />}
           <IslandLine s={ls} hidden={box.h < 0.4} />
         </div>
         {slices.map((el, i) => createPortal(<GlowField monitor={ISLAND_TINT} />, el, "s" + i))}
