@@ -14,7 +14,7 @@
 
 <p>
   <a href="https://github.com/isDionn/peeka/releases/latest/download/Peeka-setup.exe"><b>Download for Windows</b></a>
-  <br><sub>v0.3.5 · ~4.6 MB · Windows 10/11 · <a href="#download">other downloads and SmartScreen note</a></sub>
+  <br><sub>v0.3.8 · ~4.6 MB · Windows 10/11 · <a href="#download">other downloads and SmartScreen note</a></sub>
 </p>
 
 <img src="docs/images/demo.gif" alt="Peeka trailer: the old taskbar breaks, the Peeka strip and ghost drop in, then music, a Claude Code approval, clipboard and quick peeks in the island" width="100%">
@@ -23,6 +23,7 @@
 
 <p>
   <a href="#download">Download</a> ·
+  <a href="#screenshots">Screenshots</a> ·
   <a href="#features">Features</a> ·
   <a href="#privacy">Privacy</a> ·
   <a href="#build-from-source">Build</a> ·
@@ -42,6 +43,24 @@ It runs locally, sends nothing anywhere, and other programs can add their own ca
 <p align="center">
   <img src="docs/images/showcase.png" alt="Peeka showcase: strip, island, side bubble and mascot" width="100%">
 </p>
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/shot-start.png" alt="Start panel with pinned apps and recommended files"><br><sub><b>Start</b>: pinned apps, folders and recent files</sub></td>
+    <td width="50%"><img src="docs/images/shot-clipboard.png" alt="Clipboard history with images, files and links"><br><sub><b>Clipboard</b>: searchable history, password-like items blurred</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/shot-search.png" alt="Ctrl+K search with windows, files and settings"><br><sub><b>Ctrl+K search</b>: apps, windows, files and settings</sub></td>
+    <td><img src="docs/images/shot-shelf.png" alt="Shelf card holding dropped files"><br><sub><b>Shelf</b>: keep files at hand, drag them into any app</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/images/shot-music.png" alt="Music card in the island" width="60%"><br><sub><b>Music</b>: the current track and its controls in the island</sub></td>
+  </tr>
+</table>
+
+<sub>Rendered from Peeka's own interface with sample data.</sub>
 
 ## Features
 
