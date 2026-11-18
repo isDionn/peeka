@@ -6,6 +6,10 @@
 .bar .ikK { position: relative; display: inline-flex; flex: none; }
 .bar .pin:not(.openPinned):not(.active) { color: var(--l3); }
 .bar .pin.openPinned:not(.active) { color: var(--l2); }
+/* open (unpinned) apps get the same hover fill as pins, so every logo on the strip answers the pointer the same way */
+.bar .tabA { border-radius: 8px; corner-shape: squircle; transition: background-color var(--d-fast) var(--ease-move), color var(--d-fast) var(--ease-move), transform var(--d-press) var(--ease); }
+.bar .tabA.hovered { background: var(--hover); }
+@media (hover: hover) and (pointer: fine) { .bar .tabA:hover { background: var(--hover); } }
 
 /* no logo from Windows: the first letter in a coloured circle (hue from the name, common.tsx hueOf); also the hidden-icons fallback */
 .appLetter { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font: 650 11px/1 var(--font); color: #fff; background: oklch(.52 .13 var(--hue)); }
