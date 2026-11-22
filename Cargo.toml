@@ -16,8 +16,8 @@ notch-win = { path = "crates/notch-win" }
 serde = { version = "1", features = ["derive"] }
 # preserve_order: Claude Code's settings.json keeps the owner's key order when Peeka adds its hooks (indexmap is already locked).
 serde_json = { version = "1", features = ["preserve_order"] }
-parking_lot = "0.12.5"
-windows = "0.61.3"
+parking_lot = "0.13.0"
+windows = "0.62.2"
 
 [profile.release]
 codegen-units = 1
